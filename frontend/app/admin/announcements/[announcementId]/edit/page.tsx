@@ -14,6 +14,13 @@ function EditAnnouncementContent() {
   const announcementId = params.announcementId as string;
   const { user, token, isLoading: authLoading } = useAuthStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const getBackUrl = () => {
+    if (user?.role === 'PLACEMENT_COORDINATOR') {
+      return '/coordinator/dashboard';
+    }
+    return '/admin/dashboard';
+  };
   
   const [formData, setFormData] = useState({
     title: '',
@@ -197,7 +204,7 @@ function EditAnnouncementContent() {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="flex items-center gap-4">
             <Link
-              href="/admin/announcements"
+              href={getBackUrl()}
               className="p-2 hover:bg-gray-100 rounded-lg transition"
             >
               <FiArrowLeft size={20} />

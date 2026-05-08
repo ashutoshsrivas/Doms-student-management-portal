@@ -27,7 +27,7 @@ export default function CoordinatorDashboardPage() {
           <h1 className="text-4xl font-bold text-gray-900 mb-2">Placement Coordinator Dashboard</h1>
           <p className="text-gray-600 mb-8">Welcome, {user.firstName} {user.lastName}</p>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="bg-white rounded-lg shadow p-6">
               <h2 className="text-2xl font-bold text-blue-600">Manage Sessions</h2>
               <p className="text-gray-600 mt-2">Create and manage placement sessions</p>
@@ -47,6 +47,17 @@ export default function CoordinatorDashboardPage() {
                 className="mt-4 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors"
               >
                 Go to Assessments
+              </button>
+            </div>
+
+            <div className="bg-white rounded-lg shadow p-6">
+              <h2 className="text-2xl font-bold text-purple-600">AI Job Matching</h2>
+              <p className="text-gray-600 mt-2">Find best students for job openings</p>
+              <button
+                onClick={() => router.push('/coordinator/job-matching')}
+                className="mt-4 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg transition-colors"
+              >
+                Match Students
               </button>
             </div>
 

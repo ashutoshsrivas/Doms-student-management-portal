@@ -12,6 +12,7 @@ const assessmentRoutes = require('./routes/assessmentRoutes');
 const rubricRoutes = require('./routes/rubricRoutes');
 const mentorRoutes = require('./routes/mentorRoutes');
 const announcementRoutes = require('./routes/announcementRoutes');
+const jobMatchingRoutes = require('./routes/jobMatchingRoutes');
 const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
@@ -50,6 +51,7 @@ app.use('/api/assessments', assessmentRoutes);
 app.use('/api/rubrics', rubricRoutes);
 app.use('/api/mentor', mentorRoutes);
 app.use('/api/announcements', announcementRoutes);
+app.use('/api/job-matching', jobMatchingRoutes);
 
 // Health check
 app.get('/health', (req, res) => {

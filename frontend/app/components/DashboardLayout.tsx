@@ -15,6 +15,7 @@ import {
   FiCheckCircle,
   FiList,
   FiBell,
+  FiZap,
 } from 'react-icons/fi';
 import useAuthStore from '@/app/store/authStore';
 import apiClient from '@/app/lib/apiClient';
@@ -95,6 +96,7 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
         { name: 'Dashboard', href: '/coordinator/dashboard', iconKey: 'chart' },
         { name: 'Sessions', href: '/coordinator/sessions', iconKey: 'calendar' },
         { name: 'Assessments', href: '/coordinator/assessments', iconKey: 'check' },
+        { name: 'Job Matching', href: '/coordinator/job-matching', iconKey: 'zap' },
         { name: 'Announcements', href: '/admin/announcements', iconKey: 'bell' },
       ],
       TRAINER: [
@@ -123,6 +125,7 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
       check: <FiCheckCircle className="w-5 h-5" />,
       list: <FiList className="w-5 h-5" />,
       bell: <FiBell className="w-5 h-5" />,
+      zap: <FiZap className="w-5 h-5" />,
     };
     return iconMap[iconKey] || <FiBarChart2 className="w-5 h-5" />;
   };

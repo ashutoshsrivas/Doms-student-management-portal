@@ -16,6 +16,13 @@ function AdminAnnouncementsContent() {
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
+  const getBackUrl = () => {
+    if (user?.role === 'PLACEMENT_COORDINATOR') {
+      return '/coordinator/dashboard';
+    }
+    return '/admin/dashboard';
+  };
+
   useEffect(() => {
     if (!authLoading && !user) {
       router.push('/auth/login');
@@ -103,7 +110,7 @@ function AdminAnnouncementsContent() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <Link
-                href="/admin/dashboard"
+                href={getBackUrl()}
                 className="p-2 hover:bg-gray-100 rounded-lg transition"
               >
                 <FiArrowLeft size={20} />
