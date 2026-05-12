@@ -17,13 +17,13 @@ const canCreateRubric = (req, res, next) => {
 router.post('/', authenticateToken, canCreateRubric, rubricController.createRubric);
 router.get('/assessment/:assessmentId', authenticateToken, rubricController.getRubrics);
 router.get('/:rubricId', authenticateToken, rubricController.getRubric);
-router.put('/:rubricId', authenticateToken, rubricController.updateRubric);
-router.delete('/:rubricId', authenticateToken, rubricController.deleteRubric);
+router.put('/:rubricId', authenticateToken, canCreateRubric, rubricController.updateRubric);
+router.delete('/:rubricId', authenticateToken, canCreateRubric, rubricController.deleteRubric);
 
 // Rubric Criteria operations
-router.post('/:rubricId/criteria', authenticateToken, rubricController.addCriteria);
-router.put('/criteria/:criteriaId', authenticateToken, rubricController.updateCriteria);
-router.delete('/criteria/:criteriaId', authenticateToken, rubricController.deleteCriteria);
+router.post('/:rubricId/criteria', authenticateToken, canCreateRubric, rubricController.addCriteria);
+router.put('/criteria/:criteriaId', authenticateToken, canCreateRubric, rubricController.updateCriteria);
+router.delete('/criteria/:criteriaId', authenticateToken, canCreateRubric, rubricController.deleteCriteria);
 
 // Grading with rubric
 router.post('/submissions/:submissionId/grade-with-rubric', authenticateToken, rubricController.gradeSubmissionWithRubric);

@@ -1,11 +1,13 @@
 const { User, Role, UserRole } = require('./models');
-const bcrypt = require('bcryptjs');
 
 async function bootstrap() {
   try {
+    const adminEmail = process.env.ADMIN_EMAIL || 'admin@test.com';
+    const adminPassword = process.env.ADMIN_PASSWORD || 'password123';
+
     // Check if admin user exists
     const adminUser = await User.findOne({
-      where: { email: 'admin@test.com' },
+      where: { email: adminEmail },
     });
 
     if (adminUser) {
@@ -15,10 +17,10 @@ async function bootstrap() {
 
     // Create admin user
     const newAdmin = await User.create({
-      email: 'admin@test.com',
+      email: adminEmail,
       firstName: 'System',
       lastName: 'Admin',
-      password: 'password123',
+      password: adminPassword,
       requestedRole: 'ADMIN',
       approvedRole: 'ADMIN',
       status: 'ACTIVE',
@@ -33,7 +35,7 @@ async function bootstrap() {
     // Assign role to user
     await newAdmin.addRole(adminRole);
 
-    console.log('✓ Bootstrap admin user created: admin@test.com / password123');
+    console.log(`Bootstrap admin user created: ${adminEmail}`);
   } catch (error) {
     console.error('Bootstrap error:', error);
   }

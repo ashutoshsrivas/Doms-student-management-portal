@@ -53,13 +53,6 @@ export default function ViewResponsesPage() {
     }
   }, [user?.role, router]);
 
-  // Fetch requirement and responses
-  useEffect(() => {
-    if (requirementId) {
-      fetchResponsesData();
-    }
-  }, [requirementId]);
-
   const fetchResponsesData = async () => {
     try {
       setLoading(true);
@@ -96,6 +89,15 @@ export default function ViewResponsesPage() {
       setLoading(false);
     }
   };
+
+  // Fetch requirement and responses
+  useEffect(() => {
+    if (requirementId) {
+      const load = async () => { await fetchResponsesData(); };
+      load();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requirementId]);
 
   const handleProvideFeedback = async (responseId: string) => {
     if (!feedbackText.trim()) {

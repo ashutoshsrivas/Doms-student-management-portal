@@ -101,17 +101,18 @@ export default function TakeAssessmentPage() {
           };
         });
         setResponses(initialResponses);
-      } catch (submissionError: any) {
+      } catch (submissionError: unknown) {
+        const subErr = submissionError as { response?: { status?: number; data?: { message?: string } } };
         console.error('Submission error details:', {
-          status: submissionError.response?.status,
-          message: submissionError.response?.data?.message,
-          data: submissionError.response?.data,
+          status: subErr.response?.status,
+          message: subErr.response?.data?.message,
+          data: subErr.response?.data,
         });
-        
+
         // Check if error is specifically due to already submitted
-        const errorMessage = submissionError.response?.data?.message || '';
-        
-        if (submissionError.response?.status === 400) {
+        const errorMessage = subErr.response?.data?.message || '';
+
+        if (subErr.response?.status === 400) {
           if (errorMessage.includes('already has an active submission')) {
             // Assessment has an existing submission (in progress or submitted)
             console.log('Assessment has existing submission');
@@ -151,9 +152,9 @@ export default function TakeAssessmentPage() {
           router.push('/student/assessments');
         }
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Failed to load assessment:', error);
-      toast.error(error.response?.data?.message || 'Failed to load assessment');
+      toast.error((error as { response?: { data?: { message?: string } } }).response?.data?.message || 'Failed to load assessment');
       router.push('/student/assessments');
     } finally {
       setLoading(false);
@@ -162,7 +163,8 @@ export default function TakeAssessmentPage() {
 
   useEffect(() => {
     if (!currentUser) return;
-    fetchAssessmentAndStart();
+    const load = async () => { await fetchAssessmentAndStart(); };
+    load();
   }, [currentUser, fetchAssessmentAndStart]);
 
   const handleResponseChange = async (questionId: string, value: string | string[]) => {
@@ -245,9 +247,9 @@ export default function TakeAssessmentPage() {
       }
 
       toast.success(`File uploaded: ${fileName}`);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('File upload error:', error);
-      toast.error(error.response?.data?.message || 'Failed to upload file');
+      toast.error((error as { response?: { data?: { message?: string } } }).response?.data?.message || 'Failed to upload file');
     } finally {
       setSaving(false);
     }
@@ -261,8 +263,8 @@ export default function TakeAssessmentPage() {
       await apiClient.post(`/assessments/submissions/${submissionId}/submit`);
       toast.success('Assessment submitted successfully!');
       router.push('/student/assessments');
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to submit assessment');
+    } catch (error: unknown) {
+      toast.error((error as { response?: { data?: { message?: string } } }).response?.data?.message || 'Failed to submit assessment');
     } finally {
       setSaving(false);
       setShowSubmitConfirm(false);

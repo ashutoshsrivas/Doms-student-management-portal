@@ -178,10 +178,12 @@ function StudentProfileContent() {
   };
 
   useEffect(() => {
-    fetchProfile();
+    const load = async () => { await fetchProfile(); };
+    load();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleInputChange = (field: keyof StudentProfileData, value: any) => {
+  const handleInputChange = (field: keyof StudentProfileData, value: StudentProfileData[keyof StudentProfileData]) => {
     setProfileData((prev) => ({
       ...prev,
       [field]: value,
@@ -217,9 +219,9 @@ function StudentProfileContent() {
       const response = await apiClient.post('/student-profile/upload-resume', formData);
       setProfileData((prev) => ({ ...prev, resume: response.data.resume }));
       toast.success('Resume uploaded successfully');
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error uploading resume:', error);
-      toast.error(error.response?.data?.message || 'Resume upload failed');
+      toast.error((error as { response?: { data?: { message?: string } } }).response?.data?.message || 'Resume upload failed');
     } finally {
       setUploadingResume(false);
     }
@@ -238,9 +240,9 @@ function StudentProfileContent() {
         certificateDocuments: [...prev.certificateDocuments, response.data.document],
       }));
       toast.success('Document uploaded successfully');
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error uploading document:', error);
-      toast.error(error.response?.data?.message || 'Upload failed');
+      toast.error((error as { response?: { data?: { message?: string } } }).response?.data?.message || 'Upload failed');
     } finally {
       setUploadingCertificate(false);
     }
@@ -258,10 +260,9 @@ function StudentProfileContent() {
         certificateDocuments: prev.certificateDocuments.filter((doc) => doc.id !== documentId),
       }));
       toast.success('Document removed successfully');
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('[DELETE Certificate] Error:', error);
-      console.error('[DELETE Certificate] Response:', error.response);
-      toast.error(error.response?.data?.message || 'Failed to remove document');
+      toast.error((error as { response?: { data?: { message?: string } } }).response?.data?.message || 'Failed to remove document');
     }
   };
 
@@ -309,9 +310,9 @@ function StudentProfileContent() {
     try {
       await apiClient.put('/student-profile', profileData);
       toast.success('Profile saved successfully');
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error saving profile:', error);
-      toast.error(error.response?.data?.message || 'Failed to save profile');
+      toast.error((error as { response?: { data?: { message?: string } } }).response?.data?.message || 'Failed to save profile');
     } finally {
       setSaving(false);
     }
@@ -390,7 +391,7 @@ function StudentProfileContent() {
               <div className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Father's Name</label>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Father&apos;s Name</label>
                     <input
                       type="text"
                       value={profileData.fatherName}
@@ -399,7 +400,7 @@ function StudentProfileContent() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Father's Occupation</label>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Father&apos;s Occupation</label>
                     <input
                       type="text"
                       value={profileData.fatherOccupation}
@@ -408,7 +409,7 @@ function StudentProfileContent() {
                     />
                   </div>
                   <div className="md:col-span-2">
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Father's Occupation Description</label>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Father&apos;s Occupation Description</label>
                     <textarea
                       value={profileData.fatherOccupationDescription}
                       onChange={(e) => handleInputChange('fatherOccupationDescription', e.target.value)}
@@ -417,7 +418,7 @@ function StudentProfileContent() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Mother's Name</label>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Mother&apos;s Name</label>
                     <input
                       type="text"
                       value={profileData.motherName}
@@ -426,7 +427,7 @@ function StudentProfileContent() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Mother's Occupation</label>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Mother&apos;s Occupation</label>
                     <input
                       type="text"
                       value={profileData.motherOccupation}
@@ -435,7 +436,7 @@ function StudentProfileContent() {
                     />
                   </div>
                   <div className="md:col-span-2">
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Mother's Occupation Description</label>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Mother&apos;s Occupation Description</label>
                     <textarea
                       value={profileData.motherOccupationDescription}
                       onChange={(e) => handleInputChange('motherOccupationDescription', e.target.value)}
@@ -456,7 +457,7 @@ function StudentProfileContent() {
                     <label className="block text-sm font-semibold text-gray-700 mb-2">Residential Status</label>
                     <select
                       value={profileData.residentialStatus}
-                      onChange={(e) => handleInputChange('residentialStatus', e.target.value as any)}
+                      onChange={(e) => handleInputChange('residentialStatus', e.target.value as StudentProfileData['residentialStatus'])}
                       className="w-full px-4 py-2 border-2 border-gray-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white text-gray-900"
                     >
                       <option value="HOSTELLER">Hosteller</option>

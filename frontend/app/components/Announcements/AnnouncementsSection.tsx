@@ -13,7 +13,7 @@ export default function AnnouncementsSection() {
     const fetchAnnouncements = async () => {
       try {
         setLoading(true);
-        const response = await fetch('http://localhost:4000/api/announcements/public');
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api'}/announcements/public`);
         const data = await response.json();
 
         if (data.success) {

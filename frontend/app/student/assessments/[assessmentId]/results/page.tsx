@@ -139,10 +139,10 @@ export default function StudentResultsPage() {
           console.log('Could not fetch rubric data:', error);
         }
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Failed to fetch results:', error);
       toast.error(
-        error.response?.data?.message || 'Failed to load results'
+        (error as { response?: { data?: { message?: string } } }).response?.data?.message || 'Failed to load results'
       );
     } finally {
       setLoading(false);
@@ -151,7 +151,8 @@ export default function StudentResultsPage() {
 
   useEffect(() => {
     if (!currentUser) return;
-    fetchResults();
+    const load = async () => { await fetchResults(); };
+    load();
   }, [currentUser, fetchResults]);
 
   const getScoreForCriteria = (criteriaId: string) => {

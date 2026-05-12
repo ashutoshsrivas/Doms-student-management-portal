@@ -69,13 +69,9 @@ export default function GradeSubmissionPage() {
   const [rubrics, setRubrics] = useState<Rubric[]>([]);
   const [selectedRubric, setSelectedRubric] = useState<Rubric | null>(null);
   const [rubricScores, setRubricScores] = useState<RubricScore[]>([]);
-  const [studentResponses, setStudentResponses] = useState<{ [key: string]: any }>({});
+  const [studentResponses, setStudentResponses] = useState<{ [key: string]: { response: string; fileUrl?: string } }>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    fetchData();
-  }, [submissionId, assessmentId]);
 
   const fetchData = async () => {
     try {
@@ -83,13 +79,13 @@ export default function GradeSubmissionPage() {
 
       // Fetch assessment and submissions using the results endpoint
       const resultsRes = await apiClient.get(`/assessments/${assessmentId}/results`);
-      const sub = resultsRes.data.submissions?.find((s: any) => s.id === submissionId);
+      const sub = resultsRes.data.submissions?.find((s: Submission) => s.id === submissionId);
       setSubmission(sub);
 
       // Build student responses map from AssessmentResponses
       if (sub?.AssessmentResponses) {
-        const responsesMap: { [key: string]: any } = {};
-        sub.AssessmentResponses.forEach((resp: any) => {
+        const responsesMap: { [key: string]: { response: string; fileUrl?: string } } = {};
+        sub.AssessmentResponses.forEach((resp: { questionId: string; response: string; fileUrl?: string }) => {
           responsesMap[resp.questionId] = {
             response: resp.response,
             fileUrl: resp.fileUrl,
@@ -114,16 +110,16 @@ export default function GradeSubmissionPage() {
       try {
         const scoresRes = await apiClient.get(`/rubrics/submissions/${submissionId}/rubric-scores`);
         if (scoresRes.data.scores?.length > 0) {
-          const scores: RubricScore[] = scoresRes.data.scores.map((s: any) => ({
+          const scores: RubricScore[] = scoresRes.data.scores.map((s: { rubricCriteriaId: string; score: string | number; feedback?: string }) => ({
             rubricCriteriaId: s.rubricCriteriaId,
-            score: parseFloat(s.score) || 0,
+            score: parseFloat(String(s.score)) || 0,
             feedback: s.feedback || '',
           }));
           setRubricScores(scores);
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         // Silently fail - no scores exist yet (401 is expected)
-        console.log('[fetchData] No existing scores:', error.response?.status);
+        console.log('[fetchData] No existing scores:', (error as { response?: { status?: number } }).response?.status);
       }
     } catch (error) {
       console.error('Failed to fetch data:', error);
@@ -141,6 +137,11 @@ export default function GradeSubmissionPage() {
     }));
     setRubricScores(scores);
   };
+
+  useEffect(() => {
+    const load = async () => { await fetchData(); };
+    load();
+  }, [submissionId, assessmentId]);
 
   const handleRubricChange = (rubric: Rubric) => {
     // Rubric from the list already has RubricCriteria included

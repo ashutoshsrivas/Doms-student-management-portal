@@ -95,7 +95,7 @@ export default function UsersPage() {
       const response = await apiClient.get(`/users/admin/filter?${params}`);
       setUsers(response.data.users);
       setTotalPages(response.data.totalPages);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error('Failed to fetch users');
       console.error(error);
     } finally {
@@ -108,28 +108,40 @@ export default function UsersPage() {
     try {
       const response = await apiClient.get('/users/admin/statistics');
       setStats(response.data);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Failed to fetch statistics:', error);
     }
   }, []);
 
   useEffect(() => {
-    fetchUsers();
+    const load = async () => {
+      await fetchUsers();
+    };
+    load();
   }, [fetchUsers]);
 
   useEffect(() => {
-    fetchStats();
+    const load = async () => {
+      await fetchStats();
+    };
+    load();
   }, [fetchStats]);
 
   // Reset pagination on filter change
   useEffect(() => {
-    setPage(1);
+    const reset = async () => {
+      setPage(1);
+    };
+    reset();
   }, [search, roleFilter, statusFilter, departmentFilter]);
 
   // Reset limit when statusFilter changes to show all or just active
   useEffect(() => {
-    setLimit(10000);
-    setPage(1);
+    const reset = async () => {
+      setLimit(10000);
+      setPage(1);
+    };
+    reset();
   }, []);
 
   const handleCreateUser = () => {
@@ -201,10 +213,11 @@ export default function UsersPage() {
 
       setShowModal(false);
       fetchUsers();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Form submission error:', error);
-      const errorMsg = error.response?.data?.error || error.response?.data?.message || 'Operation failed';
-      console.error('Error details:', error.response?.data?.details);
+      const err = error as { response?: { data?: { error?: string; message?: string; details?: unknown } } };
+      const errorMsg = err.response?.data?.error || err.response?.data?.message || 'Operation failed';
+      console.error('Error details:', err.response?.data?.details);
       toast.error(errorMsg);
     }
   };
@@ -215,8 +228,9 @@ export default function UsersPage() {
       toast.success('User deleted successfully');
       setDeleteConfirm({ show: false });
       fetchUsers();
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to delete user');
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { message?: string } } };
+      toast.error(err.response?.data?.message || 'Failed to delete user');
     }
   };
 
@@ -226,8 +240,9 @@ export default function UsersPage() {
       toast.success(`Password reset to: ${response.data.newPassword}`);
       setResetPassConfirm({ show: false });
       fetchUsers();
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to reset password');
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { message?: string } } };
+      toast.error(err.response?.data?.message || 'Failed to reset password');
     }
   };
 

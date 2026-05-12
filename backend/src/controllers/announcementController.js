@@ -339,8 +339,7 @@ exports.deleteAnnouncement = async (req, res) => {
     // Delete file from S3 if exists
     if (announcement.fileUrl) {
       try {
-        const key = announcement.fileUrl.split('.com/')[1];
-        await deleteFromS3(key);
+        await deleteFromS3(announcement.fileUrl);
       } catch (error) {
         console.error('Error deleting file from S3:', error);
       }

@@ -17,7 +17,7 @@ interface MentorTeam {
   status: string;
   Faculty?: { id: string; firstName: string; lastName: string; email: string };
   AcademicSession?: { id: string; name: string };
-  MentorTeamMembers?: any[];
+  MentorTeamMembers?: Array<{ id: string; studentSessionId: string; StudentSession?: { Student?: { firstName?: string; lastName?: string; email?: string } } }>;
 }
 
 interface Faculty {
@@ -48,31 +48,10 @@ export default function MentorTeamManagement() {
     description: '',
     studentSessionIds: [] as string[],
   });
-  const [sessions, setSessions] = useState<any[]>([]);
+  const [sessions, setSessions] = useState<{ id: string; name: string }[]>([]);
   const [faculties, setFaculties] = useState<Faculty[]>([]);
   const [students, setStudents] = useState<StudentSession[]>([]);
   const [selectedSession, setSelectedSession] = useState('');
-
-  // Redirect if not admin
-  useEffect(() => {
-    if (user?.role !== 'ADMIN') {
-      router.push('/dashboard');
-    }
-  }, [user?.role, router]);
-
-  // Fetch initial data
-  useEffect(() => {
-    fetchTeams();
-    fetchSessions();
-    fetchFaculties();
-  }, []);
-
-  // Fetch students when session changes
-  useEffect(() => {
-    if (selectedSession) {
-      fetchStudents(selectedSession);
-    }
-  }, [selectedSession]);
 
   const fetchTeams = async () => {
     try {
@@ -112,6 +91,31 @@ export default function MentorTeamManagement() {
       console.error('Failed to fetch students:', error);
     }
   };
+
+  // Redirect if not admin
+  useEffect(() => {
+    if (user?.role !== 'ADMIN') {
+      router.push('/dashboard');
+    }
+  }, [user?.role, router]);
+
+  // Fetch initial data
+  useEffect(() => {
+    const load = async () => {
+      await fetchTeams();
+      await fetchSessions();
+      await fetchFaculties();
+    };
+    load();
+  }, []);
+
+  // Fetch students when session changes
+  useEffect(() => {
+    if (selectedSession) {
+      const load = async () => { await fetchStudents(selectedSession); };
+      load();
+    }
+  }, [selectedSession]);
 
   // Filter students based on search
   const filteredStudents = students.filter(student =>

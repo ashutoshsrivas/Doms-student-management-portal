@@ -559,14 +559,15 @@ const assessmentController = {
         return res.status(403).json({ message: 'Not authorized' });
       }
 
-      await assessment.destroy();
+      // Delete cascade handled by Sequelize associations
+      await assessment.destroy({ force: true });
 
       res.status(200).json({
         message: 'Assessment deleted successfully',
       });
     } catch (error) {
       console.error('Delete assessment error:', error);
-      res.status(500).json({ message: 'Failed to delete assessment' });
+      res.status(500).json({ message: error.message || 'Failed to delete assessment' });
     }
   },
 
@@ -1337,7 +1338,7 @@ const assessmentController = {
           await response.update({
             score: grading.score,
             feedback: grading.feedback,
-            isCorrect: grading.score >= (grading.maxScore / 2),
+            isCorrect: grading.maxScore ? grading.score >= (grading.maxScore / 2) : grading.score > 0,
           });
           totalScore += grading.score;
         }

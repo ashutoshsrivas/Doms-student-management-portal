@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { authenticateToken } = require('../middleware/auth');
+const { authenticateToken, authorizeRole } = require('../middleware/auth');
 const { assessmentUpload } = require('../middleware/upload');
 const announcementController = require('../controllers/announcementController');
 
@@ -15,15 +15,15 @@ router.get('/:id', authenticateToken, announcementController.getAnnouncementById
 router.get('/', authenticateToken, announcementController.getAllAnnouncements);
 
 // Create announcement (only Admin, HOD, Placement Coordinator)
-router.post('/', authenticateToken, assessmentUpload.single('file'), announcementController.createAnnouncement);
+router.post('/', authenticateToken, authorizeRole('ADMIN', 'HOD', 'PLACEMENT_COORDINATOR'), assessmentUpload.single('file'), announcementController.createAnnouncement);
 
 // Update announcement
-router.put('/:id', authenticateToken, assessmentUpload.single('file'), announcementController.updateAnnouncement);
+router.put('/:id', authenticateToken, authorizeRole('ADMIN', 'HOD', 'PLACEMENT_COORDINATOR'), assessmentUpload.single('file'), announcementController.updateAnnouncement);
 
 // Delete announcement
-router.delete('/:id', authenticateToken, announcementController.deleteAnnouncement);
+router.delete('/:id', authenticateToken, authorizeRole('ADMIN', 'HOD', 'PLACEMENT_COORDINATOR'), announcementController.deleteAnnouncement);
 
 // Archive announcement
-router.patch('/:id/archive', authenticateToken, announcementController.archiveAnnouncement);
+router.patch('/:id/archive', authenticateToken, authorizeRole('ADMIN', 'HOD', 'PLACEMENT_COORDINATOR'), announcementController.archiveAnnouncement);
 
 module.exports = router;

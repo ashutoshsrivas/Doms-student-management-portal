@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import {
   FiMenu,
   FiX,
@@ -16,6 +16,9 @@ import {
   FiList,
   FiBell,
   FiZap,
+  FiBriefcase,
+  FiHelpCircle,
+  FiHardDrive,
 } from 'react-icons/fi';
 import useAuthStore from '@/app/store/authStore';
 import apiClient from '@/app/lib/apiClient';
@@ -25,6 +28,7 @@ interface NavItem {
   name: string;
   href: string;
   iconKey: string;
+  children?: NavItem[];
 }
 
 interface ProtectedRouteProps {
@@ -34,25 +38,25 @@ interface ProtectedRouteProps {
 
 export default function DashboardLayout({ children, title }: ProtectedRouteProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const { user, logout, setUser } = useAuthStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [profileImage, setProfileImage] = useState<string | null>(null);
+  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    // Fetch latest user profile data on mount
     const fetchUserProfile = async () => {
       try {
         const response = await apiClient.get('/auth/profile');
         if (response.data.profileImage) {
           setProfileImage(response.data.profileImage);
         }
-        // Update user in store with profile image
         if (user) {
           setUser({ ...user, profileImage: response.data.profileImage });
         }
-      } catch (error) {
-        // Silently fail - user info is already available from auth store
+      } catch {
+        // Silently fail
       }
     };
 
@@ -67,19 +71,27 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
     router.push('/auth/login');
   };
 
-  // Define navigation based on role
-  const getNavigation = () => {
+  const getNavigation = (): NavItem[] => {
     const baseNav = [
       { name: 'Profile', href: '/profile', iconKey: 'user' },
     ];
 
-    const roleNav: Record<string, Array<{ name: string; href: string; iconKey: string }>> = {
+    const sipChildren = [
+      { name: 'SIP Questions', href: '/admin/sip-questions', iconKey: 'helpCircle' },
+    ];
+    const studentSipChildren = [
+      { name: 'SIP Questions', href: '/student/sip-questions', iconKey: 'helpCircle' },
+    ];
+
+    const roleNav: Record<string, NavItem[]> = {
       ADMIN: [
         { name: 'Dashboard', href: '/admin/dashboard', iconKey: 'chart' },
         { name: 'Users', href: '/admin/users', iconKey: 'users' },
         { name: 'Sessions', href: '/admin/sessions', iconKey: 'calendar' },
         { name: 'Assessments', href: '/admin/assessments', iconKey: 'check' },
         { name: 'Mentor Teams', href: '/admin/mentors', iconKey: 'users' },
+        { name: 'Internships (SIP)', href: '/admin/sip', iconKey: 'briefcase', children: sipChildren },
+        { name: 'File Management', href: '/admin/files', iconKey: 'hardDrive' },
         { name: 'Announcements', href: '/admin/announcements', iconKey: 'bell' },
       ],
       FACULTY: [
@@ -90,12 +102,14 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
       ],
       HOD: [
         { name: 'Dashboard', href: '/admin/dashboard', iconKey: 'chart' },
+        { name: 'Internships (SIP)', href: '/admin/sip', iconKey: 'briefcase', children: sipChildren },
         { name: 'Announcements', href: '/admin/announcements', iconKey: 'bell' },
       ],
       PLACEMENT_COORDINATOR: [
         { name: 'Dashboard', href: '/coordinator/dashboard', iconKey: 'chart' },
         { name: 'Sessions', href: '/coordinator/sessions', iconKey: 'calendar' },
         { name: 'Assessments', href: '/coordinator/assessments', iconKey: 'check' },
+        { name: 'Internships (SIP)', href: '/admin/sip', iconKey: 'briefcase', children: sipChildren },
         { name: 'Job Matching', href: '/coordinator/job-matching', iconKey: 'zap' },
         { name: 'Announcements', href: '/admin/announcements', iconKey: 'bell' },
       ],
@@ -108,6 +122,7 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
         { name: 'My Assessments', href: '/student/assessments', iconKey: 'list' },
         { name: 'My Mentors', href: '/student/mentors', iconKey: 'users' },
         { name: 'My Profile', href: '/student/profile', iconKey: 'user' },
+        { name: 'Internship (SIP)', href: '/student/sip', iconKey: 'briefcase', children: studentSipChildren },
         { name: 'Announcements', href: '/student/announcements', iconKey: 'bell' },
       ],
     };
@@ -115,156 +130,256 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
     return [...(roleNav[user?.role as string] || []), ...baseNav];
   };
 
-  // Map icon keys to React Icon components
   const getIcon = (iconKey: string) => {
     const iconMap: { [key: string]: React.ReactNode } = {
-      chart: <FiBarChart2 className="w-5 h-5" />,
-      user: <FiUser className="w-5 h-5" />,
-      users: <FiUsers className="w-5 h-5" />,
-      calendar: <FiCalendar className="w-5 h-5" />,
-      check: <FiCheckCircle className="w-5 h-5" />,
-      list: <FiList className="w-5 h-5" />,
-      bell: <FiBell className="w-5 h-5" />,
-      zap: <FiZap className="w-5 h-5" />,
+      chart:      <FiBarChart2 className="w-4.5 h-4.5" />,
+      user:       <FiUser className="w-4.5 h-4.5" />,
+      users:      <FiUsers className="w-4.5 h-4.5" />,
+      calendar:   <FiCalendar className="w-4.5 h-4.5" />,
+      check:      <FiCheckCircle className="w-4.5 h-4.5" />,
+      list:       <FiList className="w-4.5 h-4.5" />,
+      bell:       <FiBell className="w-4.5 h-4.5" />,
+      zap:        <FiZap className="w-4.5 h-4.5" />,
+      briefcase:  <FiBriefcase className="w-4.5 h-4.5" />,
+      helpCircle: <FiHelpCircle className="w-4.5 h-4.5" />,
+      hardDrive:  <FiHardDrive className="w-4.5 h-4.5" />,
     };
-    return iconMap[iconKey] || <FiBarChart2 className="w-5 h-5" />;
+    return iconMap[iconKey] || <FiBarChart2 className="w-4.5 h-4.5" />;
   };
 
   const navigation = getNavigation();
 
+  // Auto-expand parent items when a child route is active
+  useEffect(() => {
+    const toExpand = new Set<string>();
+    navigation.forEach((item) => {
+      if (item.children?.some((child) => pathname === child.href || pathname.startsWith(child.href))) {
+        toExpand.add(item.href);
+      }
+    });
+    if (toExpand.size > 0) {
+      setExpandedItems((prev) => new Set([...prev, ...toExpand]));
+    }
+  }, [pathname]);
+
+  const toggleExpanded = (href: string) => {
+    setExpandedItems((prev) => {
+      const next = new Set(prev);
+      next.has(href) ? next.delete(href) : next.add(href);
+      return next;
+    });
+  };
+
+  const renderNavItem = (item: NavItem) => {
+    const isActive =
+      pathname === item.href ||
+      (item.href !== '/' && item.href.length > 1 && pathname.startsWith(item.href));
+    const isExpanded = expandedItems.has(item.href);
+    const hasChildren = item.children && item.children.length > 0;
+    const isChildActive = item.children?.some(
+      (c) => pathname === c.href || pathname.startsWith(c.href)
+    );
+
+    return (
+      <div key={item.href}>
+        {hasChildren ? (
+          <Link
+            href={item.href}
+            onClick={() => { toggleExpanded(item.href); setSidebarOpen(false); }}
+            className={`flex items-center gap-3 px-3 py-2.5 rounded-xl mb-0.5 text-sm font-medium transition-all duration-150 ${
+              isActive || isChildActive
+                ? 'bg-[rgba(0,122,255,0.1)] text-[#007AFF]'
+                : 'text-[rgba(60,60,67,0.8)] hover:bg-[rgba(0,0,0,0.04)] hover:text-gray-900'
+            }`}
+          >
+            <span className={`flex-shrink-0 transition-colors ${isActive || isChildActive ? 'text-[#007AFF]' : 'text-[rgba(60,60,67,0.4)]'}`}>
+              {getIcon(item.iconKey)}
+            </span>
+            <span className="flex-1 text-left">{item.name}</span>
+            <span
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleExpanded(item.href); }}
+              className="flex-shrink-0 p-0.5"
+            >
+              <FiChevronDown
+                className={`w-3.5 h-3.5 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''} ${isActive || isChildActive ? 'text-[#007AFF]' : 'text-[rgba(60,60,67,0.3)]'}`}
+              />
+            </span>
+          </Link>
+        ) : (
+          <Link
+            href={item.href}
+            onClick={() => setSidebarOpen(false)}
+            className={`flex items-center gap-3 px-3 py-2.5 rounded-xl mb-0.5 text-sm font-medium transition-all duration-150 ${
+              isActive
+                ? 'bg-[rgba(0,122,255,0.1)] text-[#007AFF]'
+                : 'text-[rgba(60,60,67,0.8)] hover:bg-[rgba(0,0,0,0.04)] hover:text-gray-900'
+            }`}
+          >
+            <span className={`flex-shrink-0 transition-colors ${isActive ? 'text-[#007AFF]' : 'text-[rgba(60,60,67,0.4)]'}`}>
+              {getIcon(item.iconKey)}
+            </span>
+            <span>{item.name}</span>
+          </Link>
+        )}
+
+        {/* Children */}
+        {hasChildren && isExpanded && (
+          <div className="ml-3 pl-3.5 border-l border-[rgba(60,60,67,0.1)] mb-0.5">
+            {item.children!.map((child) => {
+              const childActive =
+                pathname === child.href ||
+                (child.href !== '/' && child.href.length > 1 && pathname.startsWith(child.href));
+              return (
+                <Link
+                  key={child.href}
+                  href={child.href}
+                  onClick={() => setSidebarOpen(false)}
+                  className={`flex items-center gap-2.5 px-3 py-2 rounded-xl mb-0.5 text-[13px] font-medium transition-all duration-150 ${
+                    childActive
+                      ? 'bg-[rgba(0,122,255,0.08)] text-[#007AFF]'
+                      : 'text-[rgba(60,60,67,0.65)] hover:bg-[rgba(0,0,0,0.04)] hover:text-gray-900'
+                  }`}
+                >
+                  <span className={`flex-shrink-0 ${childActive ? 'text-[#007AFF]' : 'text-[rgba(60,60,67,0.35)]'}`}>
+                    {getIcon(child.iconKey)}
+                  </span>
+                  <span>{child.name}</span>
+                </Link>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const avatarContent = profileImage ? (
+    <img src={profileImage} alt="Profile" className="w-full h-full object-cover" />
+  ) : (
+    <span>{`${user?.firstName?.charAt(0) ?? ''}${user?.lastName?.charAt(0) ?? ''}`.toUpperCase()}</span>
+  );
+
   return (
-    <div className="flex h-screen bg-gray-100">
+    <div className="flex h-screen bg-[#f2f2f7]">
       {/* Sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-64 bg-gray-900 text-white transition-transform duration-300 ease-in-out md:relative md:translate-x-0 ${
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        className={`fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-[rgba(60,60,67,0.12)] flex flex-col transition-transform duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] md:relative md:translate-x-0 ${
+          sidebarOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full'
         }`}
       >
         {/* Logo */}
-        <div className="flex items-center justify-between h-16 px-6 border-b border-gray-800">
-          <h1 className="text-2xl font-bold text-white">DOMS</h1>
+        <div className="flex items-center justify-between h-14 px-5 border-b border-[rgba(60,60,67,0.08)] flex-shrink-0">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-[#007AFF] flex items-center justify-center shadow-sm shadow-blue-200">
+              <span className="text-white font-bold text-sm tracking-tight">D</span>
+            </div>
+            <h1 className="text-lg font-bold text-gray-900 tracking-tight">DOMS</h1>
+          </div>
           <button
             onClick={() => setSidebarOpen(false)}
-            className="md:hidden text-gray-400 hover:text-white transition"
+            className="md:hidden w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-400 transition"
           >
-            <FiX className="w-6 h-6" />
+            <FiX className="w-4 h-4" />
           </button>
         </div>
 
         {/* User Info */}
-        <div className="px-6 py-4 border-b border-gray-700">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white font-bold flex-shrink-0 overflow-hidden">
-              {profileImage ? (
-                <img
-                  src={profileImage}
-                  alt="Profile"
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                `${user?.firstName?.charAt(0)}${user?.lastName?.charAt(0)}`.toUpperCase()
-              )}
+        <div className="px-3 pt-4 pb-3 border-b border-[rgba(60,60,67,0.08)] flex-shrink-0">
+          <div className="flex items-center gap-3 px-3 py-2.5 rounded-2xl bg-[#f2f2f7]">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white font-semibold text-sm flex-shrink-0 overflow-hidden shadow-sm">
+              {avatarContent}
             </div>
-            <div className="min-w-0">
-              <p className="text-sm text-gray-300">Logged in as</p>
-              <p className="font-semibold text-white truncate text-sm">
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold text-gray-900 truncate text-sm leading-tight">
                 {user?.firstName} {user?.lastName}
               </p>
+              <p className="text-xs text-[rgba(60,60,67,0.5)] font-medium mt-0.5">{user?.role}</p>
             </div>
           </div>
-          <p className="text-xs text-gray-300 ml-15">Role: {user?.role}</p>
         </div>
 
         {/* Navigation */}
-        <nav className="mt-6 px-3">
-          {navigation.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={() => setSidebarOpen(false)}
-              className="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-gray-700 transition mb-2 text-gray-100 hover:text-white font-medium"
-            >
-              {getIcon(item.iconKey)}
-              <span className="text-sm">{item.name}</span>
-            </Link>
-          ))}
+        <nav className="flex-1 overflow-y-auto py-3 px-2.5">
+          {navigation.map((item) => renderNavItem(item))}
         </nav>
+
+        {/* Sign Out */}
+        <div className="p-2.5 border-t border-[rgba(60,60,67,0.08)] flex-shrink-0">
+          <button
+            onClick={handleLogout}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-[rgba(60,60,67,0.65)] hover:bg-red-50 hover:text-red-500 transition-all duration-150"
+          >
+            <FiLogOut className="w-4 h-4 flex-shrink-0" />
+            <span>Sign Out</span>
+          </button>
+        </div>
       </aside>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Top Bar */}
-        <header className="bg-white shadow-sm border-b border-gray-200 h-16 flex items-center justify-between px-6 md:px-8">
-          <div className="flex items-center gap-4">
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+        {/* Top Bar — frosted glass */}
+        <header className="bg-white/80 backdrop-blur-xl border-b border-[rgba(60,60,67,0.1)] h-14 flex items-center justify-between px-4 md:px-6 flex-shrink-0 sticky top-0 z-30">
+          <div className="flex items-center gap-3">
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="md:hidden text-gray-700 hover:text-gray-900"
+              className="md:hidden w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-600 transition"
             >
-              <FiMenu className="w-6 h-6" />
+              <FiMenu className="w-5 h-5" />
             </button>
-            <h2 className="text-xl font-semibold text-gray-800 hidden md:block">
-              {title}
-            </h2>
+            {title && (
+              <h2 className="text-[15px] font-semibold text-gray-900 hidden md:block">
+                {title}
+              </h2>
+            )}
           </div>
 
           {/* Profile Dropdown */}
           <div className="relative">
             <button
               onClick={() => setProfileOpen(!profileOpen)}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-gray-100 transition"
+              className="flex items-center gap-1.5 pl-1.5 pr-2.5 py-1 rounded-full hover:bg-gray-100 transition"
             >
-              <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white text-xs font-semibold flex-shrink-0 overflow-hidden">
-                {profileImage ? (
-                  <img
-                    src={profileImage}
-                    alt="Profile"
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  `${user?.firstName?.charAt(0)}${user?.lastName?.charAt(0)}`.toUpperCase()
-                )}
+              <div className="w-7 h-7 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center text-white text-xs font-semibold overflow-hidden shadow-sm">
+                {avatarContent}
               </div>
-              <FiChevronDown className="w-4 h-4 text-gray-700" />
+              <FiChevronDown
+                className={`w-3.5 h-3.5 text-gray-400 transition-transform duration-200 ${
+                  profileOpen ? 'rotate-180' : ''
+                }`}
+              />
             </button>
 
-            {/* Dropdown Menu */}
             {profileOpen && (
-              <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 z-40">
-                <div className="px-4 py-4 border-b border-gray-200">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white font-bold flex-shrink-0 overflow-hidden">
-                      {profileImage ? (
-                        <img
-                          src={profileImage}
-                          alt="Profile"
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        `${user?.firstName?.charAt(0)}${user?.lastName?.charAt(0)}`.toUpperCase()
-                      )}
+              <div className="absolute right-0 mt-2 w-60 bg-white rounded-2xl border border-[rgba(60,60,67,0.1)] shadow-xl z-40 overflow-hidden animate-scale-in">
+                {/* User info */}
+                <div className="px-4 py-4 border-b border-[rgba(60,60,67,0.07)]">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white font-semibold text-sm flex-shrink-0 overflow-hidden shadow-sm">
+                      {avatarContent}
                     </div>
                     <div className="min-w-0">
-                      <p className="font-semibold text-gray-800 text-sm">
+                      <p className="font-semibold text-gray-900 text-sm truncate">
                         {user?.firstName} {user?.lastName}
                       </p>
-                      <p className="text-xs text-gray-700">{user?.email}</p>
+                      <p className="text-xs text-[rgba(60,60,67,0.5)] truncate">{user?.email}</p>
                     </div>
                   </div>
                 </div>
+
                 <Link
                   href="/profile"
                   onClick={() => setProfileOpen(false)}
-                  className="flex items-center gap-2 px-4 py-2 text-gray-700 hover:bg-gray-50 border-b border-gray-200"
+                  className="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 border-b border-[rgba(60,60,67,0.06)] transition"
                 >
-                  <FiUser className="w-4 h-4" />
+                  <FiUser className="w-4 h-4 text-gray-400" />
                   View Profile
                 </Link>
                 <button
                   onClick={handleLogout}
-                  className="w-full text-left flex items-center gap-2 px-4 py-2 text-red-600 hover:bg-red-50"
+                  className="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-500 hover:bg-red-50 transition"
                 >
                   <FiLogOut className="w-4 h-4" />
-                  Logout
+                  Sign Out
                 </button>
               </div>
             )}
@@ -273,7 +388,7 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
 
         {/* Page Content */}
         <main className="flex-1 overflow-auto">
-          <div className="p-6 md:p-8 max-w-7xl mx-auto w-full">
+          <div className="p-4 md:p-6 max-w-7xl mx-auto w-full animate-fade-in">
             {children}
           </div>
         </main>
@@ -282,7 +397,7 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
       {/* Mobile Overlay */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden"
+          className="fixed inset-0 bg-black/25 backdrop-blur-sm z-40 md:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}

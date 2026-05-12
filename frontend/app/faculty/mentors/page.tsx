@@ -8,11 +8,22 @@ import apiClient from '@/app/lib/apiClient';
 import toast from 'react-hot-toast';
 import DashboardLayout from '@/app/components/DashboardLayout';
 
+interface MentorTeamMember {
+  StudentSession?: {
+    Student?: {
+      id: string;
+      firstName: string;
+      lastName: string;
+      email: string;
+    };
+  };
+}
+
 interface MentorTeam {
   id: string;
   teamName: string;
   status: string;
-  MentorTeamMembers: any[];
+  MentorTeamMembers: MentorTeamMember[];
 }
 
 interface Mentee {
@@ -22,13 +33,18 @@ interface Mentee {
   email: string;
 }
 
+interface MentorResponse {
+  id: string;
+  studentSessionId: string;
+}
+
 interface Requirement {
   id: string;
   title: string;
   description: string;
   dueDate: string;
   status: string;
-  MentorResponses?: any[];
+  MentorResponses?: MentorResponse[];
 }
 
 export default function FacultyMentorDashboard() {
@@ -36,7 +52,7 @@ export default function FacultyMentorDashboard() {
   const { user } = useAuthStore();
   const [mentorTeams, setMentorTeams] = useState<MentorTeam[]>([]);
   const [selectedTeam, setSelectedTeam] = useState<MentorTeam | null>(null);
-  const [mentees, setMentees] = useState<any[]>([]);
+  const [mentees, setMentees] = useState<{ id: string; firstName: string; lastName: string; email: string }[]>([]);
   const [requirements, setRequirements] = useState<Requirement[]>([]);
   const [loading, setLoading] = useState(true);
   const [showRequirementModal, setShowRequirementModal] = useState(false);
@@ -54,10 +70,24 @@ export default function FacultyMentorDashboard() {
     }
   }, [user?.role, router]);
 
-  // Fetch mentor teams
-  useEffect(() => {
-    fetchMentorTeams();
-  }, []);
+  const fetchTeamData = async (teamId: string) => {
+    try {
+      // Fetch team details with mentees
+      const teamResponse = await apiClient.get(`/mentor/teams/${teamId}`);
+      const team = teamResponse.data.team;
+      const teamMentees = team.MentorTeamMembers?.map(
+        (member: MentorTeamMember) => member.StudentSession?.Student
+      ).filter(Boolean) || [];
+      setMentees(teamMentees);
+
+      // Fetch requirements
+      const reqResponse = await apiClient.get(`/mentor/teams/${teamId}/requirements`);
+      setRequirements(reqResponse.data.requirements || []);
+    } catch (error) {
+      console.error('Failed to fetch team data:', error);
+      toast.error('Failed to load team data');
+    }
+  };
 
   const fetchMentorTeams = async () => {
     try {
@@ -78,24 +108,12 @@ export default function FacultyMentorDashboard() {
     }
   };
 
-  const fetchTeamData = async (teamId: string) => {
-    try {
-      // Fetch team details with mentees
-      const teamResponse = await apiClient.get(`/mentor/teams/${teamId}`);
-      const team = teamResponse.data.team;
-      const teamMentees = team.MentorTeamMembers?.map(
-        (member: any) => member.StudentSession?.Student
-      ).filter(Boolean) || [];
-      setMentees(teamMentees);
-
-      // Fetch requirements
-      const reqResponse = await apiClient.get(`/mentor/teams/${teamId}/requirements`);
-      setRequirements(reqResponse.data.requirements || []);
-    } catch (error) {
-      console.error('Failed to fetch team data:', error);
-      toast.error('Failed to load team data');
-    }
-  };
+  // Fetch mentor teams
+  useEffect(() => {
+    const load = async () => { await fetchMentorTeams(); };
+    load();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleCreateRequirement = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -41,8 +41,8 @@ export default function SessionRegistrationPage() {
       try {
         const response = await apiClient.get(`/sessions/registration/${token}/details`);
         setSession(response.data);
-      } catch (error: any) {
-        toast.error(error.response?.data?.message || 'Invalid or expired registration link');
+      } catch (error: unknown) {
+        toast.error((error as { response?: { data?: { message?: string } } }).response?.data?.message || 'Invalid or expired registration link');
         setTimeout(() => router.push('/'), 3000);
       } finally {
         setLoading(false);
@@ -94,8 +94,8 @@ export default function SessionRegistrationPage() {
       setRegistered(true);
       toast.success('Registration successful! Your request is pending admin approval.');
       setTimeout(() => router.push('/'), 5000);
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Registration failed');
+    } catch (error: unknown) {
+      toast.error((error as { response?: { data?: { message?: string } } }).response?.data?.message || 'Registration failed');
     } finally {
       setSubmitting(false);
     }

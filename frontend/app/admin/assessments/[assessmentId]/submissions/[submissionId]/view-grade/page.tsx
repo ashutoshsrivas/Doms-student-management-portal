@@ -65,11 +65,7 @@ export default function ViewGradePage() {
   const [submission, setSubmission] = useState<Submission | null>(null);
   const [rubric, setRubric] = useState<Rubric | null>(null);
   const [rubricScores, setRubricScores] = useState<RubricScore[]>([]);
-  const [editedScores, setEditedScores] = useState<Record<string, any>>({});
-
-  useEffect(() => {
-    fetchData();
-  }, []);
+  const [editedScores, setEditedScores] = useState<Record<string, { score: number; feedback: string }>>({});
 
   const fetchData = async () => {
     try {
@@ -80,7 +76,7 @@ export default function ViewGradePage() {
       const submissionData = submissionRes.data.submissions?.find(
         (s: Submission) => s.id === submissionId
       );
-      
+
       if (!submissionData) {
         toast.error('Submission not found');
         router.back();
@@ -107,14 +103,14 @@ export default function ViewGradePage() {
             `/rubrics/submissions/${submissionId}/rubric-scores`
           );
           if (scoresRes.data.scores) {
-            const scores: RubricScore[] = scoresRes.data.scores.map((s: any) => ({
+            const scores: RubricScore[] = scoresRes.data.scores.map((s: { rubricCriteriaId: string; score: string | number; feedback?: string; id: string; RubricCriteria: RubricCriteria }) => ({
               ...s,
-              score: parseFloat(s.score) || 0,
+              score: parseFloat(String(s.score)) || 0,
             }));
             setRubricScores(scores);
-            
+
             // Initialize edit state with current scores
-            const editState: Record<string, any> = {};
+            const editState: Record<string, { score: number; feedback: string }> = {};
             scores.forEach((score) => {
               editState[score.rubricCriteriaId] = {
                 score: score.score,
@@ -123,7 +119,7 @@ export default function ViewGradePage() {
             });
             setEditedScores(editState);
           }
-        } catch (error: any) {
+        } catch (error: unknown) {
           console.log('No existing scores found');
         }
       }
@@ -135,9 +131,14 @@ export default function ViewGradePage() {
     }
   };
 
+  useEffect(() => {
+    const load = async () => { await fetchData(); };
+    load();
+  }, []);
+
   const handleScoreChange = (criteriaId: string, score: number) => {
     const maxPoints = rubric?.RubricCriteria.find((c) => c.id === criteriaId)?.maxPoints || 0;
-    const parsedScore = parseFloat(score) || 0;
+    const parsedScore = parseFloat(String(score)) || 0;
 
     setEditedScores((prev) => ({
       ...prev,
@@ -159,14 +160,14 @@ export default function ViewGradePage() {
   };
 
   const getTotalScore = () => {
-    const total = Object.values(editedScores).reduce((sum: number, score: any) => {
-      return sum + (parseFloat(score.score) || 0);
+    const total = Object.values(editedScores).reduce((sum: number, score: { score: number; feedback: string }) => {
+      return sum + (parseFloat(String(score.score)) || 0);
     }, 0);
     return isNaN(total) ? 0 : parseFloat(total.toFixed(2));
   };
 
   const getMaxScore = () => {
-    const max = parseFloat(rubric?.totalPoints as any) || 0;
+    const max = parseFloat(String(rubric?.totalPoints ?? 0)) || 0;
     return isNaN(max) ? 0 : max;
   };
 
@@ -176,7 +177,7 @@ export default function ViewGradePage() {
       
       // Convert edited scores to rubric scores format
       const updatedRubricScores = Object.entries(editedScores).map(
-        ([criteriaId, data]: [string, any]) => ({
+        ([criteriaId, data]: [string, { score: number; feedback: string }]) => ({
           rubricCriteriaId: criteriaId,
           score: data.score,
           feedback: data.feedback,

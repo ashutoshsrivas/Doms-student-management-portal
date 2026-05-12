@@ -188,6 +188,10 @@ const AcademicSession = sequelize.define('AcademicSession', {
     unique: true,
     allowNull: true,
   },
+  sipEnabled: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false,
+  },
 }, {
   tableName: 'academic_sessions',
   timestamps: true,
@@ -815,8 +819,8 @@ User.hasMany(AssessmentSubmission, { foreignKey: 'gradedBy' });
 AssessmentSubmission.hasMany(AssessmentResponse, { foreignKey: 'submissionId', onDelete: 'CASCADE' });
 AssessmentResponse.belongsTo(AssessmentSubmission, { foreignKey: 'submissionId' });
 
-AssessmentResponse.belongsTo(AssessmentQuestion, { foreignKey: 'questionId' });
-AssessmentQuestion.hasMany(AssessmentResponse, { foreignKey: 'questionId' });
+AssessmentResponse.belongsTo(AssessmentQuestion, { foreignKey: 'questionId', onDelete: 'CASCADE' });
+AssessmentQuestion.hasMany(AssessmentResponse, { foreignKey: 'questionId', onDelete: 'CASCADE' });
 
 // Rubric Models
 const Rubric = sequelize.define('Rubric', {
@@ -1147,6 +1151,312 @@ const Announcement = sequelize.define('Announcement', {
 Announcement.belongsTo(User, { foreignKey: 'createdBy', as: 'Creator' });
 User.hasMany(Announcement, { foreignKey: 'createdBy' });
 
+// ============ SIP (INTERNSHIP) MODELS ============
+
+const SIP = sequelize.define('SIP', {
+  id: {
+    type: DataTypes.UUID,
+    defaultValue: DataTypes.UUIDV4,
+    primaryKey: true,
+  },
+  studentSessionId: {
+    type: DataTypes.UUID,
+    allowNull: false,
+  },
+  createdBy: {
+    type: DataTypes.UUID,
+    allowNull: false,
+  },
+  enrollmentNo: {
+    type: DataTypes.STRING,
+  },
+  studentName: {
+    type: DataTypes.STRING,
+  },
+  specialization: {
+    type: DataTypes.STRING,
+  },
+  gender: {
+    type: DataTypes.ENUM('MALE', 'FEMALE', 'OTHER'),
+  },
+  email: {
+    type: DataTypes.STRING,
+  },
+  phoneNo: {
+    type: DataTypes.STRING,
+  },
+  homeTownLocation: {
+    type: DataTypes.STRING,
+  },
+  companyName: {
+    type: DataTypes.STRING,
+  },
+  jobRole: {
+    type: DataTypes.STRING,
+  },
+  sipLocation: {
+    type: DataTypes.STRING,
+  },
+  stipend: {
+    type: DataTypes.DECIMAL(10, 2),
+  },
+  type: {
+    type: DataTypes.ENUM('ON_CAMPUS', 'OFF_CAMPUS'),
+  },
+  corporateType: {
+    type: DataTypes.ENUM('CORPORATE', 'FAMILY_BUSINESS', 'ENTREPRENEURSHIP', 'SOCIAL_INTERNSHIP', 'GOVT_PROJECTS'),
+  },
+  joinDate: {
+    type: DataTypes.DATE,
+  },
+  nocDate: {
+    type: DataTypes.DATE,
+  },
+  completionDate: {
+    type: DataTypes.DATE,
+  },
+  durationWeeks: {
+    type: DataTypes.INTEGER,
+  },
+  supervisorName: {
+    type: DataTypes.STRING,
+  },
+  supervisorPhone: {
+    type: DataTypes.STRING,
+  },
+  supervisorEmail: {
+    type: DataTypes.STRING,
+  },
+  hrHeadName: {
+    type: DataTypes.STRING,
+  },
+  hrPhone: {
+    type: DataTypes.STRING,
+  },
+  hrEmail: {
+    type: DataTypes.STRING,
+  },
+  officeAddress: {
+    type: DataTypes.TEXT,
+  },
+  projectTitle: {
+    type: DataTypes.STRING,
+  },
+  facultyMentorName: {
+    type: DataTypes.STRING,
+  },
+  sipEndDate: {
+    type: DataTypes.DATE,
+  },
+  certificateIssued: {
+    type: DataTypes.STRING,
+  },
+  facultyFeedback: {
+    type: DataTypes.STRING,
+  },
+  supervisorFeedback: {
+    type: DataTypes.STRING,
+  },
+  facultyGrading: {
+    type: DataTypes.DECIMAL(5, 2),
+  },
+  supervisorGrading: {
+    type: DataTypes.DECIMAL(5, 2),
+  },
+  extensionWeeks: {
+    type: DataTypes.INTEGER,
+  },
+  ppOffered: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false,
+  },
+  ppoCompensation: {
+    type: DataTypes.DECIMAL(10, 2),
+  },
+  ppoPosition: {
+    type: DataTypes.STRING,
+  },
+  ppoLocation: {
+    type: DataTypes.STRING,
+  },
+  nocIssueDateExtension: {
+    type: DataTypes.DATE,
+  },
+  status: {
+    type: DataTypes.ENUM('PENDING', 'COMPLETED'),
+    defaultValue: 'PENDING',
+  },
+}, {
+  tableName: 'sips',
+  timestamps: true,
+  underscored: true,
+});
+
+const SIPWeeklyUpdate = sequelize.define('SIPWeeklyUpdate', {
+  id: {
+    type: DataTypes.UUID,
+    defaultValue: DataTypes.UUIDV4,
+    primaryKey: true,
+  },
+  sipId: {
+    type: DataTypes.UUID,
+    allowNull: false,
+  },
+  weekStartDate: {
+    type: DataTypes.DATE,
+    allowNull: false,
+  },
+  weekEndDate: {
+    type: DataTypes.DATE,
+    allowNull: false,
+  },
+  statusText: {
+    type: DataTypes.TEXT,
+  },
+  submitted: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false,
+  },
+  submittedAt: {
+    type: DataTypes.DATE,
+  },
+}, {
+  tableName: 'sip_weekly_updates',
+  timestamps: true,
+  underscored: true,
+});
+
+const SIPRequirement = sequelize.define('SIPRequirement', {
+  id: {
+    type: DataTypes.UUID,
+    defaultValue: DataTypes.UUIDV4,
+    primaryKey: true,
+  },
+  sessionId: {
+    type: DataTypes.UUID,
+    allowNull: false,
+  },
+  title: {
+    type: DataTypes.STRING,
+    allowNull: false,
+  },
+  description: {
+    type: DataTypes.TEXT,
+  },
+  companyName: {
+    type: DataTypes.STRING,
+  },
+  jobRole: {
+    type: DataTypes.STRING,
+  },
+  location: {
+    type: DataTypes.STRING,
+  },
+  stipend: {
+    type: DataTypes.DECIMAL(10, 2),
+  },
+  requirements: {
+    type: DataTypes.JSON,
+    defaultValue: [],
+  },
+  createdBy: {
+    type: DataTypes.UUID,
+    allowNull: false,
+  },
+  type: {
+    type: DataTypes.ENUM('ON_CAMPUS', 'OFF_CAMPUS', 'CORPORATE', 'FAMILY_BUSINESS', 'ENTREPRENEURSHIP', 'SOCIAL_INTERNSHIP', 'GOVT_PROJECTS'),
+  },
+}, {
+  tableName: 'sip_requirements',
+  timestamps: true,
+  underscored: true,
+});
+
+const SIPQuestion = sequelize.define('SIPQuestion', {
+  id: {
+    type: DataTypes.UUID,
+    defaultValue: DataTypes.UUIDV4,
+    primaryKey: true,
+  },
+  sessionId: {
+    type: DataTypes.UUID,
+    allowNull: false,
+  },
+  question: {
+    type: DataTypes.TEXT,
+    allowNull: false,
+  },
+  description: {
+    type: DataTypes.TEXT,
+  },
+  createdBy: {
+    type: DataTypes.UUID,
+    allowNull: false,
+  },
+}, {
+  tableName: 'sip_questions',
+  timestamps: true,
+  underscored: true,
+});
+
+const SIPQuestionAnswer = sequelize.define('SIPQuestionAnswer', {
+  id: {
+    type: DataTypes.UUID,
+    defaultValue: DataTypes.UUIDV4,
+    primaryKey: true,
+  },
+  questionId: {
+    type: DataTypes.UUID,
+    allowNull: false,
+  },
+  sipId: {
+    type: DataTypes.UUID,
+    allowNull: false,
+  },
+  answerText: {
+    type: DataTypes.TEXT,
+  },
+  answerDocument: {
+    type: DataTypes.STRING,
+  },
+  submittedAt: {
+    type: DataTypes.DATE,
+  },
+}, {
+  tableName: 'sip_question_answers',
+  timestamps: true,
+  underscored: true,
+});
+
+// ============ SIP ASSOCIATIONS ============
+
+SIP.belongsTo(StudentSession, { foreignKey: 'studentSessionId', onDelete: 'CASCADE' });
+StudentSession.hasMany(SIP, { foreignKey: 'studentSessionId', onDelete: 'CASCADE' });
+
+SIP.belongsTo(User, { foreignKey: 'createdBy', as: 'Student' });
+User.hasMany(SIP, { foreignKey: 'createdBy' });
+
+SIPWeeklyUpdate.belongsTo(SIP, { foreignKey: 'sipId', onDelete: 'CASCADE' });
+SIP.hasMany(SIPWeeklyUpdate, { foreignKey: 'sipId', onDelete: 'CASCADE' });
+
+SIPRequirement.belongsTo(AcademicSession, { foreignKey: 'sessionId', onDelete: 'CASCADE' });
+AcademicSession.hasMany(SIPRequirement, { foreignKey: 'sessionId', onDelete: 'CASCADE' });
+
+SIPRequirement.belongsTo(User, { foreignKey: 'createdBy', as: 'Creator' });
+User.hasMany(SIPRequirement, { foreignKey: 'createdBy' });
+
+SIPQuestion.belongsTo(AcademicSession, { foreignKey: 'sessionId', onDelete: 'CASCADE' });
+AcademicSession.hasMany(SIPQuestion, { foreignKey: 'sessionId', onDelete: 'CASCADE' });
+
+SIPQuestion.belongsTo(User, { foreignKey: 'createdBy', as: 'Creator' });
+User.hasMany(SIPQuestion, { foreignKey: 'createdBy' });
+
+SIPQuestionAnswer.belongsTo(SIPQuestion, { foreignKey: 'questionId', onDelete: 'CASCADE' });
+SIPQuestion.hasMany(SIPQuestionAnswer, { foreignKey: 'questionId', onDelete: 'CASCADE' });
+
+SIPQuestionAnswer.belongsTo(SIP, { foreignKey: 'sipId', onDelete: 'CASCADE' });
+SIP.hasMany(SIPQuestionAnswer, { foreignKey: 'sipId', onDelete: 'CASCADE' });
+
 // Messaging Models
 
 
@@ -1172,4 +1482,9 @@ module.exports = {
   MentorRequirement,
   MentorResponse,
   Announcement,
+  SIP,
+  SIPWeeklyUpdate,
+  SIPRequirement,
+  SIPQuestion,
+  SIPQuestionAnswer,
 };

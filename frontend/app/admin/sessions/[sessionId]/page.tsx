@@ -98,7 +98,15 @@ export default function SessionDetailPage() {
     color: '#3B82F6',
   });
 
-  const [sessionStudents, setSessionStudents] = useState<any[]>([]);
+  const [sessionStudents, setSessionStudents] = useState<{
+    id: string;
+    Student?: {
+      firstName: string;
+      lastName: string;
+      email: string;
+      registrationNumber?: string;
+    };
+  }[]>([]);
   const [selectedStudents, setSelectedStudents] = useState<Set<string>>(new Set());
   const [studentSearchQuery, setStudentSearchQuery] = useState('');
 
@@ -177,12 +185,16 @@ export default function SessionDetailPage() {
   // Initial fetch
   useEffect(() => {
     if (sessionId) {
-      setLoading(true);
-      Promise.all([
-        fetchSession(),
-        fetchCategories(),
-        fetchSessionStudents(),
-      ]).finally(() => setLoading(false));
+      const load = async () => {
+        setLoading(true);
+        await Promise.all([
+          fetchSession(),
+          fetchCategories(),
+          fetchSessionStudents(),
+        ]);
+        setLoading(false);
+      };
+      load();
     }
   }, [sessionId, fetchSession, fetchCategories, fetchSessionStudents]);
 
@@ -268,8 +280,9 @@ export default function SessionDetailPage() {
       setSelectedCategory(null);
       await fetchCategories();
       await fetchCategoryStudents(categoryId); // Use saved ID
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to assign students');
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { message?: string } } };
+      toast.error(err.response?.data?.message || 'Failed to assign students');
       console.error(error);
     }
   };

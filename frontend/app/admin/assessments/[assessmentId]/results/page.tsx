@@ -149,9 +149,9 @@ export default function AssessmentResultsPage() {
           lowestScore: scores.length > 0 ? Math.min(...scores) : 0,
         });
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Failed to fetch results:', error);
-      if (error.response?.status === 403) {
+      if ((error as { response?: { status?: number } }).response?.status === 403) {
         toast.error('You do not have access to view results');
         router.push('/admin/assessments');
       } else {
@@ -164,7 +164,8 @@ export default function AssessmentResultsPage() {
 
   useEffect(() => {
     if (!currentUser) return;
-    fetchResults();
+    const load = async () => { await fetchResults(); };
+    load();
   }, [currentUser, fetchResults]);
 
   // Fetch all users for searching
@@ -247,11 +248,12 @@ export default function AssessmentResultsPage() {
       setSearchQuery('');
       setSelectedUserError('');
       fetchResults();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Failed to create submission:', error);
-      const errorMessage = error.response?.data?.message || 'Failed to create submission';
+      const axiosError = error as { response?: { data?: { message?: string; code?: string } } };
+      const errorMessage = axiosError.response?.data?.message || 'Failed to create submission';
       toast.error(errorMessage);
-      if (error.response?.data?.code === 'SUBMISSION_EXISTS') {
+      if (axiosError.response?.data?.code === 'SUBMISSION_EXISTS') {
         setSelectedUserError(errorMessage);
       }
     } finally {
@@ -267,11 +269,6 @@ export default function AssessmentResultsPage() {
     setSelectedUserError('');
     await fetchAllUsers();
   };
-
-  useEffect(() => {
-    if (!currentUser) return;
-    fetchResults();
-  }, [currentUser, fetchResults]);
 
   const getSortedSubmissions = () => {
     let sorted = [...submissions];
@@ -324,7 +321,7 @@ export default function AssessmentResultsPage() {
     }
 
     // Get all unique questions across all submissions
-    const questionsMap = new Map<string, any>();
+    const questionsMap = new Map<string, { id: string; text: string; type: string }>();
     submittedAssessments.forEach((submission) => {
       submission.AssessmentResponses?.forEach((response) => {
         if (!questionsMap.has(response.questionId)) {
@@ -350,7 +347,7 @@ export default function AssessmentResultsPage() {
       const rubricsResponse = await apiClient.get(`/rubrics?assessmentId=${assessmentId}`);
       if (rubricsResponse.data.rubrics && Array.isArray(rubricsResponse.data.rubrics)) {
         const criteriaMap = new Map<string, RubricCriteria>();
-        rubricsResponse.data.rubrics.forEach((rubric: any) => {
+        rubricsResponse.data.rubrics.forEach((rubric: { RubricCriteria?: RubricCriteria[] }) => {
           if (rubric.RubricCriteria && Array.isArray(rubric.RubricCriteria)) {
             rubric.RubricCriteria.forEach((criterion: RubricCriteria) => {
               if (!criteriaMap.has(criterion.id)) {
@@ -402,7 +399,7 @@ export default function AssessmentResultsPage() {
         : 'N/A';
 
       // Create response map for quick lookup
-      const responseMap = new Map<string, any>();
+      const responseMap = new Map<string, { response: string; fileUrl?: string }>();
       submission.AssessmentResponses?.forEach((response) => {
         responseMap.set(response.questionId, response);
       });

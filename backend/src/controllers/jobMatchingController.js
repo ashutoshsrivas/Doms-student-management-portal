@@ -136,7 +136,7 @@ const analyzeStudentJobMatch = async (llmService, jobDescription, student, stude
   });
 
   // 2. Check for technical skills (baseline credit for technical roles)
-  const technicalKeywords = ['coding', 'programming', 'development', 'developer', 'tech', 'software', 'technical', 'developer', 'engineer', 'ai', 'ml', 'data'];
+  const technicalKeywords = ['coding', 'programming', 'development', 'developer', 'tech', 'software', 'technical', 'engineer', 'ai', 'ml', 'data'];
   const hasTechnicalBackground = studentData.skills.some(s => 
     technicalKeywords.some(tk => s.toLowerCase().includes(tk))
   ) || studentData.workExperiences.some(e => 
@@ -313,7 +313,7 @@ exports.matchStudentsToJob = async (req, res) => {
 
     // Filter and score with intelligent ranking
     const validMatches = matchResults
-      .filter(match => !match.error || match.matchScore > 0)
+      .filter(match => !match.error && match.matchScore > 0)
       .map(match => ({
         ...match,
         finalScore: match.matchScore,

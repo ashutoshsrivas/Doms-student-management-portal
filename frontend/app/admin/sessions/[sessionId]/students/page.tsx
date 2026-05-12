@@ -63,12 +63,12 @@ export default function SessionStudentsPage() {
   const [showBulkAssignModal, setShowBulkAssignModal] = useState(false);
   const [bulkAssignCategory, setBulkAssignCategory] = useState<string>('');
 
-  // Redirect if not admin
+  // Redirect if not admin or placement coordinator
   useEffect(() => {
-    if (user?.role !== 'ADMIN') {
+    if (user && !['ADMIN', 'PLACEMENT_COORDINATOR'].includes(user.role)) {
       router.push('/dashboard');
     }
-  }, [user?.role, router]);
+  }, [user, router]);
 
   // Fetch session details
   const fetchSession = useCallback(async () => {
@@ -120,12 +120,18 @@ export default function SessionStudentsPage() {
   }, [sessionId, limit]);
 
   useEffect(() => {
-    fetchSession();
-    fetchAllCategories();
+    const load = async () => {
+      await fetchSession();
+      await fetchAllCategories();
+    };
+    load();
   }, [fetchSession, fetchAllCategories]);
 
   useEffect(() => {
-    fetchStudents();
+    const load = async () => {
+      await fetchStudents();
+    };
+    load();
   }, [fetchStudents]);
 
   // Drop student
@@ -136,8 +142,9 @@ export default function SessionStudentsPage() {
       await apiClient.delete(`/sessions/${studentSessionId}/drop-student`);
       toast.success('Student dropped successfully');
       fetchStudents();
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to drop student');
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { message?: string } } };
+      toast.error(err.response?.data?.message || 'Failed to drop student');
     }
   };
 
@@ -187,8 +194,9 @@ export default function SessionStudentsPage() {
       setSelectedStudent(null);
       setSelectedCategories(new Set());
       await fetchStudents();
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to update categories');
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { message?: string } } };
+      toast.error(err.response?.data?.message || 'Failed to update categories');
       console.error(error);
     }
   };
@@ -203,8 +211,9 @@ export default function SessionStudentsPage() {
       });
       toast.success('Student removed from category');
       await fetchStudents();
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to remove from category');
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { message?: string } } };
+      toast.error(err.response?.data?.message || 'Failed to remove from category');
     }
   };
 
@@ -230,15 +239,16 @@ export default function SessionStudentsPage() {
       setBulkAssignCategory('');
       setShowBulkAssignModal(false);
       await fetchStudents();
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to assign students');
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { message?: string } } };
+      toast.error(err.response?.data?.message || 'Failed to assign students');
       console.error(error);
     }
   };
 
   // Filter and sort students
   const getFilteredAndSortedStudents = () => {
-    let filtered = students.filter((student) => {
+    const filtered = students.filter((student) => {
       // Exclude dropped students
       if (student.status === 'DROPPED') {
         return false;

@@ -49,7 +49,11 @@ interface AssessmentQuestion {
   questionType: 'TEXT' | 'MCQ' | 'FILE';
   pointsValue: number;
   orderIndex: number;
-  metadata: any;
+  metadata: {
+    options?: string[];
+    correctAnswers?: number[];
+    multipleCorrect?: boolean;
+  };
 }
 
 interface AssignmentRecord {
@@ -70,22 +74,6 @@ interface AssignmentRecord {
   SessionCategory?: {
     id: string;
     name: string;
-  };
-}
-
-interface StudentSessionForAssignment {
-  id: string;
-  studentSessionId: string;
-  status: string;
-  enrollmentDate: string;
-  User: {
-    id: string;
-    email: string;
-    firstName: string;
-    lastName: string;
-    registrationNumber: string;
-    profileImage?: string;
-    department?: string;
   };
 }
 
@@ -185,26 +173,27 @@ export default function AssessmentDetailsPage() {
   }, [assessmentId]);
 
   // Fetch Available Students for Assignment
+  const sessionId = assessment?.academicSessionId;
   const fetchAvailableStudents = useCallback(async () => {
-    if (!assessment?.academicSessionId) return;
+    if (!sessionId) return;
     try {
-      const response = await apiClient.get(`/sessions/${assessment.academicSessionId}/students?limit=999999`);
+      const response = await apiClient.get(`/sessions/${sessionId}/students?limit=999999`);
       setAvailableStudents(response.data.students || []);
     } catch (error) {
       console.error('Failed to fetch students:', error);
     }
-  }, [assessment?.academicSessionId]);
+  }, [sessionId]);
 
   // Fetch Available Categories for Assignment
   const fetchAvailableCategories = useCallback(async () => {
-    if (!assessment?.academicSessionId) return;
+    if (!sessionId) return;
     try {
-      const response = await apiClient.get(`/sessions/${assessment.academicSessionId}/categories`);
+      const response = await apiClient.get(`/sessions/${sessionId}/categories`);
       setAvailableCategories(response.data.categories || []);
     } catch (error) {
       console.error('Failed to fetch categories:', error);
     }
-  }, [assessment?.academicSessionId]);
+  }, [sessionId]);
 
   // Filter functions
   const filteredStudents = availableStudents.filter(student =>
@@ -223,8 +212,11 @@ export default function AssessmentDetailsPage() {
       return;
     }
 
-    fetchAssessment();
-    fetchAssignments();
+    const load = async () => {
+      await fetchAssessment();
+      await fetchAssignments();
+    };
+    load();
   }, [currentUser, router, fetchAssessment, fetchAssignments]);
 
   const resetQuestionForm = () => {
@@ -276,8 +268,9 @@ export default function AssessmentDetailsPage() {
       setShowQuestionModal(false);
       resetQuestionForm();
       fetchAssessment();
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to save question');
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { message?: string } } };
+      toast.error(err.response?.data?.message || 'Failed to save question');
     }
   };
 
@@ -288,8 +281,9 @@ export default function AssessmentDetailsPage() {
       await apiClient.delete(`/assessments/${assessmentId}/questions/${questionId}`);
       toast.success('Question deleted successfully');
       fetchAssessment();
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to delete question');
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { message?: string } } };
+      toast.error(err.response?.data?.message || 'Failed to delete question');
     }
   };
 
@@ -353,8 +347,9 @@ export default function AssessmentDetailsPage() {
       setStudentSearch('');
       setCategorySearch('');
       fetchAssignments();
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to assign assessment');
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { message?: string } } };
+      toast.error(err.response?.data?.message || 'Failed to assign assessment');
     } finally {
       setAssignmentLoading(false);
     }
@@ -681,7 +676,7 @@ export default function AssessmentDetailsPage() {
                                   );
                                   toast.success('Assignment removed');
                                   fetchAssignments();
-                                } catch (error) {
+                                } catch {
                                   toast.error('Failed to remove assignment');
                                 }
                               }}

@@ -35,7 +35,13 @@ interface Requirement {
       lastName: string;
     };
   };
-  MentorResponses: any[];
+  MentorResponses: Array<{
+    id: string;
+    studentSessionId: string;
+    responseText?: string;
+    fileUrl?: string;
+    feedback?: string;
+  }>;
 }
 
 export default function StudentMentorPage() {
@@ -59,25 +65,6 @@ export default function StudentMentorPage() {
       router.push('/dashboard');
     }
   }, [user?.role, router]);
-
-  // Get student session ID and fetch data
-  useEffect(() => {
-    const getStudentSession = async () => {
-      try {
-        const response = await apiClient.get('/sessions/me/session');
-        const sessionId = response.data.studentSessionId;
-        setStudentSessionId(sessionId);
-        fetchMentorsAndRequirements(sessionId);
-      } catch (error) {
-        console.error('Failed to get student session:', error);
-        toast.error('Failed to load student session');
-      }
-    };
-
-    if (user?.id) {
-      getStudentSession();
-    }
-  }, [user?.id]);
 
   const fetchMentorsAndRequirements = async (ssId: string) => {
     try {
@@ -103,6 +90,26 @@ export default function StudentMentorPage() {
       setLoading(false);
     }
   };
+
+  // Get student session ID and fetch data
+  useEffect(() => {
+    const getStudentSession = async () => {
+      try {
+        const response = await apiClient.get('/sessions/me/session');
+        const sessionId = response.data.studentSessionId;
+        setStudentSessionId(sessionId);
+        fetchMentorsAndRequirements(sessionId);
+      } catch (error) {
+        console.error('Failed to get student session:', error);
+        toast.error('Failed to load student session');
+      }
+    };
+
+    if (user?.id) {
+      getStudentSession();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   const handleSubmitResponse = async (e: React.FormEvent) => {
     e.preventDefault();

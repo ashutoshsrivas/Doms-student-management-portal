@@ -77,10 +77,10 @@ export default function StudentAssessmentsPage() {
       });
       
       setAssessments(assessmentList);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Failed to fetch assessments:', error);
-      console.error('Error response:', error.response?.data);
-      toast.error(error.response?.data?.message || 'Failed to load assessments');
+      const axiosError = error as { response?: { data?: { message?: string } } };
+      toast.error(axiosError.response?.data?.message || 'Failed to load assessments');
     } finally {
       setLoading(false);
     }
@@ -88,7 +88,8 @@ export default function StudentAssessmentsPage() {
 
   useEffect(() => {
     if (!currentUser) return;
-    fetchAssessments();
+    const load = async () => { await fetchAssessments(); };
+    load();
   }, [currentUser, fetchAssessments]);
 
   const getSubmissionStatus = (assessment: AssignedAssessment): SubmissionStatus => {

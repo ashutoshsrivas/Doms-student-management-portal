@@ -62,10 +62,6 @@ function ProfilePageContent() {
   const [resetingPassword, setResetingPassword] = useState(false);
   const [showPasswordReset, setShowPasswordReset] = useState(false);
 
-  useEffect(() => {
-    fetchProfile();
-  }, []);
-
   const fetchProfile = async () => {
     try {
       const response = await apiClient.get('/auth/profile');
@@ -86,6 +82,12 @@ function ProfilePageContent() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    const load = async () => { await fetchProfile(); };
+    load();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -190,9 +192,9 @@ function ProfilePageContent() {
         fileInputRef.current.value = '';
       }
       toast.success('Profile updated successfully');
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error updating profile:', error);
-      toast.error(error.response?.data?.message || 'Failed to update profile');
+      toast.error((error as { response?: { data?: { message?: string } } }).response?.data?.message || 'Failed to update profile');
     } finally {
       setUpdating(false);
     }
@@ -263,13 +265,14 @@ function ProfilePageContent() {
         confirmPassword: '',
       });
       setShowPasswordReset(false);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error resetting password:', error);
-      const errorMessage = error.response?.data?.message || 'Failed to reset password';
+      const axiosError = error as { response?: { data?: { message?: string; field?: string } } };
+      const errorMessage = axiosError.response?.data?.message || 'Failed to reset password';
       toast.error(errorMessage);
-      if (error.response?.data?.field) {
+      if (axiosError.response?.data?.field) {
         setPasswordErrors({
-          [error.response.data.field]: errorMessage,
+          [axiosError.response.data.field]: errorMessage,
         });
       }
     } finally {

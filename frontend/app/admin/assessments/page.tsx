@@ -151,7 +151,10 @@ export default function AssessmentsPage() {
   }, [search, sessionFilter, statusFilter]);
 
   useEffect(() => {
-    fetchAssessments();
+    const load = async () => {
+      await fetchAssessments();
+    };
+    load();
   }, [fetchAssessments]);
 
   const resetForm = () => {
@@ -219,9 +222,10 @@ export default function AssessmentsPage() {
       setShowModal(false);
       resetForm();
       fetchAssessments();
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const axiosError = error as { response?: { data?: { message?: string } } };
       const message =
-        error.response?.data?.message || (modalMode === 'create' ? 'Failed to create assessment' : 'Failed to update assessment');
+        axiosError.response?.data?.message || (modalMode === 'create' ? 'Failed to create assessment' : 'Failed to update assessment');
       toast.error(message);
     }
   };
@@ -231,8 +235,8 @@ export default function AssessmentsPage() {
       await apiClient.post(`/assessments/${assessmentId}/publish`);
       toast.success('Assessment published successfully');
       fetchAssessments();
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to publish assessment');
+    } catch (error: unknown) {
+      toast.error((error as { response?: { data?: { message?: string } } }).response?.data?.message || 'Failed to publish assessment');
     }
   };
 
@@ -241,8 +245,8 @@ export default function AssessmentsPage() {
       await apiClient.post(`/assessments/${assessmentId}/close`);
       toast.success('Assessment closed successfully');
       fetchAssessments();
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to close assessment');
+    } catch (error: unknown) {
+      toast.error((error as { response?: { data?: { message?: string } } }).response?.data?.message || 'Failed to close assessment');
     }
   };
 
@@ -251,8 +255,8 @@ export default function AssessmentsPage() {
       await apiClient.post(`/assessments/${assessmentId}/unpublish`);
       toast.success('Assessment unpublished successfully');
       fetchAssessments();
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to unpublish assessment');
+    } catch (error: unknown) {
+      toast.error((error as { response?: { data?: { message?: string } } }).response?.data?.message || 'Failed to unpublish assessment');
     }
   };
 
@@ -261,11 +265,12 @@ export default function AssessmentsPage() {
 
     try {
       await apiClient.delete(`/assessments/${deleteConfirm.assessmentId}`);
-      toast.success('Assessment deleted successfully');
       setDeleteConfirm({ show: false });
-      fetchAssessments();
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to delete assessment');
+      toast.success('Assessment deleted successfully');
+      await fetchAssessments();
+    } catch (error: unknown) {
+      console.error('Delete error:', error);
+      toast.error((error as { response?: { data?: { message?: string } } }).response?.data?.message || 'Failed to delete assessment');
     }
   };
 

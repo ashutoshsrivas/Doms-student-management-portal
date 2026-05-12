@@ -98,7 +98,8 @@ export default function CoordinatorSessionsPage() {
   }, [page, limit]);
 
   useEffect(() => {
-    fetchSessions();
+    const load = async () => { await fetchSessions(); };
+    load();
   }, [fetchSessions]);
 
   // Create session
@@ -121,8 +122,8 @@ export default function CoordinatorSessionsPage() {
       setShowCreateModal(false);
       setSessionForm({ name: '', startDate: '', endDate: '', description: '' });
       fetchSessions();
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to create session');
+    } catch (error: unknown) {
+      toast.error((error as { response?: { data?: { message?: string } } }).response?.data?.message || 'Failed to create session');
     }
   };
 
@@ -132,8 +133,8 @@ export default function CoordinatorSessionsPage() {
       await apiClient.post(`/sessions/${sessionId}/activate`);
       toast.success('Session activated');
       fetchSessions();
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to activate session');
+    } catch (error: unknown) {
+      toast.error((error as { response?: { data?: { message?: string } } }).response?.data?.message || 'Failed to activate session');
     }
   };
 
@@ -169,8 +170,8 @@ export default function CoordinatorSessionsPage() {
       setStudentForm({ email: '', firstName: '', lastName: '', registrationNumber: '' });
       setShowStudentModal(false);
       fetchSessions();
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to add student');
+    } catch (error: unknown) {
+      toast.error((error as { response?: { data?: { message?: string } } }).response?.data?.message || 'Failed to add student');
     }
   };
 
@@ -213,11 +214,11 @@ export default function CoordinatorSessionsPage() {
       setShowStudentModal(false);
       setUploading(false);
       fetchSessions();
-    } catch (error: any) {
+    } catch (error: unknown) {
       setUploading(false);
       console.error('Upload error:', error);
-      console.error('Error response:', error.response?.data);
-      const errorMsg = error.response?.data?.message || error.message || 'Failed to upload students';
+      const axiosError = error as { response?: { data?: { message?: string } }; message?: string };
+      const errorMsg = axiosError.response?.data?.message || axiosError.message || 'Failed to upload students';
       toast.error(errorMsg);
     }
   };
@@ -280,8 +281,8 @@ export default function CoordinatorSessionsPage() {
       const fullLink = `${baseUrl}/session-registration/${response.data.token}`;
       setShareableLink(fullLink);
       toast.success('Registration link created');
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to create link');
+    } catch (error: unknown) {
+      toast.error((error as { response?: { data?: { message?: string } } }).response?.data?.message || 'Failed to create link');
     }
   };
 
@@ -681,7 +682,7 @@ export default function CoordinatorSessionsPage() {
                     <li>Create a unique registration link</li>
                     <li>Share the link with students</li>
                     <li>Students fill in their details</li>
-                    <li>After admin approval, they're onboarded to the session</li>
+                    <li>After admin approval, they&apos;re onboarded to the session</li>
                   </ol>
                 </div>
 

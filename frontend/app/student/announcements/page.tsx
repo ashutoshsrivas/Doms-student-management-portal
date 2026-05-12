@@ -51,7 +51,7 @@ export default function AnnouncementsPage() {
           const roles = Array.from(
             new Set(
               data.data
-                .map((ann: any) => ann.Creator?.role || ann.Creator?.approvedRole || 'UNKNOWN')
+                .map((ann: { Creator?: { role?: string; approvedRole?: string } }) => ann.Creator?.role || ann.Creator?.approvedRole || 'UNKNOWN')
                 .filter((role: string) => role !== 'UNKNOWN')
             )
           ).sort() as string[];

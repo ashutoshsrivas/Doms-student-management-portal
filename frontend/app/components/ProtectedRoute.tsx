@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, ReactNode, useRef } from 'react';
+import { useEffect, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import useAuthStore from '@/app/store/authStore';
 
@@ -11,17 +11,7 @@ interface ProtectedRouteProps {
 
 export default function ProtectedRoute({ children, requiredRoles = [] }: ProtectedRouteProps) {
   const router = useRouter();
-  const { user, isAuthenticated, token, initializeAuth } = useAuthStore();
-  const hasInitialized = useRef(false);
-
-  useEffect(() => {
-    // Initialize auth on mount if not already done
-    if (!hasInitialized.current) {
-      hasInitialized.current = true;
-      initializeAuth();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const { user, isAuthenticated, token } = useAuthStore();
 
   // Wait for user to be loaded with required properties
   const isUserLoaded = user && user.role;
@@ -49,10 +39,13 @@ export default function ProtectedRoute({ children, requiredRoles = [] }: Protect
 
   if (!isUserLoaded && (isAuthenticated || token)) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="w-12 h-12 border-4 border-blue-300 border-t-blue-600 rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-gray-600">Loading...</p>
+      <div className="flex items-center justify-center min-h-screen bg-[#f2f2f7]">
+        <div className="text-center animate-fade-in">
+          <div className="relative w-11 h-11 mx-auto mb-4">
+            <div className="absolute inset-0 rounded-full border-2 border-[rgba(0,122,255,0.12)]" />
+            <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-[#007AFF] animate-spin" />
+          </div>
+          <p className="text-[13px] text-[rgba(60,60,67,0.45)] font-medium">Loading…</p>
         </div>
       </div>
     );

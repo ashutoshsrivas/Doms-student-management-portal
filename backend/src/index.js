@@ -13,6 +13,10 @@ const rubricRoutes = require('./routes/rubricRoutes');
 const mentorRoutes = require('./routes/mentorRoutes');
 const announcementRoutes = require('./routes/announcementRoutes');
 const jobMatchingRoutes = require('./routes/jobMatchingRoutes');
+const sipRoutes = require('./routes/sipRoutes');
+const sipRequirementRoutes = require('./routes/sipRequirementRoutes');
+const sipQuestionRoutes = require('./routes/sipQuestionRoutes');
+const fileManagementRoutes = require('./routes/fileManagementRoutes');
 const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
@@ -52,6 +56,10 @@ app.use('/api/rubrics', rubricRoutes);
 app.use('/api/mentor', mentorRoutes);
 app.use('/api/announcements', announcementRoutes);
 app.use('/api/job-matching', jobMatchingRoutes);
+app.use('/api/sip', sipRoutes);
+app.use('/api/sip-requirements', sipRequirementRoutes);
+app.use('/api/sip-questions', sipQuestionRoutes);
+app.use('/api/file-management', fileManagementRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
@@ -112,7 +120,7 @@ async function start() {
 
     try {
       await sequelize.query(`
-        ALTER TABLE student_profiles 
+        ALTER TABLE student_profiles
         ADD COLUMN certificate_documents JSON NULL DEFAULT '[]'
       `);
       console.log('Added certificate_documents column to student_profiles');
@@ -121,6 +129,90 @@ async function start() {
         console.log('certificate_documents column already exists');
       } else if (!error.message.includes('already exists')) {
         console.error('Error adding certificate_documents column:', error.message);
+      }
+    }
+
+    // Add sipEnabled column to academic_sessions if missing
+    try {
+      await sequelize.query(`
+        ALTER TABLE academic_sessions
+        ADD COLUMN sip_enabled BOOLEAN DEFAULT FALSE
+      `);
+      console.log('Added sip_enabled column to academic_sessions');
+    } catch (error) {
+      if (error.message && error.message.includes('Duplicate column')) {
+        console.log('sip_enabled column already exists');
+      } else if (!error.message.includes('already exists')) {
+        console.error('Error adding sip_enabled column:', error.message);
+      }
+    }
+
+    // Create sip_questions table if missing
+    try {
+      await sequelize.query(`
+        CREATE TABLE IF NOT EXISTS sip_questions (
+          id CHAR(36) PRIMARY KEY,
+          session_id CHAR(36) NOT NULL,
+          question LONGTEXT NOT NULL,
+          description LONGTEXT,
+          created_by CHAR(36) NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          FOREIGN KEY (session_id) REFERENCES academic_sessions(id) ON DELETE CASCADE,
+          FOREIGN KEY (created_by) REFERENCES users(id)
+        )
+      `);
+      console.log('Created sip_questions table');
+    } catch (error) {
+      console.log('sip_questions table already exists or error:', error.message);
+    }
+
+    // Create sip_question_answers table if missing
+    try {
+      await sequelize.query(`
+        CREATE TABLE IF NOT EXISTS sip_question_answers (
+          id CHAR(36) PRIMARY KEY,
+          question_id CHAR(36) NOT NULL,
+          sip_id CHAR(36) NOT NULL,
+          answer_text LONGTEXT,
+          answer_document VARCHAR(1024),
+          submitted_at TIMESTAMP,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          FOREIGN KEY (question_id) REFERENCES sip_questions(id) ON DELETE CASCADE,
+          FOREIGN KEY (sip_id) REFERENCES sips(id) ON DELETE CASCADE
+        )
+      `);
+      console.log('Created sip_question_answers table');
+    } catch (error) {
+      console.log('sip_question_answers table already exists or error:', error.message);
+    }
+
+    // Fix assessment_responses foreign key constraint to CASCADE on delete
+    try {
+      await sequelize.query(`
+        ALTER TABLE assessment_responses
+        DROP FOREIGN KEY assessment_responses_ibfk_2
+      `);
+      console.log('Dropped old assessment_responses foreign key');
+    } catch (error) {
+      if (!error.message.includes("can't find file")) {
+        console.log('Could not drop old FK (may already be dropped):', error.message);
+      }
+    }
+
+    try {
+      await sequelize.query(`
+        ALTER TABLE assessment_responses
+        ADD CONSTRAINT assessment_responses_ibfk_2
+        FOREIGN KEY (question_id) REFERENCES assessment_questions(id) ON DELETE CASCADE
+      `);
+      console.log('Added CASCADE delete constraint to assessment_responses.question_id');
+    } catch (error) {
+      if (error.message && error.message.includes('Duplicate')) {
+        console.log('Constraint already exists');
+      } else {
+        console.log('Constraint update completed or error:', error.message);
       }
     }
 

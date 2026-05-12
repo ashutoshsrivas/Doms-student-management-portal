@@ -106,7 +106,7 @@ const sessionController = {
   // Update session (Admin only)
   updateSession: async (req, res) => {
     const { sessionId } = req.params;
-    const { name, startDate, endDate, isActive, description } = req.body;
+    const { name, startDate, endDate, isActive, description, sipEnabled } = req.body;
 
     try {
       const session = await AcademicSession.findByPk(sessionId);
@@ -115,13 +115,19 @@ const sessionController = {
         return res.status(404).json({ message: 'Session not found' });
       }
 
-      await session.update({
+      const updateData = {
         name: name || session.name,
         startDate: startDate ? new Date(startDate) : session.startDate,
         endDate: endDate ? new Date(endDate) : session.endDate,
         isActive: isActive !== undefined ? isActive : session.isActive,
         description: description || session.description,
-      });
+      };
+
+      if (sipEnabled !== undefined) {
+        updateData.sipEnabled = sipEnabled;
+      }
+
+      await session.update(updateData);
 
       res.json({
         message: 'Session updated',
@@ -860,7 +866,7 @@ const sessionController = {
         include: [
           {
             model: AcademicSession,
-            attributes: ['id', 'name', 'description'],
+            attributes: ['id', 'name', 'description', 'sipEnabled', 'startDate', 'endDate', 'isActive'],
           },
         ],
       });

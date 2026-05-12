@@ -99,12 +99,12 @@ export default function StudentProfilePage() {
     assessments: true,
   });
 
-  // Redirect if not admin
+  // Redirect if not admin or placement coordinator
   useEffect(() => {
-    if (user?.role !== 'ADMIN') {
+    if (user && !['ADMIN', 'PLACEMENT_COORDINATOR'].includes(user.role)) {
       router.push('/dashboard');
     }
-  }, [user?.role, router]);
+  }, [user, router]);
 
   // Fetch data
   useEffect(() => {
@@ -114,7 +114,7 @@ export default function StudentProfilePage() {
 
         // Fetch student session details - need to get from query with pagination
         let foundStudent = null;
-        let page = 1;
+        const page = 1;
         const limit = 10000;
 
         // Try to fetch all students (with pagination if needed)
@@ -123,7 +123,7 @@ export default function StudentProfilePage() {
             `/sessions/${sessionId}/students?limit=${limit}`
           );
           foundStudent = studentResponse.data.students.find(
-            (s: any) => s.studentSessionId === studentSessionId
+            (s: { studentSessionId: string }) => s.studentSessionId === studentSessionId
           );
 
           if (foundStudent) {
@@ -166,7 +166,7 @@ export default function StudentProfilePage() {
           console.log('[Admin Profile] Submissions response:', submissionsResponse.data);
           console.log('[Admin Profile] Raw submissions:', submissionsResponse.data.submissions);
           if (submissionsResponse.data.submissions && submissionsResponse.data.submissions.length > 0) {
-            submissionsResponse.data.submissions.forEach((sub: any, idx: number) => {
+            submissionsResponse.data.submissions.forEach((sub: { id: string; assessmentId: string; totalScore?: number; status: string; gradedAt?: string }, idx: number) => {
               console.log(`[Admin Profile] Submission ${idx}:`, {
                 id: sub.id,
                 assessmentId: sub.assessmentId,
@@ -288,7 +288,11 @@ export default function StudentProfilePage() {
       // Helper function to convert image URL to base64
       const getImageDataUrl = async (url: string): Promise<string | null> => {
         try {
-          const response = await fetch(url);
+          const response = await fetch(url, { mode: 'cors' });
+          if (!response.ok) {
+            console.warn(`Failed to fetch image: ${response.status}`);
+            return null;
+          }
           const blob = await response.blob();
           return new Promise((resolve, reject) => {
             const reader = new FileReader();
@@ -297,7 +301,7 @@ export default function StudentProfilePage() {
             reader.readAsDataURL(blob);
           });
         } catch (error) {
-          console.error('Error loading image:', error);
+          console.warn('Image loading skipped (CORS or network issue):', error);
           return null;
         }
       };
@@ -440,7 +444,7 @@ export default function StudentProfilePage() {
         // Work Experience - Orange (matches web)
         if (selectedSections.workExperience && profileData.hasWorkExperience && profileData.workExperiences?.length > 0) {
           await addSection('Work Experience', [249, 115, 22], () => {
-            profileData.workExperiences.forEach((exp: any, index: number) => {
+            profileData.workExperiences.forEach((exp: { organization: string; role: string; duration: string; description?: string }, index: number) => {
               checkPageBreak(25);
               doc.setFont('helvetica', 'bold');
               doc.setFontSize(9);
@@ -788,9 +792,13 @@ export default function StudentProfilePage() {
                     src={student.profileImage}
                     alt="Profile"
                     className="w-full h-full object-cover"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = 'none';
+                    }}
                   />
-                ) : (
-                  `${student?.firstName?.charAt(0)}${student?.lastName?.charAt(0)}`.toUpperCase()
+                ) : null}
+                {!student?.profileImage && (
+                  <span>{`${student?.firstName?.charAt(0)}${student?.lastName?.charAt(0)}`.toUpperCase()}</span>
                 )}
               </div>
               <h2 className="text-2xl font-bold text-gray-900 mt-4 text-center md:text-left">
@@ -972,22 +980,22 @@ export default function StudentProfilePage() {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-1">
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Father's Name</p>
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Father&apos;s Name</p>
                     <p className="text-gray-900 font-medium text-lg">{profileData.fatherName || '—'}</p>
                   </div>
                   <div className="space-y-1">
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Father's Occupation</p>
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Father&apos;s Occupation</p>
                     <p className="text-gray-900 font-medium text-lg">{profileData.fatherOccupation || '—'}</p>
                     {profileData.fatherOccupationDescription && (
                       <p className="text-sm text-gray-600 mt-1 italic">{profileData.fatherOccupationDescription}</p>
                     )}
                   </div>
                   <div className="space-y-1">
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Mother's Name</p>
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Mother&apos;s Name</p>
                     <p className="text-gray-900 font-medium text-lg">{profileData.motherName || '—'}</p>
                   </div>
                   <div className="space-y-1">
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Mother's Occupation</p>
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Mother&apos;s Occupation</p>
                     <p className="text-gray-900 font-medium text-lg">{profileData.motherOccupation || '—'}</p>
                     {profileData.motherOccupationDescription && (
                       <p className="text-sm text-gray-600 mt-1 italic">{profileData.motherOccupationDescription}</p>
@@ -1099,7 +1107,7 @@ export default function StudentProfilePage() {
                 </div>
                 {profileData.hasWorkExperience && profileData.workExperiences && profileData.workExperiences.length > 0 ? (
                   <div className="space-y-4">
-                    {profileData.workExperiences.map((exp: any, idx: number) => (
+                    {profileData.workExperiences.map((exp: { organization: string; role: string; duration: string; description?: string }, idx: number) => (
                       <div key={idx} className="bg-gradient-to-r from-orange-50 to-yellow-50 p-5 rounded-xl border-2 border-orange-200 hover:shadow-lg transition-shadow">
                         <div className="flex justify-between items-start mb-3">
                           <h5 className="font-bold text-gray-900 text-lg">{exp.organization}</h5>
@@ -1417,7 +1425,7 @@ export default function StudentProfilePage() {
                     <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Certificates & Documents</p>
                     {profileData.certificateDocuments && profileData.certificateDocuments.length > 0 ? (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {profileData.certificateDocuments.map((doc: any) => (
+                        {profileData.certificateDocuments.map((doc: { id: string; name: string; url: string; uploadedAt: string }) => (
                           <div
                             key={doc.id}
                             className="flex items-center justify-between p-4 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl border-2 border-indigo-200 hover:shadow-lg transition-shadow"

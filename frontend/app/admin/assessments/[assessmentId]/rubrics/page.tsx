@@ -68,10 +68,6 @@ export default function RubricsPage() {
   });
 
   // Fetch assessment and rubrics
-  useEffect(() => {
-    fetchData();
-  }, [assessmentId]);
-
   const fetchData = async () => {
     try {
       setLoading(true);
@@ -90,6 +86,11 @@ export default function RubricsPage() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    const load = async () => { await fetchData(); };
+    load();
+  }, [assessmentId]);
 
   const handleCreateRubric = async () => {
     if (!rubricForm.name.trim()) {
