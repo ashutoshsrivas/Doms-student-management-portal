@@ -4,15 +4,15 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import useAuthStore from '@/app/store/authStore';
-import AnnouncementCard from '@/app/components/Announcements/AnnouncementCard';
+import AnnouncementCard, { type Announcement } from '@/app/components/Announcements/AnnouncementCard';
 import { FiArrowLeft, FiLoader, FiAlertCircle, FiPlus, FiSearch, FiX, FiChevronDown, FiFilter } from 'react-icons/fi';
 
 export default function AnnouncementsPage() {
   const router = useRouter();
   const { user, token, isLoading: authLoading } = useAuthStore();
-  const [announcements, setAnnouncements] = useState([]);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);

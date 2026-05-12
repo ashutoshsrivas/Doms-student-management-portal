@@ -3,7 +3,7 @@ import StudentSIPQuestionsContent from './StudentSIPQuestionsContent';
 
 export default function StudentSIPQuestionsPage() {
   return (
-    <ProtectedRoute allowedRoles={['STUDENT']}>
+    <ProtectedRoute requiredRoles={['STUDENT']}>
       <StudentSIPQuestionsContent />
     </ProtectedRoute>
   );

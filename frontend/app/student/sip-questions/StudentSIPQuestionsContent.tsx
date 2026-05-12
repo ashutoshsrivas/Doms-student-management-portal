@@ -6,16 +6,29 @@ import apiClient from '@/app/lib/apiClient';
 import toast from 'react-hot-toast';
 import DashboardLayout from '@/app/components/DashboardLayout';
 
+type SIPQuestion = {
+  id: string;
+  question: string;
+  description?: string;
+  createdAt: string;
+};
+
+type SIPAnswer = {
+  answerText?: string;
+  answerDocument?: string;
+  submittedAt: string;
+};
+
 export default function StudentSIPQuestionsContent() {
   const { user } = useAuthStore();
-  const [questions, setQuestions] = useState([]);
+  const [questions, setQuestions] = useState<SIPQuestion[]>([]);
   const [loading, setLoading] = useState(true);
-  const [academicSessionId, setAcademicSessionId] = useState(null);
-  const [answers, setAnswers] = useState({});
-  const [submitting, setSubmitting] = useState({});
-  const [uploadingFiles, setUploadingFiles] = useState({});
-  const [answerForms, setAnswerForms] = useState({});
-  const [editingQuestionId, setEditingQuestionId] = useState(null);
+  const [academicSessionId, setAcademicSessionId] = useState<string | null>(null);
+  const [answers, setAnswers] = useState<Record<string, SIPAnswer>>({});
+  const [submitting, setSubmitting] = useState<Record<string, boolean>>({});
+  const [uploadingFiles, setUploadingFiles] = useState<Record<string, File | null>>({});
+  const [answerForms, setAnswerForms] = useState<Record<string, { answerText?: string }>>({});
+  const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null);
   const [sipEnabled, setSipEnabled] = useState(false);
 
   useEffect(() => {
@@ -43,7 +56,7 @@ export default function StudentSIPQuestionsContent() {
         setQuestions(questionsResponse.data || []);
 
         // Fetch existing answers for all questions
-        const answersMap = {};
+        const answersMap: Record<string, SIPAnswer> = {};
         for (const question of questionsResponse.data || []) {
           try {
             const answerResponse = await apiClient.get(
@@ -68,7 +81,7 @@ export default function StudentSIPQuestionsContent() {
     fetchQuestions();
   }, []);
 
-  const handleAnswerSubmit = async (questionId) => {
+  const handleAnswerSubmit = async (questionId: string) => {
     const answerForm = answerForms[questionId];
     const file = uploadingFiles[questionId];
 
@@ -106,19 +119,20 @@ export default function StudentSIPQuestionsContent() {
       toast.success('Answer submitted successfully');
     } catch (error) {
       console.error('Error submitting answer:', error);
+      const err = error as { response?: { data?: { message?: string } } };
       toast.error(
-        error?.response?.data?.message || 'Failed to submit answer'
+        err?.response?.data?.message || 'Failed to submit answer'
       );
     } finally {
       setSubmitting(prev => ({ ...prev, [questionId]: false }));
     }
   };
 
-  const handleFileSelect = (questionId, file) => {
-    setUploadingFiles(prev => ({ ...prev, [questionId]: file }));
+  const handleFileSelect = (questionId: string, file: File | null | undefined) => {
+    setUploadingFiles(prev => ({ ...prev, [questionId]: file ?? null }));
   };
 
-  const handleAnswerTextChange = (questionId, text) => {
+  const handleAnswerTextChange = (questionId: string, text: string) => {
     setAnswerForms(prev => ({
       ...prev,
       [questionId]: { ...prev[questionId], answerText: text },
@@ -213,7 +227,7 @@ export default function StudentSIPQuestionsContent() {
                         value={answerForm.answerText || ''}
                         onChange={e => handleAnswerTextChange(question.id, e.target.value)}
                         className="w-full border-2 border-gray-300 rounded px-4 py-3 text-gray-900 font-medium placeholder-gray-600"
-                        rows="4"
+                        rows={4}
                       />
                     </div>
 

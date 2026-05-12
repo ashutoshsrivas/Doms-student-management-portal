@@ -8,16 +8,52 @@ import useAuthStore from '@/app/store/authStore';
 import { FiArrowLeft, FiLoader, FiSearch, FiUser, FiAward, FiTrendingUp } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 
+type SessionItem = {
+  id: string;
+  name: string;
+  _count?: { StudentSessions?: number };
+};
+
+type Match = {
+  studentId: string;
+  studentName: string;
+  studentEmail: string;
+  matchScore: number;
+  reasoning: string;
+  keyStrengths: string[];
+  gapAreas: string[];
+  sessionId?: string;
+};
+
+type StudentDetails = {
+  personalInfo: {
+    name: string;
+    email: string;
+    phone?: string;
+    registrationNumber: string;
+    department: string;
+  };
+  profile: {
+    careerObjective?: string;
+    aboutMe?: string;
+    skills?: string[];
+    workExperiences?: Array<{ position: string; company: string; duration: string; description?: string }>;
+    achievements?: Array<{ title?: string } | string>;
+    projects?: Array<{ title: string; description?: string }>;
+    certifications?: string[];
+  };
+};
+
 function JobMatchingContent() {
   const router = useRouter();
   const { user, token, isLoading: authLoading } = useAuthStore();
   const [jobDescription, setJobDescription] = useState('');
   const [loading, setLoading] = useState(false);
-  const [matches, setMatches] = useState([]);
-  const [selectedStudent, setSelectedStudent] = useState(null);
-  const [studentDetails, setStudentDetails] = useState(null);
+  const [matches, setMatches] = useState<Match[]>([]);
+  const [selectedStudent, setSelectedStudent] = useState<Match | null>(null);
+  const [studentDetails, setStudentDetails] = useState<StudentDetails | null>(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
-  const [sessions, setSessions] = useState([]);
+  const [sessions, setSessions] = useState<SessionItem[]>([]);
   const [selectedSessionId, setSelectedSessionId] = useState('');
   const [loadingSessions, setLoadingSessions] = useState(true);
 
@@ -60,7 +96,7 @@ function JobMatchingContent() {
     fetchSessions();
   }, [token]);
 
-  const handleSearchStudents = async (e) => {
+  const handleSearchStudents = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!jobDescription.trim()) {
@@ -101,13 +137,14 @@ function JobMatchingContent() {
       }
     } catch (error) {
       console.error('Error:', error);
-      toast.error(error.message || 'Error matching students');
+      const err = error as { message?: string };
+      toast.error(err?.message || 'Error matching students');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleViewStudentDetails = async (match) => {
+  const handleViewStudentDetails = async (match: Match) => {
     setSelectedStudent(match);
     setLoadingDetails(true);
 
@@ -436,7 +473,7 @@ function JobMatchingContent() {
                           {studentDetails.profile.achievements.map((achievement, i) => (
                             <li key={i} className="flex gap-2">
                               <span className="text-green-600">✓</span>
-                              <span className="text-gray-700">{achievement.title || achievement}</span>
+                              <span className="text-gray-700">{typeof achievement === 'string' ? achievement : (achievement.title || '')}</span>
                             </li>
                           ))}
                         </ul>

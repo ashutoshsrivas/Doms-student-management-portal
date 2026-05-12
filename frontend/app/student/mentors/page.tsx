@@ -9,17 +9,17 @@ import toast from 'react-hot-toast';
 import DashboardLayout from '@/app/components/DashboardLayout';
 
 interface Mentor {
-  Faculty: {
-    id: string;
-    firstName: string;
-    lastName: string;
-    email: string;
-    department: string;
-  };
   MentorTeam: {
     id: string;
     teamName: string;
     description: string;
+    Faculty?: {
+      id?: string;
+      firstName?: string;
+      lastName?: string;
+      email?: string;
+      department?: string;
+    };
   };
 }
 

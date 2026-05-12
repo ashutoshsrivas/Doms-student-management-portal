@@ -6,17 +6,31 @@ import apiClient from '@/app/lib/apiClient';
 import toast from 'react-hot-toast';
 import DashboardLayout from '@/app/components/DashboardLayout';
 
+type WeeklyUpdate = {
+  id: string;
+  weekStartDate: string;
+  weekEndDate: string;
+  statusText: string;
+  submittedAt?: string;
+};
+
+type StudentSessionInfo = {
+  academicSessionId: string;
+  AcademicSession: any;
+  id: string;
+};
+
 export default function SIPContent() {
   const { user } = useAuthStore();
   const [activeTab, setActiveTab] = useState('personal');
-  const [sip, setSip] = useState(null);
-  const [studentSession, setStudentSession] = useState(null);
+  const [sip, setSip] = useState<any>(null);
+  const [studentSession, setStudentSession] = useState<StudentSessionInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploadingCertificate, setUploadingCertificate] = useState(false);
   const [uploadingFaculty, setUploadingFaculty] = useState(false);
   const [uploadingSupervisor, setUploadingSupervisor] = useState(false);
-  const [weeklyUpdates, setWeeklyUpdates] = useState([]);
+  const [weeklyUpdates, setWeeklyUpdates] = useState<WeeklyUpdate[]>([]);
   const [currentWeekStatus, setCurrentWeekStatus] = useState('');
   const [submittingWeekly, setSubmittingWeekly] = useState(false);
   const [formMinimized, setFormMinimized] = useState(true);
@@ -181,8 +195,8 @@ export default function SIPContent() {
     fetchSIPData();
   }, []);
 
-  const handleInputChange = (field, value) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+  const handleInputChange = (field: string, value: string | boolean) => {
+    setFormData(prev => ({ ...prev, [field]: value as any }));
   };
 
   const handleSave = async () => {
@@ -228,7 +242,8 @@ export default function SIPContent() {
         toast.success('SIP saved successfully');
       }
     } catch (error) {
-      toast.error(error?.response?.data?.message || 'Failed to save SIP');
+      const err = error as { response?: { data?: { message?: string } } };
+      toast.error(err?.response?.data?.message || 'Failed to save SIP');
     } finally {
       setSaving(false);
     }
@@ -253,26 +268,27 @@ export default function SIPContent() {
       setCurrentWeekStatus('');
       toast.success('Weekly update submitted successfully');
     } catch (error) {
-      toast.error(error?.response?.data?.message || 'Failed to submit weekly update');
+      const err = error as { response?: { data?: { message?: string } } };
+      toast.error(err?.response?.data?.message || 'Failed to submit weekly update');
     } finally {
       setSubmittingWeekly(false);
     }
   };
 
-  const calculateWeekDisplay = (date) => {
+  const calculateWeekDisplay = (date: string) => {
     const d = new Date(date);
-    const options = { month: 'short', day: 'numeric', year: 'numeric' };
+    const options: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric', year: 'numeric' };
     return d.toLocaleDateString('en-US', options);
   };
 
-  const handleCertificateUpload = async (file) => {
+  const handleCertificateUpload = async (file: File | null | undefined) => {
     if (!file || !sip) return;
     try {
       setUploadingCertificate(true);
       const formDataObj = new FormData();
       formDataObj.append('certificate', file);
       const response = await apiClient.post(`/sip/${sip.id}/upload-certificate`, formDataObj);
-      setSip(prev => ({ ...prev, certificateIssued: response.data.certificateIssued }));
+      setSip((prev: any) => ({ ...prev, certificateIssued: response.data.certificateIssued }));
       toast.success('Certificate uploaded successfully');
     } catch (error) {
       toast.error('Failed to upload certificate');
@@ -281,7 +297,7 @@ export default function SIPContent() {
     }
   };
 
-  const handleFeedbackUpload = async (file, type) => {
+  const handleFeedbackUpload = async (file: File | null | undefined, type: 'faculty' | 'supervisor') => {
     if (!file || !sip) return;
     try {
       if (type === 'faculty') setUploadingFaculty(true);
@@ -289,7 +305,7 @@ export default function SIPContent() {
       const formDataObj = new FormData();
       formDataObj.append('feedback', file);
       const response = await apiClient.post(`/sip/${sip.id}/upload-feedback?feedbackType=${type}`, formDataObj);
-      setSip(prev => ({
+      setSip((prev: any) => ({
         ...prev,
         [type === 'faculty' ? 'facultyFeedback' : 'supervisorFeedback']:
           response.data[type === 'faculty' ? 'facultyFeedback' : 'supervisorFeedback'],
@@ -427,7 +443,7 @@ export default function SIPContent() {
               <input type="text" placeholder="HR Head Name" value={formData.hrHeadName} onChange={e => handleInputChange('hrHeadName', e.target.value)} className="col-span-1 border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium placeholder-gray-600" />
               <input type="tel" placeholder="HR Phone" value={formData.hrPhone} onChange={e => handleInputChange('hrPhone', e.target.value)} className="col-span-1 border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium placeholder-gray-600" />
               <input type="email" placeholder="HR Email" value={formData.hrEmail} onChange={e => handleInputChange('hrEmail', e.target.value)} className="col-span-1 border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium placeholder-gray-600" />
-              <textarea placeholder="Office Address" value={formData.officeAddress} onChange={e => handleInputChange('officeAddress', e.target.value)} className="col-span-2 border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium placeholder-gray-600" rows="3" />
+              <textarea placeholder="Office Address" value={formData.officeAddress} onChange={e => handleInputChange('officeAddress', e.target.value)} className="col-span-2 border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium placeholder-gray-600" rows={3} />
             </div>
           )}
 
@@ -488,7 +504,7 @@ export default function SIPContent() {
                   value={currentWeekStatus}
                   onChange={e => setCurrentWeekStatus(e.target.value)}
                   className="w-full border-2 border-gray-300 rounded px-4 py-3 text-gray-900 font-medium placeholder-gray-600"
-                  rows="5"
+                  rows={5}
                 />
                 <button
                   onClick={handleSubmitWeeklyUpdate}
