@@ -8,6 +8,8 @@ import useAuthStore from '@/app/store/authStore';
 import { FiArrowLeft, FiLoader, FiSearch, FiUser, FiAward, FiTrendingUp } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
+
 type SessionItem = {
   id: string;
   name: string;
@@ -70,7 +72,7 @@ function JobMatchingContent() {
     const fetchSessions = async () => {
       try {
         setLoadingSessions(true);
-        const response = await fetch('http://localhost:4000/api/sessions?limit=100', {
+        const response = await fetch(`${API_BASE}/sessions?limit=100`, {
           headers: {
             'Authorization': `Bearer ${token}`,
           },
@@ -114,7 +116,7 @@ function JobMatchingContent() {
     setSelectedStudent(null);
 
     try {
-      const response = await fetch('http://localhost:4000/api/job-matching/match', {
+      const response = await fetch(`${API_BASE}/job-matching/match`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -149,7 +151,7 @@ function JobMatchingContent() {
     setLoadingDetails(true);
 
     try {
-      const response = await fetch(`http://localhost:4000/api/job-matching/student/${match.studentId}`, {
+      const response = await fetch(`${API_BASE}/job-matching/student/${match.studentId}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },

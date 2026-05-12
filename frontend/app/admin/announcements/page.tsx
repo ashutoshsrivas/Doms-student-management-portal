@@ -9,6 +9,8 @@ import AnnouncementCard, { Announcement } from '@/app/components/Announcements/A
 import { FiArrowLeft, FiLoader, FiPlus, FiTrash2, FiEdit2 } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
+
 function AdminAnnouncementsContent() {
   const router = useRouter();
   const { user, token, isLoading: authLoading } = useAuthStore();
@@ -35,7 +37,7 @@ function AdminAnnouncementsContent() {
     const fetchAnnouncements = async () => {
       try {
         setLoading(true);
-        const response = await fetch('http://localhost:4000/api/announcements', {
+        const response = await fetch(`${API_BASE}/announcements`, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
@@ -67,7 +69,7 @@ function AdminAnnouncementsContent() {
 
     setDeletingId(id);
     try {
-      const response = await fetch(`http://localhost:4000/api/announcements/${id}`, {
+      const response = await fetch(`${API_BASE}/announcements/${id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,

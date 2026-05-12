@@ -7,6 +7,8 @@ import useAuthStore from '@/app/store/authStore';
 import AnnouncementCard, { type Announcement } from '@/app/components/Announcements/AnnouncementCard';
 import { FiArrowLeft, FiLoader, FiAlertCircle, FiPlus, FiSearch, FiX, FiChevronDown, FiFilter } from 'react-icons/fi';
 
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
+
 export default function AnnouncementsPage() {
   const router = useRouter();
   const { user, token, isLoading: authLoading } = useAuthStore();
@@ -36,7 +38,7 @@ export default function AnnouncementsPage() {
         setLoading(true);
         setError(null);
 
-        const response = await fetch('http://localhost:4000/api/announcements', {
+        const response = await fetch(`${API_BASE}/announcements`, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',

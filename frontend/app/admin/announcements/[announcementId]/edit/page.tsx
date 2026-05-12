@@ -8,6 +8,8 @@ import useAuthStore from '@/app/store/authStore';
 import { FiArrowLeft, FiLoader, FiX, FiImage } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
+
 function EditAnnouncementContent() {
   const router = useRouter();
   const params = useParams();
@@ -48,7 +50,7 @@ function EditAnnouncementContent() {
     const fetchAnnouncement = async () => {
       try {
         setPageLoading(true);
-        const response = await fetch(`http://localhost:4000/api/announcements/${announcementId}`, {
+        const response = await fetch(`${API_BASE}/announcements/${announcementId}`, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
@@ -165,7 +167,7 @@ function EditAnnouncementContent() {
         }
       }
 
-      const response = await fetch(`http://localhost:4000/api/announcements/${announcementId}`, {
+      const response = await fetch(`${API_BASE}/announcements/${announcementId}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
