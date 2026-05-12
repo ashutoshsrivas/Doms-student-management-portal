@@ -174,7 +174,7 @@ export default function UsersPage() {
       department: user.department || '',
       employeeId: user.employeeId || '',
       registrationNumber: user.registrationNumber || '',
-      approvedRole: user.role,
+      approvedRole: user.approvedRole,
       status: user.status,
     });
     setShowModal(true);
@@ -418,7 +418,7 @@ export default function UsersPage() {
                       <td className="px-6 py-4 text-sm text-gray-700">{user.email}</td>
                       <td className="px-6 py-4 text-sm">
                         <span className="px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
-                          {user.role}
+                          {user.approvedRole}
                         </span>
                       </td>
                       <td className="px-6 py-4 text-sm">

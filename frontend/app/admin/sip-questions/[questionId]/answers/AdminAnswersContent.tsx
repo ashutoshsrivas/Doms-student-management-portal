@@ -9,8 +9,8 @@ import Link from 'next/link';
 
 export default function AdminAnswersContent({ questionId }: { questionId: string }) {
   const { user } = useAuthStore();
-  const [question, setQuestion] = useState(null);
-  const [answers, setAnswers] = useState([]);
+  const [question, setQuestion] = useState<{ question: string; description?: string; createdAt: string } | null>(null);
+  const [answers, setAnswers] = useState<{ id: string; SIP?: { StudentSession?: { Student?: { firstName?: string; lastName?: string; email?: string } } }; answerText?: string; answerDocument?: string; submittedAt: string; [key: string]: unknown }[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {

@@ -9,13 +9,13 @@ import Link from 'next/link';
 
 export default function AdminSIPQuestionsContent() {
   const { user } = useAuthStore();
-  const [sessions, setSessions] = useState([]);
-  const [selectedSessionId, setSelectedSessionId] = useState(null);
-  const [questions, setQuestions] = useState([]);
+  const [sessions, setSessions] = useState<{ id: string; name: string; isActive?: boolean; startDate?: string; endDate?: string }[]>([]);
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+  const [questions, setQuestions] = useState<{ id: string; question: string; description?: string; createdAt?: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [posting, setPosting] = useState(false);
-  const [deletingId, setDeletingId] = useState(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     question: '',
@@ -26,7 +26,7 @@ export default function AdminSIPQuestionsContent() {
     const fetchData = async () => {
       try {
         const sessionsResponse = await apiClient.get('/sessions?page=1&limit=100');
-        const allSessions = sessionsResponse.data.sessions || [];
+        const allSessions: { id: string; name: string; isActive?: boolean; startDate?: string; endDate?: string }[] = sessionsResponse.data.sessions || [];
         setSessions(allSessions);
 
         if (allSessions.length > 0) {
@@ -45,7 +45,7 @@ export default function AdminSIPQuestionsContent() {
     fetchData();
   }, []);
 
-  const fetchQuestions = async (sessionId) => {
+  const fetchQuestions = async (sessionId: string) => {
     try {
       const response = await apiClient.get(`/sip-questions/session/${sessionId}`);
       setQuestions(response.data || []);
@@ -55,7 +55,7 @@ export default function AdminSIPQuestionsContent() {
     }
   };
 
-  const handleSessionChange = async (sessionId) => {
+  const handleSessionChange = async (sessionId: string) => {
     setSelectedSessionId(sessionId);
     fetchQuestions(sessionId);
   };
@@ -84,13 +84,13 @@ export default function AdminSIPQuestionsContent() {
       setShowForm(false);
       toast.success('Question posted successfully');
     } catch (error) {
-      toast.error(error?.response?.data?.message || 'Failed to post question');
+      toast.error((error as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Failed to post question');
     } finally {
       setPosting(false);
     }
   };
 
-  const handleDeleteQuestion = async (questionId) => {
+  const handleDeleteQuestion = async (questionId: string) => {
     if (!confirm('Are you sure you want to delete this question?')) return;
 
     try {
@@ -128,7 +128,7 @@ export default function AdminSIPQuestionsContent() {
               >
                 <p className="font-bold text-gray-900">{session.name}</p>
                 <p className="text-gray-600 text-sm font-semibold">
-                  {new Date(session.startDate).toLocaleDateString()} - {new Date(session.endDate).toLocaleDateString()}
+                  {session.startDate ? new Date(session.startDate).toLocaleDateString() : ""} - {session.endDate ? new Date(session.endDate).toLocaleDateString() : ""}
                 </p>
               </button>
             ))}
@@ -153,7 +153,7 @@ export default function AdminSIPQuestionsContent() {
                   value={formData.question}
                   onChange={e => setFormData(prev => ({ ...prev, question: e.target.value }))}
                   className="w-full border-2 border-gray-300 rounded px-4 py-3 text-gray-900 font-medium placeholder-gray-600"
-                  rows="4"
+                  rows={4}
                 />
               </div>
               <div>
@@ -163,7 +163,7 @@ export default function AdminSIPQuestionsContent() {
                   value={formData.description}
                   onChange={e => setFormData(prev => ({ ...prev, description: e.target.value }))}
                   className="w-full border-2 border-gray-300 rounded px-4 py-3 text-gray-900 font-medium placeholder-gray-600"
-                  rows="3"
+                  rows={3}
                 />
               </div>
               <button
@@ -215,7 +215,7 @@ export default function AdminSIPQuestionsContent() {
                     </div>
                   </div>
                   <p className="text-gray-600 text-xs font-semibold">
-                    Posted on {new Date(question.createdAt).toLocaleDateString()}
+                    Posted on {question.createdAt ? new Date(question.createdAt).toLocaleDateString() : ""}
                   </p>
                 </div>
               ))}

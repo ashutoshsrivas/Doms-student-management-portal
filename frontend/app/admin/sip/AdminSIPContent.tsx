@@ -10,11 +10,18 @@ import { exportAllSIPsToExcel } from '@/app/lib/exportUtils';
 
 export default function AdminSIPContent() {
   const { user } = useAuthStore();
-  const [sessions, setSessions] = useState([]);
-  const [sips, setSips] = useState([]);
-  const [selectedSessionId, setSelectedSessionId] = useState(null);
+  const [sessions, setSessions] = useState<{ id: string; name: string; isActive?: boolean; sipEnabled?: boolean; startDate?: string; endDate?: string }[]>([]);
+  const [sips, setSips] = useState<{
+    id: string;
+    studentName?: string;
+    companyName?: string;
+    sipLocation?: string;
+    status?: string;
+    [key: string]: unknown;
+  }[]>([]);
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [togglingSession, setTogglingSession] = useState(null);
+  const [togglingSession, setTogglingSession] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -41,7 +48,7 @@ export default function AdminSIPContent() {
     fetchData();
   }, []);
 
-  const handleSessionChange = async (sessionId) => {
+  const handleSessionChange = async (sessionId: string) => {
     try {
       setSelectedSessionId(sessionId);
       const sipsResponse = await apiClient.get(`/sip/session/${sessionId}`);
@@ -52,15 +59,15 @@ export default function AdminSIPContent() {
     }
   };
 
-  const handleToggleSIP = async (sessionId, currentState) => {
+  const handleToggleSIP = async (sessionId: string, currentState: boolean) => {
     try {
       setTogglingSession(sessionId);
       const newState = !currentState;
       const response = await apiClient.put(`/sessions/${sessionId}`, { sipEnabled: newState });
       const updatedSessionResponse = await apiClient.get(`/sessions?page=1&limit=100`);
-      const updatedSessions = updatedSessionResponse.data.sessions || [];
+      const updatedSessions: { id: string; name: string; isActive?: boolean; sipEnabled?: boolean; startDate?: string; endDate?: string }[] = updatedSessionResponse.data.sessions || [];
       setSessions(updatedSessions);
-      const updatedSession = updatedSessions.find(s => s.id === sessionId);
+      const updatedSession = updatedSessions.find((s) => s.id === sessionId);
 
       if (updatedSession?.sipEnabled === newState) {
         toast.success(`SIP ${newState ? 'enabled' : 'disabled'} for this session`);
@@ -69,7 +76,8 @@ export default function AdminSIPContent() {
       }
     } catch (error) {
       console.error('Error toggling SIP:', error);
-      toast.error(error?.response?.data?.message || 'Failed to update SIP status');
+      const err = error as { response?: { data?: { message?: string } } };
+      toast.error(err?.response?.data?.message || 'Failed to update SIP status');
     } finally {
       setTogglingSession(null);
     }
@@ -94,11 +102,11 @@ export default function AdminSIPContent() {
                 >
                   <p className="font-bold text-gray-900 text-base">{session.name}</p>
                   <p className="text-gray-700 text-sm font-semibold">
-                    {new Date(session.startDate).toLocaleDateString()} - {new Date(session.endDate).toLocaleDateString()}
+                    {session.startDate ? new Date(session.startDate).toLocaleDateString() : '—'} - {session.endDate ? new Date(session.endDate).toLocaleDateString() : '—'}
                   </p>
                 </div>
                 <button
-                  onClick={() => handleToggleSIP(session.id, session.sipEnabled)}
+                  onClick={() => handleToggleSIP(session.id, !!session.sipEnabled)}
                   disabled={togglingSession === session.id}
                   className={`px-6 py-2 rounded font-bold text-white text-base transition ${
                     session.sipEnabled

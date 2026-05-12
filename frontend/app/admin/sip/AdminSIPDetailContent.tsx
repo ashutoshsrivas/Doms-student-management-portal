@@ -8,16 +8,16 @@ import DashboardLayout from '@/app/components/DashboardLayout';
 import { useRouter } from 'next/navigation';
 import { exportSIPToExcel } from '@/app/lib/exportUtils';
 
-export default function AdminSIPDetailContent({ sipId }) {
+export default function AdminSIPDetailContent({ sipId }: { sipId: string }) {
   const { user } = useAuthStore();
   const router = useRouter();
-  const [sip, setSip] = useState(null);
+  const [sip, setSip] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [weeklyUpdates, setWeeklyUpdates] = useState([]);
+  const [weeklyUpdates, setWeeklyUpdates] = useState<any[]>([]);
 
   const [formData, setFormData] = useState({
     enrollmentNo: '',
@@ -119,8 +119,8 @@ export default function AdminSIPDetailContent({ sipId }) {
     fetchSIPDetails();
   }, [sipId]);
 
-  const handleInputChange = (field, value) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+  const handleInputChange = (field: string, value: string | boolean) => {
+    setFormData(prev => ({ ...prev, [field]: value as any }));
   };
 
   const handleSave = async () => {
@@ -131,7 +131,8 @@ export default function AdminSIPDetailContent({ sipId }) {
       setEditing(false);
       toast.success('SIP updated successfully');
     } catch (error) {
-      toast.error(error?.response?.data?.message || 'Failed to save SIP');
+      const err = error as { response?: { data?: { message?: string } } };
+      toast.error(err?.response?.data?.message || 'Failed to save SIP');
     } finally {
       setSaving(false);
     }
@@ -144,18 +145,22 @@ export default function AdminSIPDetailContent({ sipId }) {
       toast.success('SIP deleted successfully');
       setTimeout(() => router.push('/admin/sip'), 1500);
     } catch (error) {
-      toast.error(error?.response?.data?.message || 'Failed to delete SIP');
+      const err = error as { response?: { data?: { message?: string } } };
+      toast.error(err?.response?.data?.message || 'Failed to delete SIP');
     } finally {
       setDeleting(false);
       setShowDeleteConfirm(false);
     }
   };
 
-  const calculateWeekDisplay = (date) => {
+  const calculateWeekDisplay = (date: string) => {
     const d = new Date(date);
-    const options = { month: 'short', day: 'numeric', year: 'numeric' };
+    const options: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric', year: 'numeric' };
     return d.toLocaleDateString('en-US', options);
   };
+
+  // formData is indexed by string keys throughout the JSX — alias for safe access.
+  const fd = formData as Record<string, any>;
 
   if (loading) return <div className="text-center py-8 text-gray-900 font-semibold">Loading...</div>;
 
@@ -232,7 +237,7 @@ export default function AdminSIPDetailContent({ sipId }) {
                     {editing ? (
                       field === 'gender' ? (
                         <select
-                          value={formData[field]}
+                          value={fd[field]}
                           onChange={e => handleInputChange(field, e.target.value)}
                           className="w-full border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium"
                         >
@@ -244,13 +249,13 @@ export default function AdminSIPDetailContent({ sipId }) {
                       ) : (
                         <input
                           type={field === 'email' ? 'email' : field === 'phoneNo' ? 'tel' : 'text'}
-                          value={formData[field]}
+                          value={fd[field]}
                           onChange={e => handleInputChange(field, e.target.value)}
                           className="w-full border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium"
                         />
                       )
                     ) : (
-                      <p className="text-gray-900 font-semibold">{formData[field] || 'N/A'}</p>
+                      <p className="text-gray-900 font-semibold">{fd[field] || 'N/A'}</p>
                     )}
                   </div>
                 ))}
@@ -267,7 +272,7 @@ export default function AdminSIPDetailContent({ sipId }) {
                       {editing ? (
                         field === 'type' ? (
                           <select
-                            value={formData[field]}
+                            value={fd[field]}
                             onChange={e => handleInputChange(field, e.target.value)}
                             className="w-full border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium"
                           >
@@ -276,7 +281,7 @@ export default function AdminSIPDetailContent({ sipId }) {
                           </select>
                         ) : field === 'corporateType' ? (
                           <select
-                            value={formData[field]}
+                            value={fd[field]}
                             onChange={e => handleInputChange(field, e.target.value)}
                             className="w-full border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium"
                           >
@@ -290,20 +295,20 @@ export default function AdminSIPDetailContent({ sipId }) {
                         ) : field === 'joinDate' || field === 'nocDate' || field === 'completionDate' ? (
                           <input
                             type="date"
-                            value={formData[field]}
+                            value={fd[field]}
                             onChange={e => handleInputChange(field, e.target.value)}
                             className="w-full border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium"
                           />
                         ) : (
                           <input
                             type={field === 'stipend' || field === 'durationWeeks' ? 'number' : 'text'}
-                            value={formData[field]}
+                            value={fd[field]}
                             onChange={e => handleInputChange(field, e.target.value)}
                             className="w-full border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium"
                           />
                         )
                       ) : (
-                        <p className="text-gray-900 font-semibold">{formData[field] || 'N/A'}</p>
+                        <p className="text-gray-900 font-semibold">{fd[field] || 'N/A'}</p>
                       )}
                     </div>
                   )
@@ -320,21 +325,21 @@ export default function AdminSIPDetailContent({ sipId }) {
                     {editing ? (
                       field === 'officeAddress' ? (
                         <textarea
-                          value={formData[field]}
+                          value={fd[field]}
                           onChange={e => handleInputChange(field, e.target.value)}
                           className="w-full border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium"
-                          rows="3"
+                          rows={3}
                         />
                       ) : (
                         <input
                           type={field.includes('Email') ? 'email' : field.includes('Phone') ? 'tel' : 'text'}
-                          value={formData[field]}
+                          value={fd[field]}
                           onChange={e => handleInputChange(field, e.target.value)}
                           className="w-full border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium"
                         />
                       )
                     ) : (
-                      <p className="text-gray-900 font-semibold">{formData[field] || 'N/A'}</p>
+                      <p className="text-gray-900 font-semibold">{fd[field] || 'N/A'}</p>
                     )}
                   </div>
                 ))}
@@ -351,20 +356,20 @@ export default function AdminSIPDetailContent({ sipId }) {
                       field === 'sipEndDate' ? (
                         <input
                           type="date"
-                          value={formData[field]}
+                          value={fd[field]}
                           onChange={e => handleInputChange(field, e.target.value)}
                           className="w-full border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium"
                         />
                       ) : (
                         <input
                           type="text"
-                          value={formData[field]}
+                          value={fd[field]}
                           onChange={e => handleInputChange(field, e.target.value)}
                           className="w-full border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium"
                         />
                       )
                     ) : (
-                      <p className="text-gray-900 font-semibold">{formData[field] || 'N/A'}</p>
+                      <p className="text-gray-900 font-semibold">{fd[field] || 'N/A'}</p>
                     )}
                   </div>
                 ))}
@@ -382,14 +387,14 @@ export default function AdminSIPDetailContent({ sipId }) {
                         field === 'ppOffered' ? (
                           <input
                             type="checkbox"
-                            checked={formData[field]}
+                            checked={fd[field]}
                             onChange={e => handleInputChange(field, e.target.checked)}
                             className="w-4 h-4 ml-2"
                           />
                         ) : field === 'nocIssueDateExtension' ? (
                           <input
                             type="date"
-                            value={formData[field]}
+                            value={fd[field]}
                             onChange={e => handleInputChange(field, e.target.value)}
                             className="w-full border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium"
                           />
@@ -397,13 +402,13 @@ export default function AdminSIPDetailContent({ sipId }) {
                           <input
                             type="number"
                             step="0.01"
-                            value={formData[field]}
+                            value={fd[field]}
                             onChange={e => handleInputChange(field, e.target.value)}
                             className="w-full border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium"
                           />
                         )
                       ) : (
-                        <p className="text-gray-900 font-semibold">{field === 'ppOffered' ? (formData[field] ? 'Yes' : 'No') : (formData[field] || 'N/A')}</p>
+                        <p className="text-gray-900 font-semibold">{field === 'ppOffered' ? (fd[field] ? 'Yes' : 'No') : (fd[field] || 'N/A')}</p>
                       )}
                     </div>
                   ) : null

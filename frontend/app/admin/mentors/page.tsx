@@ -29,7 +29,7 @@ interface Faculty {
 
 interface StudentSession {
   id: string;
-  Student: { id: string; firstName: string; lastName: string };
+  Student: { id: string; firstName: string; lastName: string; email?: string };
 }
 
 export default function MentorTeamManagement() {

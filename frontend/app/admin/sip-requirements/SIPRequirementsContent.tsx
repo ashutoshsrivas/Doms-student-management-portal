@@ -8,8 +8,8 @@ import DashboardLayout from '@/app/components/DashboardLayout';
 
 export default function SIPRequirementsContent() {
   const { user } = useAuthStore();
-  const [requirements, setRequirements] = useState([]);
-  const [sessionId, setSessionId] = useState(null);
+  const [requirements, setRequirements] = useState<{ id: string; title?: string; companyName?: string; jobRole?: string; description?: string; location?: string; stipend?: string; type?: string }[]>([]);
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [posting, setPosting] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -30,7 +30,7 @@ export default function SIPRequirementsContent() {
       try {
         const sessions = await apiClient.get('/sessions?page=1&limit=100');
         if (sessions.data && sessions.data.sessions && sessions.data.sessions.length > 0) {
-          const activeSession = sessions.data.sessions.find(s => s.isActive) || sessions.data.sessions[0];
+          const activeSession = sessions.data.sessions.find((s: { id: string; isActive?: boolean }) => s.isActive) || sessions.data.sessions[0];
           setSessionId(activeSession.id);
 
           const reqs = await apiClient.get(`/sip-requirements/${activeSession.id}`);
@@ -74,13 +74,13 @@ export default function SIPRequirementsContent() {
       setShowForm(false);
       toast.success('Requirement posted successfully');
     } catch (error) {
-      toast.error(error?.response?.data?.message || 'Failed to post requirement');
+      toast.error((error as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Failed to post requirement');
     } finally {
       setPosting(false);
     }
   };
 
-  const handleDeleteRequirement = async (requirementId) => {
+  const handleDeleteRequirement = async (requirementId: string) => {
     try {
       await apiClient.delete(`/sip-requirements/${requirementId}`);
       setRequirements(prev => prev.filter(r => r.id !== requirementId));
@@ -161,7 +161,7 @@ export default function SIPRequirementsContent() {
                 value={formData.description}
                 onChange={e => setFormData(prev => ({ ...prev, description: e.target.value }))}
                 className="col-span-2 border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium placeholder-gray-600"
-                rows="4"
+                rows={4}
               />
             </div>
             <button

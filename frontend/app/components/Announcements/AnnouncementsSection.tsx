@@ -5,9 +5,9 @@ import AnnouncementCard from './AnnouncementCard';
 import { FiLoader } from 'react-icons/fi';
 
 export default function AnnouncementsSection() {
-  const [announcements, setAnnouncements] = useState([]);
+  const [announcements, setAnnouncements] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchAnnouncements = async () => {

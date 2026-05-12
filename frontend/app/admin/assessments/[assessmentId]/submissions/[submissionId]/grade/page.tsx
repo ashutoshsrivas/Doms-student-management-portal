@@ -384,7 +384,7 @@ export default function GradeSubmissionPage() {
                           <div className="text-right flex-shrink-0">
                             <p className="text-xs text-slate-600 font-semibold">Current Score</p>
                             <p className="text-2xl font-bold text-blue-600">
-                              {parseFloat(score?.score) || 0}<span className="text-lg text-slate-500">/{parseFloat(criterion.maxPoints) || 0}</span>
+                              {parseFloat(String(score?.score ?? 0)) || 0}<span className="text-lg text-slate-500">/{parseFloat(String(criterion.maxPoints ?? 0)) || 0}</span>
                             </p>
                           </div>
                         </div>
@@ -436,9 +436,9 @@ export default function GradeSubmissionPage() {
                               <input
                                 type="range"
                                 min="0"
-                              max={parseFloat(criterion.maxPoints) || 0}
+                              max={parseFloat(String(criterion.maxPoints ?? 0)) || 0}
                               step="0.5"
-                              value={parseFloat(score?.score) || 0}
+                              value={parseFloat(String(score?.score ?? 0)) || 0}
                               onChange={(e) =>
                                 handleScoreChange(criterion.id, parseFloat(e.target.value))
                               }
@@ -446,15 +446,15 @@ export default function GradeSubmissionPage() {
                             />
                             <div className="flex justify-between text-xs text-slate-500 mt-1">
                               <span>0</span>
-                              <span>{parseFloat(criterion.maxPoints) || 0}</span>
+                              <span>{parseFloat(String(criterion.maxPoints ?? 0)) || 0}</span>
                               </div>
                             </div>
                             <input
                               type="number"
                               min="0"
-                              max={parseFloat(criterion.maxPoints) || 0}
+                              max={parseFloat(String(criterion.maxPoints ?? 0)) || 0}
                               step="0.5"
-                              value={parseFloat(score?.score) || 0}
+                              value={parseFloat(String(score?.score ?? 0)) || 0}
                               onChange={(e) =>
                                 handleScoreChange(criterion.id, parseFloat(e.target.value))
                               }

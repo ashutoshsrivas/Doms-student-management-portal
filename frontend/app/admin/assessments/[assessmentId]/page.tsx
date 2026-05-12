@@ -64,6 +64,12 @@ interface AssignmentRecord {
   assignedAt: string;
   StudentSession?: {
     id: string;
+    Student?: {
+      id: string;
+      firstName: string;
+      lastName: string;
+      email: string;
+    };
     User: {
       id: string;
       firstName: string;

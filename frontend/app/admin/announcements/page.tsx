@@ -5,14 +5,14 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import ProtectedRoute from '@/app/components/ProtectedRoute';
 import useAuthStore from '@/app/store/authStore';
-import AnnouncementCard from '@/app/components/Announcements/AnnouncementCard';
+import AnnouncementCard, { Announcement } from '@/app/components/Announcements/AnnouncementCard';
 import { FiArrowLeft, FiLoader, FiPlus, FiTrash2, FiEdit2 } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 
 function AdminAnnouncementsContent() {
   const router = useRouter();
   const { user, token, isLoading: authLoading } = useAuthStore();
-  const [announcements, setAnnouncements] = useState([]);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 

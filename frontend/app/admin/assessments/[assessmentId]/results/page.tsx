@@ -138,7 +138,7 @@ export default function AssessmentResultsPage() {
             const score = typeof s.totalScore === 'string' ? parseFloat(s.totalScore) : s.totalScore;
             return score;
           })
-          .filter((score): score is number => typeof score === 'number' && !isNaN(score) && score !== null && score !== undefined);
+          .filter((score: number | null | undefined): score is number => typeof score === 'number' && !isNaN(score) && score !== null && score !== undefined);
 
         setStats({
           totalSubmissions: subs.length,

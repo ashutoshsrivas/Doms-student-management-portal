@@ -3,7 +3,7 @@ import AdminSIPQuestionsContent from './AdminSIPQuestionsContent';
 
 export default function AdminSIPQuestionsPage() {
   return (
-    <ProtectedRoute allowedRoles={['ADMIN', 'HOD', 'PLACEMENT_COORDINATOR']}>
+    <ProtectedRoute requiredRoles={['ADMIN', 'HOD', 'PLACEMENT_COORDINATOR']}>
       <AdminSIPQuestionsContent />
     </ProtectedRoute>
   );

@@ -259,7 +259,7 @@ export default function StudentProfilePage() {
   );
   const avgScore =
     submittedAssessments.length > 0
-      ? (submittedAssessments.reduce((sum, s) => sum + (parseFloat(s.totalScore) || 0), 0) /
+      ? (submittedAssessments.reduce((sum, s) => sum + (parseFloat(String(s.totalScore ?? 0)) || 0), 0) /
         submittedAssessments.length)
       : 0;
 
@@ -640,7 +640,7 @@ export default function StudentProfilePage() {
         // Assessment Details with improved cards
         assessments.forEach((assessment, index) => {
           const submission = submissions.find((s) => s.assessmentId === assessment.id);
-          const submissionScore = submission ? parseFloat(submission.totalScore) : 0;
+          const submissionScore = submission ? parseFloat(String(submission.totalScore ?? 0)) : 0;
           const percentage = assessment.totalPoints > 0 && submissionScore > 0
             ? Math.round((submissionScore / assessment.totalPoints) * 100)
             : 0;
@@ -907,7 +907,7 @@ export default function StudentProfilePage() {
                     const submission = submissions.find(
                       (s) => s.assessmentId === assessment.id
                     );
-                    const submissionScore = submission ? parseFloat(submission.totalScore) : 0;
+                    const submissionScore = submission ? parseFloat(String(submission.totalScore ?? 0)) : 0;
                     const percentage = assessment.totalPoints > 0 && submissionScore > 0
                       ? Math.round((submissionScore / assessment.totalPoints) * 100)
                       : 0;

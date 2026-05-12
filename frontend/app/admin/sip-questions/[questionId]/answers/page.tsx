@@ -9,7 +9,7 @@ export default async function AdminAnswersPage({
   const { questionId } = await params;
 
   return (
-    <ProtectedRoute allowedRoles={['ADMIN', 'HOD', 'PLACEMENT_COORDINATOR']}>
+    <ProtectedRoute requiredRoles={['ADMIN', 'HOD', 'PLACEMENT_COORDINATOR']}>
       <AdminAnswersContent questionId={questionId} />
     </ProtectedRoute>
   );
