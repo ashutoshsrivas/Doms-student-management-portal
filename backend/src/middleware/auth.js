@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const { User, Role, UserRole } = require('../models');
+const { User, Role } = require('../models');
 
 const authenticateToken = async (req, res, next) => {
   try {
@@ -10,41 +10,42 @@ const authenticateToken = async (req, res, next) => {
       return res.status(401).json({ message: 'Access token required' });
     }
 
-    jwt.verify(token, process.env.JWT_SECRET, async (err, user) => {
-      if (err) {
-        return res.status(403).json({ message: 'Invalid or expired token' });
-      }
+    let payload;
+    try {
+      payload = jwt.verify(token, process.env.JWT_SECRET);
+    } catch (err) {
+      const message = err.name === 'TokenExpiredError' ? 'Token expired' : 'Invalid token';
+      return res.status(401).json({ message, code: err.name });
+    }
 
-      // Fetch fresh user data from database
-      const dbUser = await User.findByPk(user.id, {
-        include: {
-          model: Role,
-          through: { attributes: [] },
-        },
-      });
-
-      if (!dbUser) {
-        return res.status(404).json({ message: 'User not found' });
-      }
-
-      if (dbUser.approvedRole !== user.role) {
-        return res.status(403).json({ message: 'User role has changed' });
-      }
-
-      req.user = {
-        id: dbUser.id,
-        email: dbUser.email,
-        firstName: dbUser.firstName,
-        lastName: dbUser.lastName,
-        role: dbUser.approvedRole,
-        status: dbUser.status,
-      };
-
-      next();
+    const dbUser = await User.findByPk(payload.id, {
+      include: { model: Role, through: { attributes: [] } },
     });
+
+    if (!dbUser) {
+      return res.status(401).json({ message: 'User not found' });
+    }
+
+    if (dbUser.status !== 'ACTIVE') {
+      return res.status(401).json({ message: 'Account is not active', status: dbUser.status });
+    }
+
+    if (!dbUser.approvedRole || dbUser.approvedRole !== payload.role) {
+      return res.status(401).json({ message: 'User role has changed' });
+    }
+
+    req.user = {
+      id: dbUser.id,
+      email: dbUser.email,
+      firstName: dbUser.firstName,
+      lastName: dbUser.lastName,
+      role: dbUser.approvedRole,
+      status: dbUser.status,
+    };
+
+    return next();
   } catch (error) {
-    console.error('Authentication error:', error);
-    res.status(500).json({ message: 'Authentication failed' });
+    return next(error);
   }
 };
 

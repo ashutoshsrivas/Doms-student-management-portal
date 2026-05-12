@@ -138,7 +138,7 @@ export default function ViewGradePage() {
 
   const handleScoreChange = (criteriaId: string, score: number) => {
     const maxPoints = rubric?.RubricCriteria.find((c) => c.id === criteriaId)?.maxPoints || 0;
-    const parsedScore = parseFloat(String(score)) || 0;
+    const parsedScore = Number.isFinite(score) ? score : 0;
 
     setEditedScores((prev) => ({
       ...prev,

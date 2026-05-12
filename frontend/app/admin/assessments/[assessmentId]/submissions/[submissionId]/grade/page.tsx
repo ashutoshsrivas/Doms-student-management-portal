@@ -11,6 +11,7 @@ import {
 import apiClient from '@/app/lib/apiClient';
 import toast from 'react-hot-toast';
 import DashboardLayout from '@/app/components/DashboardLayout';
+import ProtectedRoute from '@/app/components/ProtectedRoute';
 
 interface RubricCriteria {
   id: string;
@@ -244,6 +245,7 @@ export default function GradeSubmissionPage() {
   }
 
   return (
+    <ProtectedRoute requiredRoles={['ADMIN', 'HOD', 'FACULTY', 'MENTOR', 'PLACEMENT_COORDINATOR']}>
     <DashboardLayout>
       <div className="min-h-screen bg-gray-50 py-8 px-4">
         <div className="max-w-4xl mx-auto pb-12">
@@ -507,5 +509,6 @@ export default function GradeSubmissionPage() {
         </div>
       </div>
     </DashboardLayout>
+    </ProtectedRoute>
   );
 }

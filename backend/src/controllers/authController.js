@@ -1,8 +1,10 @@
 const jwt = require('jsonwebtoken');
-const { User, Role, UserRole, AcademicSession } = require('../models');
+const { sequelize, User, Role, UserRole, AcademicSession } = require('../models');
 const { v4: uuidv4 } = require('uuid');
 const crypto = require('crypto');
 const { uploadToS3, deleteFromS3 } = require('../utils/s3Upload');
+
+const REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET;
 
 const generateToken = (user) => {
   return jwt.sign(
@@ -22,8 +24,9 @@ const generateRefreshToken = (user) => {
     {
       id: user.id,
       email: user.email,
+      typ: 'refresh',
     },
-    process.env.JWT_SECRET,
+    REFRESH_SECRET,
     { expiresIn: '7d' }
   );
 };
@@ -46,85 +49,92 @@ const authController = {
       });
     }
 
+    // Verify requested role is valid (cheap check before opening a tx)
+    const validRoles = [
+      'ADMIN',
+      'HOD',
+      'FACULTY',
+      'COORDINATOR',
+      'PLACEMENT_COORDINATOR',
+      'TRAINER',
+      'STUDENT',
+      'MENTOR',
+    ];
+
+    if (!validRoles.includes(requestedRole)) {
+      return res.status(400).json({ message: 'Invalid role' });
+    }
+
     try {
-      // Check if user already exists
-      const existingUser = await User.findOne({ where: { email } });
-      if (existingUser) {
-        return res.status(409).json({ message: 'Email already registered' });
-      }
-
-      // Verify requested role is valid
-      const validRoles = [
-        'ADMIN',
-        'HOD',
-        'FACULTY',
-        'COORDINATOR',
-        'PLACEMENT_COORDINATOR',
-        'TRAINER',
-        'STUDENT',
-        'MENTOR',
-      ];
-
-      if (!validRoles.includes(requestedRole)) {
-        return res.status(400).json({ message: 'Invalid role' });
-      }
-
-      // Check if this is the first admin (bootstrap case)
-      let initialStatus = 'PENDING';
-      let initialApprovedRole = null;
-
-      if (requestedRole === 'ADMIN') {
-        const adminCount = await User.count({
-          where: { approvedRole: 'ADMIN', status: 'ACTIVE' },
-        });
-        
-        // If no active admin exists, auto-approve the first admin
-        if (adminCount === 0) {
-          initialStatus = 'ACTIVE';
-          initialApprovedRole = 'ADMIN';
+      const result = await sequelize.transaction(async (t) => {
+        const existingUser = await User.findOne({ where: { email }, transaction: t });
+        if (existingUser) {
+          const err = new Error('Email already registered');
+          err.status = 409;
+          throw err;
         }
-      }
 
-      // Create user
-      const user = await User.create({
-        email,
-        password,
-        firstName,
-        lastName,
-        phoneNumber,
-        requestedRole,
-        approvedRole: initialApprovedRole,
-        status: initialStatus,
-        verificationToken: crypto.randomBytes(20).toString('hex'),
-      });
+        let initialStatus = 'PENDING';
+        let initialApprovedRole = null;
 
-      // If auto-approved, assign the role
-      if (initialApprovedRole === 'ADMIN') {
-        let role = await Role.findOne({ where: { name: 'ADMIN' } });
-        if (!role) {
-          role = await Role.create({
-            name: 'ADMIN',
-            description: 'System Administrator',
+        if (requestedRole === 'ADMIN') {
+          // Lock matching admin rows so concurrent signups can't both bootstrap.
+          const adminCount = await User.count({
+            where: { approvedRole: 'ADMIN', status: 'ACTIVE' },
+            transaction: t,
+            lock: t.LOCK.UPDATE,
           });
+
+          if (adminCount === 0) {
+            initialStatus = 'ACTIVE';
+            initialApprovedRole = 'ADMIN';
+          }
         }
-        await UserRole.create({
-          userId: user.id,
-          roleId: role.id,
-        });
-      }
+
+        const user = await User.create({
+          email,
+          password,
+          firstName,
+          lastName,
+          phoneNumber,
+          requestedRole,
+          approvedRole: initialApprovedRole,
+          status: initialStatus,
+          verificationToken: crypto.randomBytes(20).toString('hex'),
+        }, { transaction: t });
+
+        if (initialApprovedRole === 'ADMIN') {
+          let role = await Role.findOne({ where: { name: 'ADMIN' }, transaction: t });
+          if (!role) {
+            role = await Role.create({
+              name: 'ADMIN',
+              description: 'System Administrator',
+            }, { transaction: t });
+          }
+          await UserRole.create({
+            userId: user.id,
+            roleId: role.id,
+          }, { transaction: t });
+        }
+
+        return { user, initialStatus, initialApprovedRole };
+      });
 
       res.status(201).json({
-        message: initialStatus === 'ACTIVE' 
-          ? 'Admin account created and activated successfully!' 
+        message: result.initialStatus === 'ACTIVE'
+          ? 'Admin account created and activated successfully!'
           : 'Signup successful. Your request is pending admin approval.',
-        userId: user.id,
-        email: user.email,
-        status: user.status,
-        approvedRole: initialApprovedRole,
+        userId: result.user.id,
+        email: result.user.email,
+        status: result.user.status,
+        approvedRole: result.initialApprovedRole,
       });
     } catch (error) {
+      if (error.status === 409) {
+        return res.status(409).json({ message: error.message });
+      }
       console.error('Signup error:', error);
-      res.status(500).json({ message: 'Signup failed', error: error.message });
+      res.status(500).json({ message: 'Signup failed' });
     }
   },
 
@@ -208,7 +218,7 @@ const authController = {
       });
     } catch (error) {
       console.error('Login error:', error);
-      res.status(500).json({ message: 'Login failed', error: error.message });
+      res.status(500).json({ message: 'Login failed' });
     }
   },
 
@@ -221,11 +231,20 @@ const authController = {
     }
 
     try {
-      const decoded = jwt.verify(refreshToken, process.env.JWT_SECRET);
+      const decoded = jwt.verify(refreshToken, REFRESH_SECRET);
+
+      if (decoded.typ !== 'refresh') {
+        return res.status(401).json({ message: 'Invalid refresh token' });
+      }
+
       const user = await User.findByPk(decoded.id);
 
       if (!user) {
-        return res.status(404).json({ message: 'User not found' });
+        return res.status(401).json({ message: 'Invalid refresh token' });
+      }
+
+      if (user.status !== 'ACTIVE' || !user.approvedRole) {
+        return res.status(401).json({ message: 'Account is not active' });
       }
 
       const newToken = generateToken(user);
@@ -243,7 +262,7 @@ const authController = {
       });
     } catch (error) {
       console.error('Token refresh error:', error);
-      res.status(403).json({ message: 'Invalid refresh token' });
+      res.status(401).json({ message: 'Invalid refresh token' });
     }
   },
 

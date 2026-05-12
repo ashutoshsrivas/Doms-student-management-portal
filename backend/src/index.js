@@ -34,17 +34,15 @@ app.options('*', cors(corsOptions)); // Enable pre-flight for all routes
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-// Request logging middleware
-app.use((req, res, next) => {
-  if (req.method === 'DELETE' || req.url.includes('certificate')) {
-    console.log(`[REQUEST] ${req.method} ${req.url} - Original URL: ${req.originalUrl}`);
-  }
-  // Log all POST requests to submission endpoints
-  if (req.method === 'POST' && req.url.includes('submission')) {
-    console.log(`[REQUEST] ${req.method} ${req.url} - Original URL: ${req.originalUrl} - Body:`, req.body);
-  }
-  next();
-});
+// Request logging middleware (no bodies, no PII)
+if (process.env.NODE_ENV !== 'production') {
+  app.use((req, res, next) => {
+    if (req.method === 'DELETE' || req.url.includes('certificate') || req.url.includes('submission')) {
+      console.log(`[REQUEST] ${req.method} ${req.url}`);
+    }
+    next();
+  });
+}
 
 // Routes
 app.use('/api/auth', authRoutes);

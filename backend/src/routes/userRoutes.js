@@ -19,13 +19,6 @@ router.get(
   userController.getUserStatistics
 );
 
-router.put(
-  '/admin/reset-passwords',
-  authenticateToken,
-  authorizeRole('ADMIN'),
-  userController.resetAllPasswords
-);
-
 // Get all users (Admin only)
 router.get(
   '/',

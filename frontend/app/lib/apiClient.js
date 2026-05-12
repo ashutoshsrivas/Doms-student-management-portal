@@ -17,9 +17,6 @@ apiClient.interceptors.request.use(
     const token = Cookie.get('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
-      console.log('[apiClient] Token found, Authorization header set:', token.substring(0, 20) + '...');
-    } else {
-      console.log('[apiClient] No token found in cookies');
     }
 
     // Normalize relative API URLs so baseURL path segments are preserved.
@@ -29,7 +26,6 @@ apiClient.interceptors.request.use(
 
     // Don't force Content-Type for FormData - let axios/browser set it automatically with boundary
     if (config.data instanceof FormData) {
-      console.log('[apiClient] FormData detected, removing Content-Type to let browser set it with boundary');
       delete config.headers['Content-Type'];
     }
     return config;
@@ -39,26 +35,21 @@ apiClient.interceptors.request.use(
   }
 );
 
-// Handle token refresh on 403
+// Handle token refresh on 401 (auth failure). 403 = authorization denied — do not refresh.
 apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
-    
-    console.log('[apiClient] Error response:', {
-      status: error.response?.status,
-      message: error.response?.data?.message,
-      url: originalRequest?.url,
-    });
+    const status = error.response?.status;
 
-    if (error.response?.status === 403 && !originalRequest._retry) {
+    if (status === 401 && originalRequest && !originalRequest._retry && !originalRequest.url?.includes('auth/refresh-token')) {
       originalRequest._retry = true;
 
       try {
         const refreshToken = Cookie.get('refreshToken');
-        const response = await axios.post(`${API_URL}/auth/refresh-token`, {
-          refreshToken,
-        });
+        if (!refreshToken) throw new Error('No refresh token');
+
+        const response = await axios.post(`${API_URL}/auth/refresh-token`, { refreshToken });
 
         const { token } = response.data;
         Cookie.set('token', token, { expires: 1 });
@@ -66,7 +57,8 @@ apiClient.interceptors.response.use(
         originalRequest.headers.Authorization = `Bearer ${token}`;
         return apiClient(originalRequest);
       } catch (refreshError) {
-        // Refresh failed, redirect to login
+        Cookie.remove('token');
+        Cookie.remove('refreshToken');
         if (typeof window !== 'undefined') {
           window.location.href = '/auth/login';
         }

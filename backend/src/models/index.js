@@ -1461,6 +1461,7 @@ SIP.hasMany(SIPQuestionAnswer, { foreignKey: 'sipId', onDelete: 'CASCADE' });
 
 
 module.exports = {
+  sequelize,
   User,
   Role,
   AcademicSession,

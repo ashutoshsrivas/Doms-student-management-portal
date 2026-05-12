@@ -528,33 +528,6 @@ const userController = {
     }
   },
 
-  // Reset all users passwords to default (Admin only)
-  resetAllPasswords: async (req, res) => {
-    try {
-      const defaultPassword = '12345678';
-      
-      // Update all users with the default password
-      // The beforeCreate hook will hash it during User.create, but update bypasses hooks
-      // So we need to hash it manually for updates
-      const bcrypt = require('bcryptjs');
-      const hashedPassword = await bcrypt.hash(defaultPassword, 10);
-      
-      const result = await User.update(
-        { password: hashedPassword },
-        { where: {} }
-      );
-
-      res.json({
-        message: 'All user passwords reset to default successfully',
-        usersUpdated: result[0],
-        password: defaultPassword,
-      });
-    } catch (error) {
-      console.error('Reset all passwords error:', error);
-      res.status(500).json({ message: 'Failed to reset passwords' });
-    }
-  },
-
   // Get student profile
   getStudentProfile: async (req, res) => {
     try {

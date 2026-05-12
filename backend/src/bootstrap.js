@@ -1,43 +1,46 @@
-const { User, Role, UserRole } = require('./models');
+const { User, Role } = require('./models');
 
 async function bootstrap() {
+  const email = process.env.BOOTSTRAP_ADMIN_EMAIL;
+  const password = process.env.BOOTSTRAP_ADMIN_PASSWORD;
+
+  // No-op unless explicitly opted-in via env vars. Prevents shipping a
+  // hardcoded admin account to any environment.
+  if (!email || !password) {
+    return;
+  }
+
+  if (password.length < 12) {
+    console.error('Bootstrap admin password must be at least 12 characters; skipping');
+    return;
+  }
+
   try {
-    const adminEmail = process.env.ADMIN_EMAIL || 'admin@test.com';
-    const adminPassword = process.env.ADMIN_PASSWORD || 'password123';
-
-    // Check if admin user exists
-    const adminUser = await User.findOne({
-      where: { email: adminEmail },
-    });
-
-    if (adminUser) {
-      console.log('Admin user already exists');
+    const existing = await User.findOne({ where: { email } });
+    if (existing) {
       return;
     }
 
-    // Create admin user
     const newAdmin = await User.create({
-      email: adminEmail,
+      email,
       firstName: 'System',
       lastName: 'Admin',
-      password: adminPassword,
+      password,
       requestedRole: 'ADMIN',
       approvedRole: 'ADMIN',
       status: 'ACTIVE',
     });
 
-    // Get or create ADMIN role
     const [adminRole] = await Role.findOrCreate({
       where: { name: 'ADMIN' },
       defaults: { name: 'ADMIN' },
     });
 
-    // Assign role to user
     await newAdmin.addRole(adminRole);
 
-    console.log(`Bootstrap admin user created: ${adminEmail}`);
+    console.log(`Bootstrap admin user created: ${email}`);
   } catch (error) {
-    console.error('Bootstrap error:', error);
+    console.error('Bootstrap error:', error.name);
   }
 }
 

@@ -47,4 +47,5 @@ coverage/
 
 # Misc
 *.log
-.pem
+*.pem
+*.key

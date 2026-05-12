@@ -131,14 +131,14 @@ export default function AssessmentResultsPage() {
       if (subs.length > 0) {
         const submitted = subs.filter((s: AssessmentSubmission) => s.submittedAt);
         const graded = subs.filter((s: AssessmentSubmission) => s.status === 'GRADED');
-        
+
         // Extract valid scores from graded submissions, converting strings to numbers
         const scores = graded
           .map((s: AssessmentSubmission) => {
             const score = typeof s.totalScore === 'string' ? parseFloat(s.totalScore) : s.totalScore;
             return score;
           })
-          .filter((score: number | null | undefined): score is number => typeof score === 'number' && !isNaN(score) && score !== null && score !== undefined);
+          .filter((score: number | null | undefined): score is number => typeof score === 'number' && !isNaN(score));
 
         setStats({
           totalSubmissions: subs.length,
@@ -148,6 +148,8 @@ export default function AssessmentResultsPage() {
           highestScore: scores.length > 0 ? Math.max(...scores) : 0,
           lowestScore: scores.length > 0 ? Math.min(...scores) : 0,
         });
+      } else {
+        setStats(null);
       }
     } catch (error: unknown) {
       console.error('Failed to fetch results:', error);
@@ -636,7 +638,7 @@ export default function AssessmentResultsPage() {
                             </div>
                           )}
 
-                          {submission.status === 'GRADED' && submission.totalScore !== null && (
+                          {submission.status === 'GRADED' && submission.totalScore != null && (
                             <div>
                               <p className="text-gray-600">Score</p>
                               <p className="font-bold text-lg text-gray-900">
@@ -722,14 +724,14 @@ export default function AssessmentResultsPage() {
                                     <p className="text-sm text-gray-600 mt-1">{response.response}</p>
                                   )}
                                 </div>
-                                {response.isCorrect !== null && (
+                                {response.isCorrect != null && (
                                   <div className="flex items-center gap-1 ml-3">
                                     {response.isCorrect ? (
                                       <FiCheck className="text-green-600" />
                                     ) : (
                                       <FiX className="text-red-600" />
                                     )}
-                                    {response.score !== null && (
+                                    {response.score != null && (
                                       <span className="text-sm font-medium text-gray-900">
                                         {response.score} pts
                                       </span>
@@ -754,7 +756,7 @@ export default function AssessmentResultsPage() {
 
         {/* Create Submission Modal */}
         {showCreateModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
             <div className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[80vh] flex flex-col">
               {/* Modal Header */}
               <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4 rounded-t-lg flex-shrink-0">
