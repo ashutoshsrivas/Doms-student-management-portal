@@ -90,6 +90,38 @@ export default function StudentProfilePage() {
   const [showExportModal, setShowExportModal] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [shareQrDataUrl, setShareQrDataUrl] = useState<string>('');
+
+  // Shareable links state
+  type ShareLink = {
+    id: string;
+    token: string;
+    url: string;
+    label: string | null;
+    sections: string[] | null; // null == all
+    status: 'ACTIVE' | 'REVOKED';
+    expiresAt: string | null;
+    createdAt: string;
+    createdBy: { id: string; name: string; email: string } | string;
+  };
+  const SHARE_SECTIONS: { key: string; label: string; help?: string }[] = [
+    { key: 'contact', label: 'Contact (email & phone)' },
+    { key: 'aboutCareer', label: 'About & Career Objective' },
+    { key: 'skillsInterests', label: 'Skills & Interests' },
+    { key: 'workExperience', label: 'Work Experience' },
+    { key: 'projects', label: 'Projects' },
+    { key: 'achievements', label: 'Achievements' },
+    { key: 'certifications', label: 'Certifications' },
+    { key: 'responsibilities', label: 'Positions of Responsibility' },
+    { key: 'onlinePresence', label: 'Online Presence (LinkedIn, GitHub, etc.)' },
+    { key: 'additionalInfo', label: 'Languages, Hobbies, Strengths' },
+  ];
+  const [shareSections, setShareSections] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(SHARE_SECTIONS.map((s) => [s.key, true])),
+  );
+  const [shareLabel, setShareLabel] = useState('');
+  const [shareLinks, setShareLinks] = useState<ShareLink[]>([]);
+  const [creatingShare, setCreatingShare] = useState(false);
+  const [loadingLinks, setLoadingLinks] = useState(false);
   const [selectedSections, setSelectedSections] = useState({
     personalInfo: true,
     aboutCareer: true,
@@ -246,28 +278,79 @@ export default function StudentProfilePage() {
 
   const student = studentSession.Student;
 
-  // Public shareable link — uses the User's UUID, served unauthenticated by /share/profile/:userId
-  const shareUrl = student?.id
-    ? `${typeof window !== 'undefined' ? window.location.origin : 'https://doms.geu.ac.in'}/share/profile/${student.id}`
-    : '';
-
+  // Fetch existing share links for this student and open the modal
   const openShareModal = async () => {
     setShowShareModal(true);
+    setShareQrDataUrl('');
+    if (!student?.id) return;
+    setLoadingLinks(true);
     try {
-      const dataUrl = await QRCode.toDataURL(shareUrl, { width: 220, margin: 1, color: { dark: '#8B1538', light: '#ffffff' } });
-      setShareQrDataUrl(dataUrl);
+      const res = await apiClient.get('/share-links', { params: { userId: student.id } });
+      setShareLinks(res.data.links || []);
     } catch (e) {
-      console.error('QR generation failed', e);
+      console.error('Failed to load share links', e);
+      toast.error('Failed to load existing share links');
+    } finally {
+      setLoadingLinks(false);
     }
   };
 
-  const copyShareUrl = async () => {
-    try {
-      await navigator.clipboard.writeText(shareUrl);
-      toast.success('Link copied to clipboard');
-    } catch {
-      toast.error('Could not copy — long-press the link to copy manually');
+  const handleCreateShareLink = async () => {
+    if (!student?.id) return;
+    const sections = Object.entries(shareSections).filter(([, v]) => v).map(([k]) => k);
+    if (sections.length === 0) {
+      const ok = confirm('No sections selected — the link will show only identity (name, photo, registration number). Continue?');
+      if (!ok) return;
     }
+    setCreatingShare(true);
+    try {
+      const res = await apiClient.post('/share-links', {
+        userId: student.id,
+        sections,
+        label: shareLabel.trim() || null,
+      });
+      const link = res.data.link as ShareLink;
+      setShareLinks((prev) => [link, ...prev]);
+      try {
+        const qr = await QRCode.toDataURL(link.url, { width: 220, margin: 1, color: { dark: '#8B1538', light: '#ffffff' } });
+        setShareQrDataUrl(qr);
+      } catch (qerr) { console.error('QR gen failed', qerr); }
+      setShareLabel('');
+      toast.success('Shareable link created');
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string } } };
+      toast.error(err.response?.data?.message || 'Failed to create link');
+    } finally {
+      setCreatingShare(false);
+    }
+  };
+
+  const handleDeleteShareLink = async (id: string) => {
+    if (!confirm('Delete this shareable link? Anyone holding it will get a "not found" page.')) return;
+    try {
+      await apiClient.delete(`/share-links/${id}`);
+      setShareLinks((prev) => prev.filter((l) => l.id !== id));
+      toast.success('Link deleted');
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string } } };
+      toast.error(err.response?.data?.message || 'Failed to delete');
+    }
+  };
+
+  const copyShareUrl = async (url: string) => {
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success('Link copied');
+    } catch {
+      toast.error('Could not copy — select and copy manually');
+    }
+  };
+
+  const fmtSections = (sections: string[] | null) => {
+    if (sections == null) return 'All sections';
+    if (sections.length === 0) return 'Identity only';
+    const map = Object.fromEntries(SHARE_SECTIONS.map((s) => [s.key, s.label]));
+    return sections.map((k) => map[k] || k).join(', ');
   };
 
   console.log('[Admin Profile] Data loaded:');
@@ -1595,11 +1678,11 @@ export default function StudentProfilePage() {
         {/* Shareable Link Modal */}
         {showShareModal && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden">
               <div className="bg-gradient-to-r from-[#8B1538] to-[#6B0E26] text-white px-6 py-4 flex items-center justify-between">
                 <div>
-                  <h2 className="text-xl font-bold">Shareable Public Profile</h2>
-                  <p className="text-sm opacity-90 mt-0.5">Anyone with this link can view {student?.firstName}&apos;s profile.</p>
+                  <h2 className="text-xl font-bold">Shareable Public Profile Links</h2>
+                  <p className="text-sm opacity-90 mt-0.5">Anyone with a link can view {student?.firstName}&apos;s profile — but only the sections you opt into per link.</p>
                 </div>
                 <button
                   onClick={() => setShowShareModal(false)}
@@ -1610,54 +1693,144 @@ export default function StudentProfilePage() {
                 </button>
               </div>
 
-              <div className="p-6 space-y-5">
-                {/* URL with copy */}
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wide mb-2">
-                    Share URL
+              <div className="p-6 space-y-6 overflow-y-auto">
+                {/* === Create new link === */}
+                <section className="border border-gray-200 rounded-lg p-4">
+                  <h3 className="font-bold text-gray-900 mb-3">Create a new link</h3>
+
+                  <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wide mb-1">
+                    Label (optional)
                   </label>
-                  <div className="flex items-stretch gap-2">
-                    <input
-                      type="text"
-                      readOnly
-                      value={shareUrl}
-                      onFocus={(e) => e.currentTarget.select()}
-                      className="flex-1 px-3 py-2 border-2 border-gray-300 rounded-lg text-sm font-mono text-gray-900 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#8B1538]"
-                    />
+                  <input
+                    type="text"
+                    value={shareLabel}
+                    onChange={(e) => setShareLabel(e.target.value)}
+                    placeholder='e.g. "For Acme Corp recruiter"'
+                    maxLength={120}
+                    className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#8B1538] mb-4"
+                  />
+
+                  <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wide mb-2">
+                    What to share
+                  </label>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-4">
+                    {SHARE_SECTIONS.map((s) => (
+                      <label key={s.key} className="flex items-start gap-2 p-2 border border-gray-200 rounded hover:bg-gray-50 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={!!shareSections[s.key]}
+                          onChange={(e) => setShareSections((prev) => ({ ...prev, [s.key]: e.target.checked }))}
+                          className="mt-0.5 w-4 h-4 accent-[#8B1538]"
+                        />
+                        <span className="text-sm text-gray-800">{s.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-2 mb-4">
                     <button
-                      onClick={copyShareUrl}
-                      className="px-4 py-2 bg-[#8B1538] hover:bg-[#6B0E26] text-white rounded-lg font-semibold text-sm flex items-center gap-1.5 transition"
-                      title="Copy link"
+                      type="button"
+                      onClick={() => setShareSections(Object.fromEntries(SHARE_SECTIONS.map((s) => [s.key, true])))}
+                      className="text-xs text-[#8B1538] hover:underline"
                     >
-                      <FiCopy className="w-4 h-4" />
-                      Copy
+                      Select all
                     </button>
+                    <span className="text-gray-400">·</span>
+                    <button
+                      type="button"
+                      onClick={() => setShareSections(Object.fromEntries(SHARE_SECTIONS.map((s) => [s.key, false])))}
+                      className="text-xs text-[#8B1538] hover:underline"
+                    >
+                      Clear all
+                    </button>
+                    <span className="text-xs text-gray-500 ml-auto">Identity (name, photo, reg no, department) is always shown.</span>
                   </div>
-                  <a
-                    href={shareUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 mt-2 text-sm text-[#8B1538] hover:underline"
+
+                  <button
+                    onClick={handleCreateShareLink}
+                    disabled={creatingShare}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-[#8B1538] hover:bg-[#6B0E26] disabled:bg-gray-400 text-white font-semibold rounded-lg transition"
                   >
-                    <FiExternalLink className="w-4 h-4" />
-                    Open in a new tab
-                  </a>
-                </div>
+                    <FiShare2 className="w-4 h-4" />
+                    {creatingShare ? 'Creating…' : 'Create Link'}
+                  </button>
 
-                {/* QR code */}
-                {shareQrDataUrl && (
-                  <div className="flex flex-col items-center pt-2 border-t border-gray-200">
-                    <p className="text-xs text-gray-600 mb-2 uppercase tracking-wide font-semibold">Or scan with your phone</p>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={shareQrDataUrl} alt="QR for profile link" className="border border-gray-200 rounded-lg" />
-                  </div>
-                )}
+                  {shareQrDataUrl && (
+                    <div className="mt-5 pt-5 border-t border-gray-200 flex flex-col items-center">
+                      <p className="text-xs text-gray-600 mb-2 uppercase tracking-wide font-semibold">Latest link QR</p>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={shareQrDataUrl} alt="QR" className="border border-gray-200 rounded-lg" />
+                    </div>
+                  )}
+                </section>
 
-                {/* Info notes */}
+                {/* === Existing links list === */}
+                <section>
+                  <h3 className="font-bold text-gray-900 mb-3">
+                    Existing links{' '}
+                    <span className="text-sm font-normal text-gray-500">({shareLinks.length})</span>
+                  </h3>
+
+                  {loadingLinks ? (
+                    <p className="text-sm text-gray-500">Loading…</p>
+                  ) : shareLinks.length === 0 ? (
+                    <p className="text-sm text-gray-500 italic border border-dashed border-gray-300 rounded p-4 text-center">
+                      No share links yet. Create one above.
+                    </p>
+                  ) : (
+                    <ul className="space-y-2">
+                      {shareLinks.map((l) => (
+                        <li key={l.id} className="border border-gray-200 rounded-lg p-3 bg-white">
+                          <div className="flex items-start justify-between gap-3 flex-wrap">
+                            <div className="flex-1 min-w-0">
+                              {l.label && (
+                                <p className="text-sm font-semibold text-gray-900">{l.label}</p>
+                              )}
+                              <a
+                                href={l.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-sm text-[#8B1538] hover:underline font-mono break-all inline-flex items-center gap-1"
+                              >
+                                {l.url}
+                                <FiExternalLink className="w-3 h-3 flex-shrink-0" />
+                              </a>
+                              <p className="text-xs text-gray-600 mt-1">
+                                <span className="font-semibold">Shares:</span> {fmtSections(l.sections)}
+                              </p>
+                              <p className="text-xs text-gray-500 mt-0.5">
+                                Created {new Date(l.createdAt).toLocaleString()}
+                                {typeof l.createdBy === 'object' && l.createdBy.name && (
+                                  <> by {l.createdBy.name}</>
+                                )}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => copyShareUrl(l.url)}
+                                className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded text-sm font-medium flex items-center gap-1.5"
+                                title="Copy URL"
+                              >
+                                <FiCopy className="w-3.5 h-3.5" /> Copy
+                              </button>
+                              <button
+                                onClick={() => handleDeleteShareLink(l.id)}
+                                className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 rounded text-sm font-medium flex items-center gap-1.5"
+                                title="Delete link"
+                              >
+                                <FiX className="w-3.5 h-3.5" /> Delete
+                              </button>
+                            </div>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </section>
+
                 <div className="bg-blue-50 border border-blue-200 text-blue-900 text-xs rounded-lg p-3 space-y-1">
-                  <p>• The page updates automatically — when the student edits their profile, the live page reflects it.</p>
-                  <p>• Branded with Graphic Era deemed-to-be University &amp; GESoM headers/footer.</p>
-                  <p>• A standard disclaimer is shown at the bottom of the public page.</p>
+                  <p>• Each link has its own section filter — you can make one for &quot;HR contact + skills&quot; and another with &quot;full profile&quot;.</p>
+                  <p>• Pages update live — when the student edits their profile the public page reflects it.</p>
+                  <p>• Deleting a link makes it return &quot;not found&quot; immediately, so it is fully revocable.</p>
                 </div>
               </div>
 

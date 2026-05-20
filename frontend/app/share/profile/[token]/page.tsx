@@ -1,23 +1,43 @@
 'use client';
 
-// Public, unauthenticated student profile view.
-// Linked from the "Create Shareable Link" button on the admin profile page.
-// Branded for Graphic Era deemed-to-be University + GESoM.
-// Reads /api/public/profile/:userId — refuses non-students at the backend.
+// Public, unauthenticated student profile view, gated by a share-link token.
+// The token controls (server-side) which sections are exposed. We render
+// each section only if the backend included it in `meta.allowedSections`.
 
 import { useEffect, useState, use } from 'react';
 import Image from 'next/image';
-import { FiMail, FiPhone, FiLinkedin, FiGithub, FiGlobe, FiAward, FiBriefcase, FiBookOpen, FiCheckCircle, FiUser, FiHeart, FiTarget, FiAlertCircle } from 'react-icons/fi';
+import {
+  FiMail, FiPhone, FiLinkedin, FiGithub, FiGlobe, FiAward, FiBriefcase,
+  FiBookOpen, FiCheckCircle, FiUser, FiHeart, FiTarget, FiAlertCircle,
+} from 'react-icons/fi';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
 
-interface PublicProfileResponse {
+type SectionKey =
+  | 'contact'
+  | 'aboutCareer'
+  | 'skillsInterests'
+  | 'workExperience'
+  | 'projects'
+  | 'achievements'
+  | 'certifications'
+  | 'responsibilities'
+  | 'onlinePresence'
+  | 'additionalInfo';
+
+interface ShareResponse {
+  meta: {
+    token: string;
+    label: string | null;
+    createdAt: string;
+    allowedSections: SectionKey[];
+  };
   user: {
     id: string;
     firstName: string;
     lastName: string | null;
-    email?: string;
-    phoneNumber?: string;
+    email: string | null;
+    phoneNumber: string | null;
     department?: string;
     registrationNumber?: string;
     profileImage?: string;
@@ -100,9 +120,9 @@ function Chips({ items }: { items: string[] }) {
   );
 }
 
-export default function PublicProfilePage({ params }: { params: Promise<{ userId: string }> }) {
-  const { userId } = use(params);
-  const [data, setData] = useState<PublicProfileResponse | null>(null);
+export default function PublicSharedProfilePage({ params }: { params: Promise<{ token: string }> }) {
+  const { token } = use(params);
+  const [data, setData] = useState<ShareResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -110,16 +130,14 @@ export default function PublicProfilePage({ params }: { params: Promise<{ userId
     const load = async () => {
       try {
         setLoading(true);
-        const r = await fetch(`${API_BASE}/public/profile/${userId}`, { cache: 'no-store' });
+        const r = await fetch(`${API_BASE}/public/share/${token}`, { cache: 'no-store' });
         if (!r.ok) {
-          if (r.status === 404) {
-            setError('Profile not available.');
-          } else {
-            setError('Failed to load profile.');
-          }
+          if (r.status === 410) setError('This share link has expired.');
+          else if (r.status === 404) setError('This share link is not valid or has been revoked.');
+          else setError('Failed to load profile.');
           return;
         }
-        const j = (await r.json()) as PublicProfileResponse;
+        const j = (await r.json()) as ShareResponse;
         setData(j);
       } catch (e) {
         console.error(e);
@@ -129,7 +147,7 @@ export default function PublicProfilePage({ params }: { params: Promise<{ userId
       }
     };
     load();
-  }, [userId]);
+  }, [token]);
 
   if (loading) {
     return (
@@ -160,6 +178,7 @@ export default function PublicProfilePage({ params }: { params: Promise<{ userId
 
   const u = data.user;
   const p = data.profile || {};
+  const allowed = new Set<SectionKey>(data.meta.allowedSections);
   const fullName = `${u.firstName || ''} ${u.lastName || ''}`.trim();
   const initials = `${u.firstName?.charAt(0) || ''}${u.lastName?.charAt(0) || ''}`.toUpperCase();
 
@@ -168,7 +187,7 @@ export default function PublicProfilePage({ params }: { params: Promise<{ userId
       <BrandedHeader />
 
       <main className="flex-1 w-full max-w-5xl mx-auto px-4 py-8">
-        {/* Identity header */}
+        {/* Identity header — always shown */}
         <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6 mb-6">
           <div className="flex flex-col md:flex-row md:items-center gap-6">
             <div className="flex-shrink-0">
@@ -194,24 +213,26 @@ export default function PublicProfilePage({ params }: { params: Promise<{ userId
                   <span><span className="font-semibold">Session:</span> {data.session.name}</span>
                 )}
               </div>
-              <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm">
-                {u.email && (
-                  <a href={`mailto:${u.email}`} className="inline-flex items-center gap-1.5 text-[#8B1538] hover:underline">
-                    <FiMail size={14} /> {u.email}
-                  </a>
-                )}
-                {u.phoneNumber && (
-                  <span className="inline-flex items-center gap-1.5 text-gray-700">
-                    <FiPhone size={14} /> {u.phoneNumber}
-                  </span>
-                )}
-              </div>
+              {/* Contact row only if `contact` is enabled */}
+              {allowed.has('contact') && (u.email || u.phoneNumber) && (
+                <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm">
+                  {u.email && (
+                    <a href={`mailto:${u.email}`} className="inline-flex items-center gap-1.5 text-[#8B1538] hover:underline">
+                      <FiMail size={14} /> {u.email}
+                    </a>
+                  )}
+                  {u.phoneNumber && (
+                    <span className="inline-flex items-center gap-1.5 text-gray-700">
+                      <FiPhone size={14} /> {u.phoneNumber}
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
 
-        {/* About / Career Objective */}
-        {(p.aboutMe || p.careerObjective) && (
+        {allowed.has('aboutCareer') && (p.aboutMe || p.careerObjective) && (
           <Section icon={<FiUser size={20} />} title="About">
             {p.careerObjective && (
               <div className="mb-3">
@@ -228,8 +249,7 @@ export default function PublicProfilePage({ params }: { params: Promise<{ userId
           </Section>
         )}
 
-        {/* Skills + Interests */}
-        {(arrFmt(p.skills).length > 0 || arrFmt(p.interests).length > 0 || p.coScholasticExpertise) && (
+        {allowed.has('skillsInterests') && (arrFmt(p.skills).length > 0 || arrFmt(p.interests).length > 0 || p.coScholasticExpertise) && (
           <Section icon={<FiTarget size={20} />} title="Skills & Interests">
             {arrFmt(p.skills).length > 0 && (
               <div className="mb-4">
@@ -255,8 +275,7 @@ export default function PublicProfilePage({ params }: { params: Promise<{ userId
           </Section>
         )}
 
-        {/* Work Experience */}
-        {objArr(p.workExperiences).length > 0 && (
+        {allowed.has('workExperience') && objArr(p.workExperiences).length > 0 && (
           <Section icon={<FiBriefcase size={20} />} title="Work Experience">
             <div className="space-y-4">
               {objArr(p.workExperiences).map((w, i) => (
@@ -273,8 +292,7 @@ export default function PublicProfilePage({ params }: { params: Promise<{ userId
           </Section>
         )}
 
-        {/* Projects */}
-        {objArr(p.projects).length > 0 && (
+        {allowed.has('projects') && objArr(p.projects).length > 0 && (
           <Section icon={<FiBookOpen size={20} />} title="Projects">
             <div className="space-y-4">
               {objArr(p.projects).map((proj, i) => (
@@ -292,8 +310,7 @@ export default function PublicProfilePage({ params }: { params: Promise<{ userId
           </Section>
         )}
 
-        {/* Achievements */}
-        {objArr(p.achievements).length > 0 && (
+        {allowed.has('achievements') && objArr(p.achievements).length > 0 && (
           <Section icon={<FiAward size={20} />} title="Achievements">
             <ul className="space-y-2">
               {objArr(p.achievements).map((a, i) => (
@@ -310,8 +327,7 @@ export default function PublicProfilePage({ params }: { params: Promise<{ userId
           </Section>
         )}
 
-        {/* Certifications */}
-        {objArr(p.certifications).length > 0 && (
+        {allowed.has('certifications') && objArr(p.certifications).length > 0 && (
           <Section icon={<FiCheckCircle size={20} />} title="Certifications">
             <ul className="space-y-2">
               {objArr(p.certifications).map((c, i) => (
@@ -325,8 +341,7 @@ export default function PublicProfilePage({ params }: { params: Promise<{ userId
           </Section>
         )}
 
-        {/* Positions of Responsibility */}
-        {objArr(p.positionsOfResponsibility).length > 0 && (
+        {allowed.has('responsibilities') && objArr(p.positionsOfResponsibility).length > 0 && (
           <Section icon={<FiUser size={20} />} title="Positions of Responsibility">
             <ul className="space-y-2">
               {objArr(p.positionsOfResponsibility).map((pos, i) => (
@@ -340,8 +355,7 @@ export default function PublicProfilePage({ params }: { params: Promise<{ userId
           </Section>
         )}
 
-        {/* Online presence */}
-        {(p.linkedin || p.github || p.portfolio || p.coursera || arrFmt(p.otherLinks).length > 0) && (
+        {allowed.has('onlinePresence') && (p.linkedin || p.github || p.portfolio || p.coursera || arrFmt(p.otherLinks).length > 0) && (
           <Section icon={<FiGlobe size={20} />} title="Online Presence">
             <div className="space-y-2 text-sm">
               {p.linkedin && (
@@ -373,8 +387,7 @@ export default function PublicProfilePage({ params }: { params: Promise<{ userId
           </Section>
         )}
 
-        {/* Additional */}
-        {(arrFmt(p.languagesKnown).length > 0 || arrFmt(p.hobbies).length > 0 || arrFmt(p.strengths).length > 0) && (
+        {allowed.has('additionalInfo') && (arrFmt(p.languagesKnown).length > 0 || arrFmt(p.hobbies).length > 0 || arrFmt(p.strengths).length > 0) && (
           <Section icon={<FiHeart size={20} />} title="Additional Information">
             {arrFmt(p.languagesKnown).length > 0 && (
               <div className="mb-3">
@@ -397,12 +410,9 @@ export default function PublicProfilePage({ params }: { params: Promise<{ userId
           </Section>
         )}
 
-        {/* Empty profile fallback */}
-        {!data.profile && (
+        {!data.profile && allowed.size > 0 && (
           <Section icon={<FiAlertCircle size={20} />} title="No profile information yet">
-            <p className="text-gray-600">
-              This student has not yet filled in their profile details.
-            </p>
+            <p className="text-gray-600">This student has not yet filled in their profile details.</p>
           </Section>
         )}
 
@@ -426,7 +436,6 @@ function BrandedHeader() {
     <header className="bg-white border-b border-gray-200 shadow-sm">
       <div className="max-w-5xl mx-auto px-4 py-4 flex items-center gap-4">
         <div className="flex-shrink-0">
-          {/* Logo lives in /public/branding/geu-logo.webp */}
           <Image
             src="/branding/geu-logo.webp"
             alt="Graphic Era deemed to be University"
@@ -440,7 +449,7 @@ function BrandedHeader() {
           <p className="text-lg font-bold text-[#8B1538] leading-tight">
             Graphic Era School of Management <span className="text-gray-500 font-normal text-sm">(GESoM)</span>
           </p>
-          <p className="text-xs text-gray-600">Student Profile · Department of Management Studies</p>
+          <p className="text-xs text-gray-600">Student Profile</p>
         </div>
       </div>
     </header>

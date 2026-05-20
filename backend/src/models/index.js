@@ -1457,6 +1457,69 @@ SIPQuestion.hasMany(SIPQuestionAnswer, { foreignKey: 'questionId', onDelete: 'CA
 SIPQuestionAnswer.belongsTo(SIP, { foreignKey: 'sipId', onDelete: 'CASCADE' });
 SIP.hasMany(SIPQuestionAnswer, { foreignKey: 'sipId', onDelete: 'CASCADE' });
 
+// ============ SHARE LINK MODEL ============
+// One row per admin-created public profile share. The token is the
+// URL-safe identifier used in /share/profile/<token>. Multiple links can
+// exist for the same student (e.g. one per recruiter), each with its own
+// `sections` filter so the admin controls what the public page shows.
+
+const ShareLink = sequelize.define('ShareLink', {
+  id: {
+    type: DataTypes.UUID,
+    defaultValue: DataTypes.UUIDV4,
+    primaryKey: true,
+  },
+  token: {
+    type: DataTypes.STRING(64),
+    allowNull: false,
+    unique: true,
+  },
+  userId: {
+    type: DataTypes.UUID,
+    allowNull: false,
+  },
+  createdBy: {
+    type: DataTypes.UUID,
+    allowNull: false,
+  },
+  label: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+  // JSON array of section keys to expose. null = all sections.
+  sections: {
+    type: DataTypes.JSON,
+    allowNull: true,
+    defaultValue: null,
+    get() {
+      const raw = this.getDataValue('sections');
+      if (raw == null) return null;
+      if (typeof raw === 'string') {
+        try { return JSON.parse(raw); } catch { return null; }
+      }
+      return Array.isArray(raw) ? raw : null;
+    },
+  },
+  status: {
+    type: DataTypes.ENUM('ACTIVE', 'REVOKED'),
+    defaultValue: 'ACTIVE',
+    allowNull: false,
+  },
+  expiresAt: {
+    type: DataTypes.DATE,
+    allowNull: true,
+  },
+}, {
+  tableName: 'share_links',
+  timestamps: true,
+  underscored: true,
+});
+
+// Associations
+ShareLink.belongsTo(User, { foreignKey: 'userId', as: 'Student' });
+User.hasMany(ShareLink, { foreignKey: 'userId', as: 'ProfileShareLinks' });
+ShareLink.belongsTo(User, { foreignKey: 'createdBy', as: 'Creator' });
+
 // Messaging Models
 
 
@@ -1488,4 +1551,5 @@ module.exports = {
   SIPRequirement,
   SIPQuestion,
   SIPQuestionAnswer,
+  ShareLink,
 };
