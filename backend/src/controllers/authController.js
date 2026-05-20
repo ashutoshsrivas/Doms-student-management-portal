@@ -413,15 +413,24 @@ const authController = {
         return res.status(404).json({ message: 'User not found' });
       }
 
-      // Return user in the same format as login
+      // Return the full profile shape the UI expects
       res.json({
         id: user.id,
         email: user.email,
         firstName: user.firstName,
         lastName: user.lastName,
-        role: user.approvedRole,
+        phoneNumber: user.phoneNumber,
+        department: user.department,
+        employeeId: user.employeeId,
+        registrationNumber: user.registrationNumber,
+        requestedRole: user.requestedRole,
+        approvedRole: user.approvedRole,
+        role: user.approvedRole, // kept for components that read `role`
         status: user.status,
         profileImage: user.profileImage,
+        isVerified: user.isVerified,
+        lastLogin: user.lastLogin,
+        createdAt: user.createdAt,
       });
     } catch (error) {
       console.error('Get profile error:', error);
@@ -481,6 +490,12 @@ const authController = {
           lastName: user.lastName,
           phoneNumber: user.phoneNumber,
           department: user.department,
+          employeeId: user.employeeId,
+          registrationNumber: user.registrationNumber,
+          requestedRole: user.requestedRole,
+          approvedRole: user.approvedRole,
+          role: user.approvedRole,
+          status: user.status,
           profileImage: profileImageUrl,
         },
       });
