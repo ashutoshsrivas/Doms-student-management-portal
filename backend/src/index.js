@@ -17,6 +17,7 @@ const sipRoutes = require('./routes/sipRoutes');
 const sipRequirementRoutes = require('./routes/sipRequirementRoutes');
 const sipQuestionRoutes = require('./routes/sipQuestionRoutes');
 const fileManagementRoutes = require('./routes/fileManagementRoutes');
+const reportRoutes = require('./routes/reportRoutes');
 const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
@@ -58,6 +59,7 @@ app.use('/api/sip', sipRoutes);
 app.use('/api/sip-requirements', sipRequirementRoutes);
 app.use('/api/sip-questions', sipQuestionRoutes);
 app.use('/api/file-management', fileManagementRoutes);
+app.use('/api/reports', reportRoutes);
 
 // Health check
 app.get('/health', (req, res) => {

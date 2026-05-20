@@ -19,6 +19,7 @@ import {
   FiBriefcase,
   FiHelpCircle,
   FiHardDrive,
+  FiFileText,
 } from 'react-icons/fi';
 import useAuthStore from '@/app/store/authStore';
 import apiClient from '@/app/lib/apiClient';
@@ -92,6 +93,7 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
         { name: 'Mentor Teams', href: '/admin/mentors', iconKey: 'users' },
         { name: 'Internships (SIP)', href: '/admin/sip', iconKey: 'briefcase', children: sipChildren },
         { name: 'File Management', href: '/admin/files', iconKey: 'hardDrive' },
+        { name: 'Reports', href: '/admin/reports', iconKey: 'fileText' },
         { name: 'Announcements', href: '/admin/announcements', iconKey: 'bell' },
       ],
       FACULTY: [
@@ -143,6 +145,7 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
       briefcase:  <FiBriefcase className="w-4.5 h-4.5" />,
       helpCircle: <FiHelpCircle className="w-4.5 h-4.5" />,
       hardDrive:  <FiHardDrive className="w-4.5 h-4.5" />,
+      fileText:   <FiFileText className="w-4.5 h-4.5" />,
     };
     return iconMap[iconKey] || <FiBarChart2 className="w-4.5 h-4.5" />;
   };
