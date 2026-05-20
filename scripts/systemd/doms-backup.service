@@ -1,0 +1,10 @@
+[Unit]
+Description=DOMS MariaDB nightly backup
+
+[Service]
+Type=oneshot
+User=ec2-user
+Group=ec2-user
+# Path is intentional: scripts live with the deployed code so `git pull` updates
+# them in one step. If you redeploy the app to a different path, update this.
+ExecStart=/opt/doms/app/scripts/backup.sh
