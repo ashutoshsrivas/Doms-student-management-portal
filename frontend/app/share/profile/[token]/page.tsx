@@ -9,6 +9,7 @@ import Image from 'next/image';
 import {
   FiMail, FiPhone, FiLinkedin, FiGithub, FiGlobe, FiAward, FiBriefcase,
   FiBookOpen, FiCheckCircle, FiUser, FiHeart, FiTarget, FiAlertCircle,
+  FiFileText, FiBarChart2, FiDownload,
 } from 'react-icons/fi';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
@@ -23,7 +24,19 @@ type SectionKey =
   | 'certifications'
   | 'responsibilities'
   | 'onlinePresence'
-  | 'additionalInfo';
+  | 'additionalInfo'
+  | 'documents'
+  | 'assessmentReport';
+
+type AssessmentRow = {
+  title: string;
+  type: string | null;
+  status: string;
+  totalPoints: number | null;
+  totalScore: number | null;
+  submittedAt: string | null;
+  gradedAt: string | null;
+};
 
 interface ShareResponse {
   meta: {
@@ -49,6 +62,7 @@ interface ShareResponse {
     endDate?: string;
   } | null;
   profile: Record<string, any> | null;
+  assessments: AssessmentRow[] | null;
 }
 
 const arrFmt = (v: any): string[] => {
@@ -407,6 +421,105 @@ export default function PublicSharedProfilePage({ params }: { params: Promise<{ 
                 <Chips items={arrFmt(p.strengths)} />
               </div>
             )}
+          </Section>
+        )}
+
+        {allowed.has('documents') && (p.resume || (Array.isArray(p.certificateDocuments) && p.certificateDocuments.length > 0)) && (
+          <Section icon={<FiFileText size={20} />} title="Documents">
+            <div className="space-y-3">
+              {p.resume && (
+                <a
+                  href={p.resume}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-3 p-3 border-2 border-[#8B1538] bg-[#FEF2F4] hover:bg-[#FCE4EA] rounded-lg transition"
+                >
+                  <FiFileText size={20} className="text-[#8B1538]" />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-[#8B1538]">Resume</p>
+                    <p className="text-xs text-gray-600 truncate">{p.resume}</p>
+                  </div>
+                  <FiDownload size={18} className="text-[#8B1538] flex-shrink-0" />
+                </a>
+              )}
+              {Array.isArray(p.certificateDocuments) && p.certificateDocuments.length > 0 && (
+                <div>
+                  <h3 className="font-semibold text-gray-900 mb-2 mt-1">Certificate Documents</h3>
+                  <div className="space-y-2">
+                    {p.certificateDocuments.map((doc: any, i: number) => {
+                      const url = typeof doc === 'string' ? doc : (doc?.url || doc?.link || doc?.file);
+                      const name = typeof doc === 'string'
+                        ? (doc.split('/').pop() || `Document ${i + 1}`)
+                        : (doc?.name || doc?.title || doc?.filename || `Document ${i + 1}`);
+                      if (!url) return null;
+                      return (
+                        <a
+                          key={i}
+                          href={url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-3 p-3 border border-gray-200 hover:border-[#8B1538] hover:bg-[#FEF2F4] rounded-lg transition"
+                        >
+                          <FiCheckCircle size={18} className="text-[#8B1538] flex-shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-gray-900 truncate">{name}</p>
+                          </div>
+                          <FiDownload size={16} className="text-gray-500 flex-shrink-0" />
+                        </a>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          </Section>
+        )}
+
+        {allowed.has('assessmentReport') && (data.assessments?.length ?? 0) > 0 && (
+          <Section icon={<FiBarChart2 size={20} />} title="Assessment Report">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-xs text-gray-700 uppercase border-b-2 border-gray-300">
+                    <th className="py-2 pr-3 font-semibold">Assessment</th>
+                    <th className="py-2 pr-3 font-semibold">Type</th>
+                    <th className="py-2 pr-3 font-semibold">Status</th>
+                    <th className="py-2 pr-3 font-semibold text-right">Score</th>
+                    <th className="py-2 pr-3 font-semibold">Submitted</th>
+                    <th className="py-2 pl-1 font-semibold">Graded</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.assessments!.map((a, i) => {
+                    const score = a.totalScore != null
+                      ? (a.totalPoints != null ? `${a.totalScore} / ${a.totalPoints}` : String(a.totalScore))
+                      : (a.totalPoints != null ? `— / ${a.totalPoints}` : '—');
+                    return (
+                      <tr key={i} className="border-b border-gray-100 last:border-0 align-top">
+                        <td className="py-2 pr-3 text-gray-900 font-medium">{a.title}</td>
+                        <td className="py-2 pr-3 text-gray-700">{a.type || '—'}</td>
+                        <td className="py-2 pr-3">
+                          <span
+                            className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${
+                              a.status === 'GRADED'
+                                ? 'bg-green-100 text-green-800'
+                                : a.status === 'SUBMITTED'
+                                  ? 'bg-blue-100 text-blue-800'
+                                  : 'bg-gray-100 text-gray-700'
+                            }`}
+                          >
+                            {a.status}
+                          </span>
+                        </td>
+                        <td className="py-2 pr-3 text-right font-mono text-gray-900">{score}</td>
+                        <td className="py-2 pr-3 text-gray-700">{a.submittedAt ? new Date(a.submittedAt).toLocaleDateString() : '—'}</td>
+                        <td className="py-2 pl-1 text-gray-700">{a.gradedAt ? new Date(a.gradedAt).toLocaleDateString() : '—'}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </Section>
         )}
 

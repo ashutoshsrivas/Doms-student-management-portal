@@ -10,6 +10,8 @@ const {
   StudentProfile,
   StudentSession,
   AcademicSession,
+  Assessment,
+  AssessmentSubmission,
 } = require('../models');
 
 // Canonical list of sections the public page can show. Identity (name,
@@ -26,6 +28,8 @@ const SECTION_KEYS = [
   'responsibilities',
   'onlinePresence',
   'additionalInfo',
+  'documents',
+  'assessmentReport',
 ];
 
 function generateToken() {
@@ -159,6 +163,43 @@ const shareLinkController = {
       // Sections == [...] -> only those keys visible
       const allowedSections = link.sections == null ? SECTION_KEYS : link.sections;
 
+      // Optional: assessment report (only fetched if section is allowed)
+      let assessmentRows = null;
+      if (allowedSections.includes('assessmentReport')) {
+        const ss = await StudentSession.findAll({
+          where: { userId: link.userId },
+          attributes: ['id'],
+        });
+        const ssIds = ss.map((s) => s.id);
+        if (ssIds.length > 0) {
+          const subs = await AssessmentSubmission.findAll({
+            where: { studentSessionId: ssIds },
+            include: [
+              {
+                model: Assessment,
+                attributes: ['id', 'title', 'type', 'totalPoints'],
+              },
+            ],
+            order: [['submittedAt', 'DESC'], ['createdAt', 'DESC']],
+          });
+
+          assessmentRows = subs
+            // Hide IN_PROGRESS unsubmitted ones from the public view
+            .filter((s) => s.submittedAt || s.status === 'SUBMITTED' || s.status === 'GRADED')
+            .map((s) => ({
+              title: s.Assessment?.title || 'Assessment',
+              type: s.Assessment?.type || null,
+              status: s.status,
+              totalPoints: s.Assessment?.totalPoints != null ? Number(s.Assessment.totalPoints) : null,
+              totalScore: s.totalScore != null ? Number(s.totalScore) : null,
+              submittedAt: s.submittedAt,
+              gradedAt: s.gradedAt,
+            }));
+        } else {
+          assessmentRows = [];
+        }
+      }
+
       res.json({
         meta: {
           token: link.token,
@@ -187,6 +228,7 @@ const shareLinkController = {
             }
           : null,
         profile: profile ? profile.toJSON() : null,
+        assessments: assessmentRows,
       });
     } catch (error) {
       console.error('ShareLink resolve error:', error);

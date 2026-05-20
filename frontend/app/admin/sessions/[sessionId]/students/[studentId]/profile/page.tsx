@@ -114,6 +114,8 @@ export default function StudentProfilePage() {
     { key: 'responsibilities', label: 'Positions of Responsibility' },
     { key: 'onlinePresence', label: 'Online Presence (LinkedIn, GitHub, etc.)' },
     { key: 'additionalInfo', label: 'Languages, Hobbies, Strengths' },
+    { key: 'documents', label: 'Documents (Resume & Certificates)' },
+    { key: 'assessmentReport', label: 'Assessment Report (scores & grades)' },
   ];
   const [shareSections, setShareSections] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(SHARE_SECTIONS.map((s) => [s.key, true])),
