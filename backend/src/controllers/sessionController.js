@@ -244,19 +244,38 @@ const sessionController = {
               'department',
             ],
           },
+          {
+            // Embed categories so the admin students page can avoid an N+1
+            // per-student request. Frontend uses the `categories` array.
+            model: StudentSessionCategory,
+            required: false,
+            attributes: ['id'],
+            include: [
+              {
+                model: SessionCategory,
+                attributes: ['id', 'name', 'description', 'color'],
+              },
+            ],
+          },
         ],
         order: [['createdAt', 'DESC']],
+        distinct: true, // count is correct even with hasMany includes
       });
 
-      // Map rows to include Student relationship correctly
+      // Map rows to include Student + Categories
       const students = rows.map(row => {
         const student = row.Student ? (row.Student.toJSON ? row.Student.toJSON() : row.Student) : {};
+        const sscs = row.StudentSessionCategories || [];
+        const categories = sscs
+          .map(ssc => (ssc.SessionCategory ? (ssc.SessionCategory.toJSON ? ssc.SessionCategory.toJSON() : ssc.SessionCategory) : null))
+          .filter(Boolean);
         return {
           id: row.id,
           studentSessionId: row.id,
           status: row.status,
           enrollmentDate: row.enrollmentDate,
           Student: student,
+          categories,
         };
       });
 

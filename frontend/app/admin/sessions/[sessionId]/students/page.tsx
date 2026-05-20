@@ -91,24 +91,19 @@ export default function SessionStudentsPage() {
     }
   }, [sessionId]);
 
-  // Fetch students
+  // Fetch students (categories now embedded in the response — single round-trip)
   const fetchStudents = useCallback(async () => {
     try {
       setLoading(true);
       const response = await apiClient.get(`/sessions/${sessionId}/students?limit=${limit}`);
-      setStudents(response.data.students);
+      const studentsData = response.data.students || [];
+      setStudents(studentsData);
 
-      // Fetch categories for each student
+      // Populate the categories map directly from the embedded data.
+      // No follow-up HTTP requests; was previously N+1.
       const categoriesMap = new Map<string, Category[]>();
-      for (const student of response.data.students) {
-        try {
-          const catResponse = await apiClient.get(
-            `/sessions/student-sessions/${student.studentSessionId}/categories`
-          );
-          categoriesMap.set(student.id, catResponse.data.categories || []);
-        } catch (error) {
-          categoriesMap.set(student.id, []);
-        }
+      for (const s of studentsData) {
+        categoriesMap.set(s.id, (s.categories || []) as Category[]);
       }
       setStudentCategories(categoriesMap);
     } catch (error) {

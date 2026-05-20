@@ -476,23 +476,34 @@ export default function SIPContent() {
           )}
 
           {activeTab === 'documents' && (
-            <div className="space-y-6">
-              <div>
-                <label className="block text-gray-900 font-bold mb-3 text-base">Certificate (PDF)</label>
-                <input type="file" accept=".pdf" onChange={e => handleCertificateUpload(e.target.files?.[0])} disabled={uploadingCertificate} className="border-2 border-gray-300 rounded px-4 py-2 text-gray-900" />
-                {sip.certificateIssued && <a href={sip.certificateIssued} target="_blank" rel="noopener noreferrer" className="text-blue-700 underline font-bold mt-3 block hover:text-blue-900">View Certificate</a>}
+            sip ? (
+              <div className="space-y-6">
+                <div>
+                  <label className="block text-gray-900 font-bold mb-3 text-base">Certificate (PDF)</label>
+                  <input type="file" accept=".pdf" onChange={e => handleCertificateUpload(e.target.files?.[0])} disabled={uploadingCertificate} className="border-2 border-gray-300 rounded px-4 py-2 text-gray-900" />
+                  {sip?.certificateIssued && <a href={sip.certificateIssued} target="_blank" rel="noopener noreferrer" className="text-blue-700 underline font-bold mt-3 block hover:text-blue-900">View Certificate</a>}
+                </div>
+                <div>
+                  <label className="block text-gray-900 font-bold mb-3 text-base">Faculty Feedback Form (PDF)</label>
+                  <input type="file" accept=".pdf" onChange={e => handleFeedbackUpload(e.target.files?.[0], 'faculty')} disabled={uploadingFaculty} className="border-2 border-gray-300 rounded px-4 py-2 text-gray-900" />
+                  {sip?.facultyFeedback && <a href={sip.facultyFeedback} target="_blank" rel="noopener noreferrer" className="text-blue-700 underline font-bold mt-3 block hover:text-blue-900">View Faculty Feedback</a>}
+                </div>
+                <div>
+                  <label className="block text-gray-900 font-bold mb-3 text-base">Supervisor Feedback Form (PDF)</label>
+                  <input type="file" accept=".pdf" onChange={e => handleFeedbackUpload(e.target.files?.[0], 'supervisor')} disabled={uploadingSupervisor} className="border-2 border-gray-300 rounded px-4 py-2 text-gray-900" />
+                  {sip?.supervisorFeedback && <a href={sip.supervisorFeedback} target="_blank" rel="noopener noreferrer" className="text-blue-700 underline font-bold mt-3 block hover:text-blue-900">View Supervisor Feedback</a>}
+                </div>
               </div>
-              <div>
-                <label className="block text-gray-900 font-bold mb-3 text-base">Faculty Feedback Form (PDF)</label>
-                <input type="file" accept=".pdf" onChange={e => handleFeedbackUpload(e.target.files?.[0], 'faculty')} disabled={uploadingFaculty} className="border-2 border-gray-300 rounded px-4 py-2 text-gray-900" />
-                {sip.facultyFeedback && <a href={sip.facultyFeedback} target="_blank" rel="noopener noreferrer" className="text-blue-700 underline font-bold mt-3 block hover:text-blue-900">View Faculty Feedback</a>}
+            ) : (
+              <div className="bg-yellow-50 border-2 border-yellow-300 rounded-lg p-6 text-center">
+                <p className="text-yellow-900 font-bold text-lg mb-2">Save your SIP first</p>
+                <p className="text-yellow-800">
+                  Fill in at least Student Name and Company Name on the Personal/Company tabs,
+                  then click <span className="font-semibold">Save</span>. Document uploads will
+                  unlock once your SIP record is created.
+                </p>
               </div>
-              <div>
-                <label className="block text-gray-900 font-bold mb-3 text-base">Supervisor Feedback Form (PDF)</label>
-                <input type="file" accept=".pdf" onChange={e => handleFeedbackUpload(e.target.files?.[0], 'supervisor')} disabled={uploadingSupervisor} className="border-2 border-gray-300 rounded px-4 py-2 text-gray-900" />
-                {sip.supervisorFeedback && <a href={sip.supervisorFeedback} target="_blank" rel="noopener noreferrer" className="text-blue-700 underline font-bold mt-3 block hover:text-blue-900">View Supervisor Feedback</a>}
-              </div>
-            </div>
+            )
           )}
 
           {activeTab === 'weekly' && (
