@@ -244,31 +244,38 @@ const sessionController = {
               'department',
             ],
           },
-          {
-            // Embed categories so the admin students page can avoid an N+1
-            // per-student request. Frontend uses the `categories` array.
-            model: StudentSessionCategory,
-            required: false,
-            attributes: ['id'],
-            include: [
-              {
-                model: SessionCategory,
-                attributes: ['id', 'name', 'description', 'color'],
-              },
-            ],
-          },
         ],
         order: [['createdAt', 'DESC']],
-        distinct: true, // count is correct even with hasMany includes
       });
+
+      // Batch-fetch categories for these students in one query (was N+1 from frontend).
+      const ssIds = rows.map(r => r.id);
+      const categoriesByStudentSession = new Map();
+      if (ssIds.length > 0) {
+        const sscs = await StudentSessionCategory.findAll({
+          where: { studentSessionId: ssIds },
+          attributes: ['id', 'studentSessionId'],
+          include: [
+            {
+              model: SessionCategory,
+              attributes: ['id', 'name', 'description', 'color'],
+            },
+          ],
+        });
+        for (const ssc of sscs) {
+          const arr = categoriesByStudentSession.get(ssc.studentSessionId) || [];
+          if (ssc.SessionCategory) {
+            const cat = ssc.SessionCategory.toJSON ? ssc.SessionCategory.toJSON() : ssc.SessionCategory;
+            arr.push(cat);
+          }
+          categoriesByStudentSession.set(ssc.studentSessionId, arr);
+        }
+      }
 
       // Map rows to include Student + Categories
       const students = rows.map(row => {
         const student = row.Student ? (row.Student.toJSON ? row.Student.toJSON() : row.Student) : {};
-        const sscs = row.StudentSessionCategories || [];
-        const categories = sscs
-          .map(ssc => (ssc.SessionCategory ? (ssc.SessionCategory.toJSON ? ssc.SessionCategory.toJSON() : ssc.SessionCategory) : null))
-          .filter(Boolean);
+        const categories = categoriesByStudentSession.get(row.id) || [];
         return {
           id: row.id,
           studentSessionId: row.id,
