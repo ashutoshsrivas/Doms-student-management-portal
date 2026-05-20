@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { FiArrowLeft, FiMail, FiCalendar, FiUser, FiCheckCircle, FiList, FiBarChart2, FiDownload, FiX } from 'react-icons/fi';
+import { FiArrowLeft, FiMail, FiCalendar, FiUser, FiCheckCircle, FiList, FiBarChart2, FiDownload, FiX, FiShare2, FiCopy, FiExternalLink } from 'react-icons/fi';
+import QRCode from 'qrcode';
 import useAuthStore from '@/app/store/authStore';
 import apiClient from '@/app/lib/apiClient';
 import toast from 'react-hot-toast';
@@ -87,6 +88,8 @@ export default function StudentProfilePage() {
   const [loading, setLoading] = useState(true);
   const [profileData, setProfileData] = useState<StudentProfileData | null>(null);
   const [showExportModal, setShowExportModal] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [shareQrDataUrl, setShareQrDataUrl] = useState<string>('');
   const [selectedSections, setSelectedSections] = useState({
     personalInfo: true,
     aboutCareer: true,
@@ -242,7 +245,31 @@ export default function StudentProfilePage() {
   }
 
   const student = studentSession.Student;
-  
+
+  // Public shareable link — uses the User's UUID, served unauthenticated by /share/profile/:userId
+  const shareUrl = student?.id
+    ? `${typeof window !== 'undefined' ? window.location.origin : 'https://doms.geu.ac.in'}/share/profile/${student.id}`
+    : '';
+
+  const openShareModal = async () => {
+    setShowShareModal(true);
+    try {
+      const dataUrl = await QRCode.toDataURL(shareUrl, { width: 220, margin: 1, color: { dark: '#8B1538', light: '#ffffff' } });
+      setShareQrDataUrl(dataUrl);
+    } catch (e) {
+      console.error('QR generation failed', e);
+    }
+  };
+
+  const copyShareUrl = async () => {
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      toast.success('Link copied to clipboard');
+    } catch {
+      toast.error('Could not copy — long-press the link to copy manually');
+    }
+  };
+
   console.log('[Admin Profile] Data loaded:');
   console.log('  - Assessments:', assessments.length, assessments);
   console.log('  - Submissions:', submissions.length, submissions);
@@ -772,13 +799,23 @@ export default function StudentProfilePage() {
               <p className="text-gray-600 mt-1">Student Profile</p>
             </div>
           </div>
-          <button
-            onClick={() => setShowExportModal(true)}
-            className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg hover:shadow-xl font-semibold"
-          >
-            <FiDownload className="w-5 h-5" />
-            Export as PDF
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={openShareModal}
+              className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-[#8B1538] to-[#6B0E26] text-white rounded-xl hover:from-[#6B0E26] hover:to-[#4d0a1c] transition-all shadow-lg hover:shadow-xl font-semibold"
+              title="Generate a public link to this profile"
+            >
+              <FiShare2 className="w-5 h-5" />
+              Create Shareable Link
+            </button>
+            <button
+              onClick={() => setShowExportModal(true)}
+              className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg hover:shadow-xl font-semibold"
+            >
+              <FiDownload className="w-5 h-5" />
+              Export as PDF
+            </button>
+          </div>
         </div>
 
         {/* Student Info Card */}
@@ -1549,6 +1586,87 @@ export default function StudentProfilePage() {
                 >
                   <FiDownload className="w-5 h-5" />
                   Export Selected Sections
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Shareable Link Modal */}
+        {showShareModal && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden">
+              <div className="bg-gradient-to-r from-[#8B1538] to-[#6B0E26] text-white px-6 py-4 flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl font-bold">Shareable Public Profile</h2>
+                  <p className="text-sm opacity-90 mt-0.5">Anyone with this link can view {student?.firstName}&apos;s profile.</p>
+                </div>
+                <button
+                  onClick={() => setShowShareModal(false)}
+                  className="p-2 rounded hover:bg-white/20 transition"
+                  aria-label="Close"
+                >
+                  <FiX className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-5">
+                {/* URL with copy */}
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wide mb-2">
+                    Share URL
+                  </label>
+                  <div className="flex items-stretch gap-2">
+                    <input
+                      type="text"
+                      readOnly
+                      value={shareUrl}
+                      onFocus={(e) => e.currentTarget.select()}
+                      className="flex-1 px-3 py-2 border-2 border-gray-300 rounded-lg text-sm font-mono text-gray-900 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#8B1538]"
+                    />
+                    <button
+                      onClick={copyShareUrl}
+                      className="px-4 py-2 bg-[#8B1538] hover:bg-[#6B0E26] text-white rounded-lg font-semibold text-sm flex items-center gap-1.5 transition"
+                      title="Copy link"
+                    >
+                      <FiCopy className="w-4 h-4" />
+                      Copy
+                    </button>
+                  </div>
+                  <a
+                    href={shareUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 mt-2 text-sm text-[#8B1538] hover:underline"
+                  >
+                    <FiExternalLink className="w-4 h-4" />
+                    Open in a new tab
+                  </a>
+                </div>
+
+                {/* QR code */}
+                {shareQrDataUrl && (
+                  <div className="flex flex-col items-center pt-2 border-t border-gray-200">
+                    <p className="text-xs text-gray-600 mb-2 uppercase tracking-wide font-semibold">Or scan with your phone</p>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={shareQrDataUrl} alt="QR for profile link" className="border border-gray-200 rounded-lg" />
+                  </div>
+                )}
+
+                {/* Info notes */}
+                <div className="bg-blue-50 border border-blue-200 text-blue-900 text-xs rounded-lg p-3 space-y-1">
+                  <p>• The page updates automatically — when the student edits their profile, the live page reflects it.</p>
+                  <p>• Branded with Graphic Era deemed-to-be University &amp; GESoM headers/footer.</p>
+                  <p>• A standard disclaimer is shown at the bottom of the public page.</p>
+                </div>
+              </div>
+
+              <div className="bg-gray-50 px-6 py-4 border-t border-gray-200 flex justify-end">
+                <button
+                  onClick={() => setShowShareModal(false)}
+                  className="px-5 py-2 bg-white border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition font-semibold"
+                >
+                  Close
                 </button>
               </div>
             </div>
