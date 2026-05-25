@@ -8,9 +8,11 @@ const { FacultyTask, User } = require('../models');
 const { uploadToS3, deleteFromS3 } = require('../utils/s3Upload');
 
 const ASSIGNABLE_ROLES = ['HOD', 'FACULTY', 'COORDINATOR', 'PLACEMENT_COORDINATOR', 'TRAINER', 'MENTOR'];
+const PRIORITIES = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'];
 
 const sanitiseTitle = (s) => (s || '').toString().trim().slice(0, 250);
 const sanitiseText = (s, max = 5000) => (s == null ? null : String(s).slice(0, max));
+const sanitisePriority = (p) => (PRIORITIES.includes(p) ? p : 'MEDIUM');
 
 function canViewTask(user, task) {
   if (!user) return false;
@@ -23,7 +25,7 @@ const facultyTaskController = {
   // body: { assigneeId, title, description?, deadline? }
   create: async (req, res) => {
     try {
-      const { assigneeId, title, description, deadline } = req.body || {};
+      const { assigneeId, title, description, deadline, priority } = req.body || {};
       const cleanTitle = sanitiseTitle(title);
       if (!assigneeId || !cleanTitle) {
         return res.status(400).json({ message: 'assigneeId and title are required' });
@@ -43,12 +45,14 @@ const facultyTaskController = {
         title: cleanTitle,
         description: sanitiseText(description, 5000),
         deadline: deadline ? new Date(deadline) : null,
+        priority: sanitisePriority(priority),
       });
 
       const created = await FacultyTask.findByPk(task.id, {
         include: [
           { model: User, as: 'Assignee', attributes: ['id', 'firstName', 'lastName', 'email', 'approvedRole'] },
           { model: User, as: 'Assigner', attributes: ['id', 'firstName', 'lastName', 'email'] },
+          { model: User, as: 'Remarker', attributes: ['id', 'firstName', 'lastName', 'email'] },
         ],
       });
 
@@ -80,9 +84,11 @@ const facultyTaskController = {
         include: [
           { model: User, as: 'Assignee', attributes: ['id', 'firstName', 'lastName', 'email', 'approvedRole', 'department'] },
           { model: User, as: 'Assigner', attributes: ['id', 'firstName', 'lastName', 'email'] },
+          { model: User, as: 'Remarker', attributes: ['id', 'firstName', 'lastName', 'email'] },
         ],
         order: [
           ['status', 'ASC'],   // PENDING < COMPLETED alphabetically — pending first
+          ['priority', 'DESC'], // URGENT > MEDIUM > LOW alphabetically — bubble up urgent
           ['deadline', 'ASC'],
           ['createdAt', 'DESC'],
         ],
@@ -148,6 +154,7 @@ const facultyTaskController = {
         include: [
           { model: User, as: 'Assignee', attributes: ['id', 'firstName', 'lastName', 'email', 'approvedRole', 'department'] },
           { model: User, as: 'Assigner', attributes: ['id', 'firstName', 'lastName', 'email'] },
+          { model: User, as: 'Remarker', attributes: ['id', 'firstName', 'lastName', 'email'] },
         ],
       });
       if (!task) return res.status(404).json({ message: 'Task not found' });
@@ -170,6 +177,7 @@ const facultyTaskController = {
       if (req.body.title !== undefined) patch.title = sanitiseTitle(req.body.title);
       if (req.body.description !== undefined) patch.description = sanitiseText(req.body.description, 5000);
       if (req.body.deadline !== undefined) patch.deadline = req.body.deadline ? new Date(req.body.deadline) : null;
+      if (req.body.priority !== undefined) patch.priority = sanitisePriority(req.body.priority);
       if (req.body.status !== undefined) {
         if (!['PENDING', 'COMPLETED'].includes(req.body.status)) {
           return res.status(400).json({ message: 'Invalid status' });
@@ -185,6 +193,7 @@ const facultyTaskController = {
         include: [
           { model: User, as: 'Assignee', attributes: ['id', 'firstName', 'lastName', 'email', 'approvedRole'] },
           { model: User, as: 'Assigner', attributes: ['id', 'firstName', 'lastName', 'email'] },
+          { model: User, as: 'Remarker', attributes: ['id', 'firstName', 'lastName', 'email'] },
         ],
       });
       res.json({ task: updated });
@@ -237,6 +246,7 @@ const facultyTaskController = {
         include: [
           { model: User, as: 'Assignee', attributes: ['id', 'firstName', 'lastName', 'email', 'approvedRole'] },
           { model: User, as: 'Assigner', attributes: ['id', 'firstName', 'lastName', 'email'] },
+          { model: User, as: 'Remarker', attributes: ['id', 'firstName', 'lastName', 'email'] },
         ],
       });
       res.json({ task: updated });
@@ -256,6 +266,127 @@ const facultyTaskController = {
     } catch (error) {
       console.error('FacultyTask reopen error:', error);
       res.status(500).json({ message: 'Failed to reopen task' });
+    }
+  },
+
+  // PATCH /api/faculty-tasks/:id/remark  (ADMIN)
+  // Body: { remark } — pass null/empty string to clear.
+  setRemark: async (req, res) => {
+    try {
+      const task = await FacultyTask.findByPk(req.params.id);
+      if (!task) return res.status(404).json({ message: 'Task not found' });
+      const incoming = req.body?.remark;
+      const trimmed = incoming == null ? '' : String(incoming).trim();
+      if (trimmed) {
+        await task.update({
+          adminRemark: trimmed.slice(0, 5000),
+          remarkedAt: new Date(),
+          remarkedBy: req.user.id,
+        });
+      } else {
+        // Clear the remark
+        await task.update({ adminRemark: null, remarkedAt: null, remarkedBy: null });
+      }
+      const updated = await FacultyTask.findByPk(task.id, {
+        include: [
+          { model: User, as: 'Assignee', attributes: ['id', 'firstName', 'lastName', 'email', 'approvedRole'] },
+          { model: User, as: 'Assigner', attributes: ['id', 'firstName', 'lastName', 'email'] },
+          { model: User, as: 'Remarker', attributes: ['id', 'firstName', 'lastName', 'email'] },
+        ],
+      });
+      res.json({ task: updated });
+    } catch (error) {
+      console.error('FacultyTask setRemark error:', error);
+      res.status(500).json({ message: 'Failed to save remark' });
+    }
+  },
+
+  // GET /api/faculty-tasks/report  (ADMIN)
+  // Returns a ReportPayload-shaped JSON: { meta, columns, rows }
+  // The frontend pipes this through exportToExcel / exportToPDF from
+  // app/lib/reportExports.ts — same pattern as /api/reports/*.
+  report: async (req, res) => {
+    try {
+      const tasks = await FacultyTask.findAll({
+        include: [
+          { model: User, as: 'Assignee', attributes: ['id', 'firstName', 'lastName', 'email', 'approvedRole', 'department'] },
+          { model: User, as: 'Assigner', attributes: ['id', 'firstName', 'lastName', 'email'] },
+          { model: User, as: 'Remarker', attributes: ['id', 'firstName', 'lastName', 'email'] },
+        ],
+        order: [
+          ['status', 'ASC'],
+          ['priority', 'DESC'],
+          ['deadline', 'ASC'],
+          ['createdAt', 'DESC'],
+        ],
+      });
+
+      const now = Date.now();
+      const fullName = (u) => (u ? `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email : '');
+      const fmtDate = (d) => (d ? new Date(d).toISOString().slice(0, 19).replace('T', ' ') : '');
+
+      const rows = tasks.map((t) => {
+        const overdue = t.status !== 'COMPLETED' && t.deadline && new Date(t.deadline).getTime() < now;
+        return {
+          title: t.title,
+          priority: t.priority,
+          assignee: fullName(t.Assignee),
+          assigneeEmail: t.Assignee?.email || '',
+          assigneeRole: t.Assignee?.approvedRole || '',
+          assigneeDepartment: t.Assignee?.department || '',
+          assignedBy: fullName(t.Assigner),
+          assignedAt: fmtDate(t.createdAt),
+          deadline: fmtDate(t.deadline),
+          status: overdue ? 'OVERDUE' : t.status,
+          completedAt: fmtDate(t.completedAt),
+          daysToComplete: t.completedAt && t.createdAt
+            ? Math.round((new Date(t.completedAt).getTime() - new Date(t.createdAt).getTime()) / 86400000)
+            : '',
+          submissionDocument: t.documentName || '',
+          submissionUrl: t.documentUrl || '',
+          adminRemark: t.adminRemark || '',
+          remarkedBy: fullName(t.Remarker),
+          remarkedAt: fmtDate(t.remarkedAt),
+          description: t.description || '',
+        };
+      });
+
+      const payload = {
+        meta: {
+          reportType: 'faculty-tasks',
+          title: 'Faculty Tasks Report',
+          session: null,
+          generatedAt: new Date().toISOString(),
+          generatedBy: req.user?.email || 'admin',
+          rowCount: rows.length,
+        },
+        columns: [
+          { key: 'title', label: 'Title' },
+          { key: 'priority', label: 'Priority' },
+          { key: 'status', label: 'Status' },
+          { key: 'assignee', label: 'Assignee' },
+          { key: 'assigneeEmail', label: 'Email' },
+          { key: 'assigneeRole', label: 'Role' },
+          { key: 'assigneeDepartment', label: 'Department' },
+          { key: 'assignedBy', label: 'Assigned By' },
+          { key: 'assignedAt', label: 'Assigned At' },
+          { key: 'deadline', label: 'Deadline' },
+          { key: 'completedAt', label: 'Completed At' },
+          { key: 'daysToComplete', label: 'Days To Complete' },
+          { key: 'submissionDocument', label: 'Submission Document' },
+          { key: 'submissionUrl', label: 'Submission URL' },
+          { key: 'adminRemark', label: 'Admin Remark' },
+          { key: 'remarkedBy', label: 'Remarked By' },
+          { key: 'remarkedAt', label: 'Remarked At' },
+          { key: 'description', label: 'Description' },
+        ],
+        rows,
+      };
+
+      res.json(payload);
+    } catch (error) {
+      console.error('FacultyTask report error:', error);
+      res.status(500).json({ message: 'Failed to generate report' });
     }
   },
 

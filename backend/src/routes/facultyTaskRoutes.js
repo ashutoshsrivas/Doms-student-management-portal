@@ -6,10 +6,12 @@ const { assessmentUpload } = require('../middleware/upload');
 
 router.use(authenticateToken);
 
-// Admin-only: create, list-summary, edit, reopen, delete
+// Admin-only: create, list-summary, edit, reopen, delete, remark, report
 router.post('/', authorizeRole('ADMIN'), facultyTaskController.create);
 router.get('/summary', authorizeRole('ADMIN'), facultyTaskController.summary);
+router.get('/report', authorizeRole('ADMIN'), facultyTaskController.report);
 router.patch('/:id', authorizeRole('ADMIN'), facultyTaskController.update);
+router.patch('/:id/remark', authorizeRole('ADMIN'), facultyTaskController.setRemark);
 router.patch('/:id/reopen', authorizeRole('ADMIN'), facultyTaskController.reopen);
 router.delete('/:id', authorizeRole('ADMIN'), facultyTaskController.remove);
 

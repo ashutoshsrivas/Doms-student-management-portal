@@ -224,6 +224,31 @@ async function start() {
       }
     }
 
+    // Add priority + admin-remark columns to faculty_tasks if missing.
+    // sequelize.sync() creates the table on first deploy; these ALTERs are
+    // for subsequent deploys to existing installs.
+    const facultyTaskColumns = [
+      { name: 'priority', ddl: "ENUM('LOW','MEDIUM','HIGH','URGENT') NOT NULL DEFAULT 'MEDIUM'" },
+      { name: 'admin_remark', ddl: 'TEXT NULL' },
+      { name: 'remarked_at', ddl: 'DATETIME NULL' },
+      { name: 'remarked_by', ddl: 'CHAR(36) NULL' },
+    ];
+    for (const col of facultyTaskColumns) {
+      try {
+        await sequelize.query(`ALTER TABLE faculty_tasks ADD COLUMN ${col.name} ${col.ddl}`);
+        console.log(`Added ${col.name} column to faculty_tasks`);
+      } catch (error) {
+        if (error.message && error.message.includes('Duplicate column')) {
+          console.log(`${col.name} column already exists on faculty_tasks`);
+        } else if (error.message && error.message.includes("doesn't exist")) {
+          // Table not created yet (very first deploy) — sync() will create it
+          // with the columns already in place. Safe to ignore.
+        } else {
+          console.error(`Error adding ${col.name} to faculty_tasks:`, error.message);
+        }
+      }
+    }
+
     // Bootstrap default admin user
     await bootstrap();
 

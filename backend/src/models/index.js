@@ -1572,6 +1572,23 @@ const FacultyTask = sequelize.define('FacultyTask', {
     type: DataTypes.STRING,
     allowNull: true,
   },
+  priority: {
+    type: DataTypes.ENUM('LOW', 'MEDIUM', 'HIGH', 'URGENT'),
+    defaultValue: 'MEDIUM',
+    allowNull: false,
+  },
+  adminRemark: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+  },
+  remarkedAt: {
+    type: DataTypes.DATE,
+    allowNull: true,
+  },
+  remarkedBy: {
+    type: DataTypes.UUID,
+    allowNull: true,
+  },
 }, {
   tableName: 'faculty_tasks',
   timestamps: true,
@@ -1581,6 +1598,7 @@ const FacultyTask = sequelize.define('FacultyTask', {
 FacultyTask.belongsTo(User, { foreignKey: 'assigneeId', as: 'Assignee' });
 User.hasMany(FacultyTask, { foreignKey: 'assigneeId', as: 'AssignedTasks' });
 FacultyTask.belongsTo(User, { foreignKey: 'assignedBy', as: 'Assigner' });
+FacultyTask.belongsTo(User, { foreignKey: 'remarkedBy', as: 'Remarker' });
 
 const FacultyNote = sequelize.define('FacultyNote', {
   id: {
