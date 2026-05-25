@@ -20,6 +20,7 @@ import {
   FiHelpCircle,
   FiHardDrive,
   FiFileText,
+  FiClipboard,
 } from 'react-icons/fi';
 import useAuthStore from '@/app/store/authStore';
 import apiClient from '@/app/lib/apiClient';
@@ -94,17 +95,20 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
         { name: 'Internships (SIP)', href: '/admin/sip', iconKey: 'briefcase', children: sipChildren },
         { name: 'File Management', href: '/admin/files', iconKey: 'hardDrive' },
         { name: 'Reports', href: '/admin/reports', iconKey: 'fileText' },
+        { name: 'Faculty Tasks', href: '/admin/faculty-tasks', iconKey: 'clipboard' },
         { name: 'Announcements', href: '/admin/announcements', iconKey: 'bell' },
       ],
       FACULTY: [
         { name: 'Dashboard', href: '/faculty/dashboard', iconKey: 'chart' },
         { name: 'Assessments', href: '/faculty/assessments', iconKey: 'check' },
         { name: 'My Mentees', href: '/faculty/mentors', iconKey: 'users' },
+        { name: 'My Tasks', href: '/faculty/tasks', iconKey: 'clipboard' },
         { name: 'Announcements', href: '/student/announcements', iconKey: 'bell' },
       ],
       HOD: [
         { name: 'Dashboard', href: '/admin/dashboard', iconKey: 'chart' },
         { name: 'Internships (SIP)', href: '/admin/sip', iconKey: 'briefcase', children: sipChildren },
+        { name: 'My Tasks', href: '/faculty/tasks', iconKey: 'clipboard' },
         { name: 'Announcements', href: '/admin/announcements', iconKey: 'bell' },
       ],
       PLACEMENT_COORDINATOR: [
@@ -113,11 +117,24 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
         { name: 'Assessments', href: '/coordinator/assessments', iconKey: 'check' },
         { name: 'Internships (SIP)', href: '/admin/sip', iconKey: 'briefcase', children: sipChildren },
         { name: 'Job Matching', href: '/coordinator/job-matching', iconKey: 'zap' },
+        { name: 'My Tasks', href: '/faculty/tasks', iconKey: 'clipboard' },
         { name: 'Announcements', href: '/admin/announcements', iconKey: 'bell' },
       ],
       TRAINER: [
         { name: 'Dashboard', href: '/trainer/dashboard', iconKey: 'chart' },
         { name: 'Assessments', href: '/trainer/assessments', iconKey: 'check' },
+        { name: 'My Tasks', href: '/faculty/tasks', iconKey: 'clipboard' },
+        { name: 'Announcements', href: '/student/announcements', iconKey: 'bell' },
+      ],
+      COORDINATOR: [
+        { name: 'Dashboard', href: '/coordinator/dashboard', iconKey: 'chart' },
+        { name: 'My Tasks', href: '/faculty/tasks', iconKey: 'clipboard' },
+        { name: 'Announcements', href: '/admin/announcements', iconKey: 'bell' },
+      ],
+      MENTOR: [
+        { name: 'Dashboard', href: '/faculty/dashboard', iconKey: 'chart' },
+        { name: 'My Mentees', href: '/faculty/mentors', iconKey: 'users' },
+        { name: 'My Tasks', href: '/faculty/tasks', iconKey: 'clipboard' },
         { name: 'Announcements', href: '/student/announcements', iconKey: 'bell' },
       ],
       STUDENT: [
@@ -146,6 +163,7 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
       helpCircle: <FiHelpCircle className="w-4.5 h-4.5" />,
       hardDrive:  <FiHardDrive className="w-4.5 h-4.5" />,
       fileText:   <FiFileText className="w-4.5 h-4.5" />,
+      clipboard:  <FiClipboard className="w-4.5 h-4.5" />,
     };
     return iconMap[iconKey] || <FiBarChart2 className="w-4.5 h-4.5" />;
   };

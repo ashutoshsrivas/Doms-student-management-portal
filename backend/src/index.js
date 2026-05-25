@@ -20,6 +20,8 @@ const fileManagementRoutes = require('./routes/fileManagementRoutes');
 const reportRoutes = require('./routes/reportRoutes');
 const publicProfileRoutes = require('./routes/publicProfileRoutes');
 const shareLinkRoutes = require('./routes/shareLinkRoutes');
+const facultyTaskRoutes = require('./routes/facultyTaskRoutes');
+const facultyNoteRoutes = require('./routes/facultyNoteRoutes');
 const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
@@ -64,6 +66,8 @@ app.use('/api/file-management', fileManagementRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/public', publicProfileRoutes);
 app.use('/api/share-links', shareLinkRoutes);
+app.use('/api/faculty-tasks', facultyTaskRoutes);
+app.use('/api/faculty-notes', facultyNoteRoutes);
 
 // Health check
 app.get('/health', (req, res) => {

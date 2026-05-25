@@ -1520,6 +1520,95 @@ ShareLink.belongsTo(User, { foreignKey: 'userId', as: 'Student' });
 User.hasMany(ShareLink, { foreignKey: 'userId', as: 'ProfileShareLinks' });
 ShareLink.belongsTo(User, { foreignKey: 'createdBy', as: 'Creator' });
 
+// ============ FACULTY TASK MODELS ============
+// Admin assigns a task to a faculty (or HOD / mentor / coordinator / trainer).
+// The assignee can mark it done and optionally attach a supporting document.
+// Admins can also write private notes about a faculty (faculty_notes).
+
+const FacultyTask = sequelize.define('FacultyTask', {
+  id: {
+    type: DataTypes.UUID,
+    defaultValue: DataTypes.UUIDV4,
+    primaryKey: true,
+  },
+  assigneeId: {
+    type: DataTypes.UUID,
+    allowNull: false,
+  },
+  assignedBy: {
+    type: DataTypes.UUID,
+    allowNull: false,
+  },
+  title: {
+    type: DataTypes.STRING,
+    allowNull: false,
+  },
+  description: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+  },
+  deadline: {
+    type: DataTypes.DATE,
+    allowNull: true,
+  },
+  status: {
+    type: DataTypes.ENUM('PENDING', 'COMPLETED'),
+    defaultValue: 'PENDING',
+    allowNull: false,
+  },
+  completedAt: {
+    type: DataTypes.DATE,
+    allowNull: true,
+  },
+  documentUrl: {
+    type: DataTypes.STRING(1024),
+    allowNull: true,
+  },
+  documentName: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+  documentMime: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+}, {
+  tableName: 'faculty_tasks',
+  timestamps: true,
+  underscored: true,
+});
+
+FacultyTask.belongsTo(User, { foreignKey: 'assigneeId', as: 'Assignee' });
+User.hasMany(FacultyTask, { foreignKey: 'assigneeId', as: 'AssignedTasks' });
+FacultyTask.belongsTo(User, { foreignKey: 'assignedBy', as: 'Assigner' });
+
+const FacultyNote = sequelize.define('FacultyNote', {
+  id: {
+    type: DataTypes.UUID,
+    defaultValue: DataTypes.UUIDV4,
+    primaryKey: true,
+  },
+  facultyId: {
+    type: DataTypes.UUID,
+    allowNull: false,
+  },
+  createdBy: {
+    type: DataTypes.UUID,
+    allowNull: false,
+  },
+  note: {
+    type: DataTypes.TEXT,
+    allowNull: false,
+  },
+}, {
+  tableName: 'faculty_notes',
+  timestamps: true,
+  underscored: true,
+});
+
+FacultyNote.belongsTo(User, { foreignKey: 'facultyId', as: 'Faculty' });
+FacultyNote.belongsTo(User, { foreignKey: 'createdBy', as: 'Creator' });
+
 // Messaging Models
 
 
@@ -1552,4 +1641,6 @@ module.exports = {
   SIPQuestion,
   SIPQuestionAnswer,
   ShareLink,
+  FacultyTask,
+  FacultyNote,
 };
