@@ -17,6 +17,7 @@ import toast from 'react-hot-toast';
 import useAuthStore from '@/app/store/authStore';
 import apiClient from '@/app/lib/apiClient';
 import DashboardLayout from '@/app/components/DashboardLayout';
+import FacultyTaskExtras from '@/app/components/FacultyTaskExtras';
 
 type Priority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
 
@@ -43,6 +44,12 @@ interface Task {
   groupTaskId?: string | null;
   sharedCompletion?: boolean;
   submittedLate?: boolean;
+  extensionStatus?: 'PENDING' | 'APPROVED' | 'REJECTED' | null;
+  extensionRequestedDeadline?: string | null;
+  extensionRequestReason?: string | null;
+  extensionRequestedAt?: string | null;
+  extensionRespondedAt?: string | null;
+  extensionResponseReason?: string | null;
   Assigner?: { id: string; firstName: string; lastName: string | null; email: string };
   Remarker?: { id: string; firstName: string; lastName: string | null; email: string };
 }
@@ -206,35 +213,36 @@ export default function MyTasksPage() {
                 <div className="bg-green-50 border border-green-200 rounded px-2 py-1.5">
                   <span className="font-bold text-green-700">{accuracy.breakdown.completedOnTime}</span>
                   <span className="text-gray-600"> on time</span>
-                  <span className="block text-[10px] text-gray-500">100 pts each</span>
+                  <span className="block text-[10px] text-gray-500">+5 each</span>
                 </div>
                 <div className="bg-yellow-50 border border-yellow-200 rounded px-2 py-1.5">
                   <span className="font-bold text-yellow-700">{accuracy.breakdown.completedLate1}</span>
                   <span className="text-gray-600"> ≤1d late</span>
-                  <span className="block text-[10px] text-gray-500">80 pts each</span>
+                  <span className="block text-[10px] text-gray-500">+1 each</span>
                 </div>
                 <div className="bg-orange-50 border border-orange-200 rounded px-2 py-1.5">
                   <span className="font-bold text-orange-700">{accuracy.breakdown.completedLate7}</span>
                   <span className="text-gray-600"> ≤7d late</span>
-                  <span className="block text-[10px] text-gray-500">60 pts each</span>
+                  <span className="block text-[10px] text-gray-500">−1 each</span>
                 </div>
                 <div className="bg-red-50 border border-red-200 rounded px-2 py-1.5">
                   <span className="font-bold text-red-700">{accuracy.breakdown.completedLateMore}</span>
                   <span className="text-gray-600"> &gt;7d late</span>
-                  <span className="block text-[10px] text-gray-500">30 pts each</span>
+                  <span className="block text-[10px] text-gray-500">−3 each</span>
                 </div>
                 <div className="bg-red-100 border border-red-300 rounded px-2 py-1.5">
                   <span className="font-bold text-red-800">{accuracy.breakdown.overduePending}</span>
                   <span className="text-gray-700"> overdue</span>
-                  <span className="block text-[10px] text-gray-600">0 pts each</span>
+                  <span className="block text-[10px] text-gray-600">−5 each</span>
                 </div>
                 <div className="bg-gray-50 border border-gray-200 rounded px-2 py-1.5">
                   <span className="font-bold text-gray-700">{accuracy.breakdown.notDueYet}</span>
                   <span className="text-gray-600"> upcoming</span>
-                  <span className="block text-[10px] text-gray-500">excluded</span>
+                  <span className="block text-[10px] text-gray-500">no effect</span>
                 </div>
               </div>
             )}
+            <p className="text-[10px] text-gray-500 w-full">Base 100. Score floor 0, no ceiling.</p>
           </div>
         )}
 
@@ -371,6 +379,9 @@ export default function MyTasksPage() {
                                 </div>
                               </div>
                             )}
+
+                            {/* Extension request + trail */}
+                            <FacultyTaskExtras task={t} isAdmin={false} onChanged={load} />
                           </div>
                         </div>
                       </li>

@@ -1608,6 +1608,39 @@ const FacultyTask = sequelize.define('FacultyTask', {
     defaultValue: false,
     allowNull: false,
   },
+  // Deadline-extension request flow (one pending request at a time).
+  // When extensionStatus is 'PENDING' the admin sees the request banner;
+  // 'APPROVED' moves task.deadline -> extensionRequestedDeadline and clears
+  // back to NULL so a new request can be made later; 'REJECTED' keeps the
+  // record around for one display cycle then can also clear back.
+  extensionStatus: {
+    type: DataTypes.ENUM('PENDING', 'APPROVED', 'REJECTED'),
+    allowNull: true,
+  },
+  extensionRequestedDeadline: {
+    type: DataTypes.DATE,
+    allowNull: true,
+  },
+  extensionRequestReason: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+  },
+  extensionRequestedAt: {
+    type: DataTypes.DATE,
+    allowNull: true,
+  },
+  extensionRespondedBy: {
+    type: DataTypes.UUID,
+    allowNull: true,
+  },
+  extensionRespondedAt: {
+    type: DataTypes.DATE,
+    allowNull: true,
+  },
+  extensionResponseReason: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+  },
 }, {
   tableName: 'faculty_tasks',
   timestamps: true,
@@ -1677,6 +1710,45 @@ FacultyGroup.hasMany(FacultyGroupMember, { foreignKey: 'groupId', as: 'Members',
 FacultyGroupMember.belongsTo(FacultyGroup, { foreignKey: 'groupId', as: 'Group' });
 FacultyGroupMember.belongsTo(User, { foreignKey: 'userId', as: 'User' });
 
+// Per-task discussion thread / trail. Both the assignee and admin may
+// append updates; only the author (or admin) can delete their own.
+const FacultyTaskUpdate = sequelize.define('FacultyTaskUpdate', {
+  id: {
+    type: DataTypes.UUID,
+    defaultValue: DataTypes.UUIDV4,
+    primaryKey: true,
+  },
+  taskId: {
+    type: DataTypes.UUID,
+    allowNull: false,
+  },
+  userId: {
+    type: DataTypes.UUID,
+    allowNull: false,
+  },
+  message: {
+    type: DataTypes.TEXT,
+    allowNull: false,
+  },
+  // System updates (extension approved/rejected, status changes) get
+  // kind='SYSTEM' so the UI can render them with a different style.
+  kind: {
+    type: DataTypes.ENUM('USER', 'SYSTEM'),
+    defaultValue: 'USER',
+    allowNull: false,
+  },
+}, {
+  tableName: 'faculty_task_updates',
+  timestamps: true,
+  underscored: true,
+  indexes: [{ fields: ['task_id', 'created_at'] }],
+});
+
+FacultyTaskUpdate.belongsTo(FacultyTask, { foreignKey: 'taskId', as: 'Task' });
+FacultyTask.hasMany(FacultyTaskUpdate, { foreignKey: 'taskId', as: 'Updates', onDelete: 'CASCADE' });
+FacultyTaskUpdate.belongsTo(User, { foreignKey: 'userId', as: 'Author' });
+FacultyTask.belongsTo(User, { foreignKey: 'extensionRespondedBy', as: 'ExtensionResponder' });
+
 const FacultyNote = sequelize.define('FacultyNote', {
   id: {
     type: DataTypes.UUID,
@@ -1740,4 +1812,5 @@ module.exports = {
   FacultyNote,
   FacultyGroup,
   FacultyGroupMember,
+  FacultyTaskUpdate,
 };

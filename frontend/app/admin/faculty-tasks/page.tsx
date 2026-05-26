@@ -19,7 +19,9 @@ import toast from 'react-hot-toast';
 import useAuthStore from '@/app/store/authStore';
 import apiClient from '@/app/lib/apiClient';
 import DashboardLayout from '@/app/components/DashboardLayout';
+import FacultyTaskExtras from '@/app/components/FacultyTaskExtras';
 import { exportToExcel, exportToPDF, type ReportPayload } from '@/app/lib/reportExports';
+import { generatePerformanceReportPDF } from '@/app/lib/performanceReportPdf';
 
 // ============ Types & constants ============
 
@@ -79,6 +81,12 @@ interface Task {
   groupTaskId?: string | null;
   sharedCompletion?: boolean;
   submittedLate?: boolean;
+  extensionStatus?: 'PENDING' | 'APPROVED' | 'REJECTED' | null;
+  extensionRequestedDeadline?: string | null;
+  extensionRequestReason?: string | null;
+  extensionRequestedAt?: string | null;
+  extensionRespondedAt?: string | null;
+  extensionResponseReason?: string | null;
   Assignee?: {
     id: string;
     firstName: string;
@@ -165,6 +173,13 @@ export default function AdminFacultyTasksPage() {
 
   // Report download state
   const [reportBusy, setReportBusy] = useState<null | 'xlsx' | 'pdf'>(null);
+
+  // Performance report modal
+  const [showPerf, setShowPerf] = useState(false);
+  const [perfRange, setPerfRange] = useState<'week' | 'month' | 'year' | 'custom'>('month');
+  const [perfCustom, setPerfCustom] = useState<{ start: string; end: string }>({ start: '', end: '' });
+  const [perfFacultyId, setPerfFacultyId] = useState<string>('');
+  const [perfBusy, setPerfBusy] = useState(false);
 
   // Bulk-assign modal + groups
   const [groups, setGroups] = useState<FacultyGroupLite[]>([]);
@@ -442,6 +457,55 @@ export default function AdminFacultyTasksPage() {
     });
   }, [faculty, bulkSearch]);
 
+  // === Performance report ===
+  const handleDownloadPerf = async () => {
+    let start = '';
+    let end = '';
+    let label = '';
+    const now = new Date();
+    const endIso = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toISOString();
+    if (perfRange === 'week') {
+      const s = new Date(now); s.setDate(now.getDate() - 7);
+      start = new Date(s.getFullYear(), s.getMonth(), s.getDate()).toISOString();
+      end = endIso;
+      label = `Last 7 days (${s.toLocaleDateString()} – ${now.toLocaleDateString()})`;
+    } else if (perfRange === 'month') {
+      const s = new Date(now.getFullYear(), now.getMonth(), 1);
+      start = s.toISOString();
+      end = endIso;
+      label = `${s.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}`;
+    } else if (perfRange === 'year') {
+      const s = new Date(now.getFullYear(), 0, 1);
+      start = s.toISOString();
+      end = endIso;
+      label = `${now.getFullYear()}`;
+    } else {
+      if (!perfCustom.start || !perfCustom.end) { toast.error('Pick start & end'); return; }
+      start = new Date(perfCustom.start).toISOString();
+      end = new Date(perfCustom.end).toISOString();
+      label = `${new Date(perfCustom.start).toLocaleDateString()} – ${new Date(perfCustom.end).toLocaleDateString()}`;
+    }
+
+    setPerfBusy(true);
+    try {
+      const params: Record<string, string> = { start, end };
+      if (perfFacultyId) params.facultyId = perfFacultyId;
+      const res = await apiClient.get('/faculty-tasks/performance-report', { params });
+      if (!res.data.faculty?.length) {
+        toast('No tasks found in the selected range', { icon: 'ℹ️' });
+        return;
+      }
+      generatePerformanceReportPDF(res.data, label);
+      toast.success('Performance report downloaded');
+      setShowPerf(false);
+    } catch (e) {
+      console.error(e);
+      toast.error('Failed to generate report');
+    } finally {
+      setPerfBusy(false);
+    }
+  };
+
   // === Report ===
   const handleDownloadReport = async (format: 'xlsx' | 'pdf') => {
     setReportBusy(format);
@@ -542,6 +606,13 @@ export default function AdminFacultyTasksPage() {
               </button>
             </div>
             <button
+              onClick={() => setShowPerf(true)}
+              className="flex items-center gap-2 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-semibold text-sm"
+              title="Download a polished PDF performance report for a date range"
+            >
+              <FiDownload /> Performance PDF
+            </button>
+            <button
               onClick={() => setShowBulk(true)}
               className="flex items-center gap-2 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold text-sm"
               title="Assign one task to multiple faculty or groups at once"
@@ -613,8 +684,8 @@ export default function AdminFacultyTasksPage() {
                           <div className="mt-2 flex items-center gap-1.5">
                             <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
                               <div
-                                className={`h-full ${f.accuracy >= 80 ? 'bg-green-500' : f.accuracy >= 60 ? 'bg-yellow-500' : 'bg-red-500'}`}
-                                style={{ width: `${f.accuracy}%` }}
+                                className={`h-full ${f.accuracy >= 100 ? 'bg-emerald-500' : f.accuracy >= 80 ? 'bg-green-500' : f.accuracy >= 60 ? 'bg-yellow-500' : 'bg-red-500'}`}
+                                style={{ width: `${Math.min(100, f.accuracy)}%` }}
                               />
                             </div>
                             <span className="text-[10px] font-bold text-gray-700">{f.accuracy}%</span>
@@ -651,13 +722,13 @@ export default function AdminFacultyTasksPage() {
                       <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Accuracy</p>
                       {selected.accuracy != null ? (
                         <div className="flex items-baseline gap-1 justify-end">
-                          <span className={`text-2xl font-bold ${selected.accuracy >= 80 ? 'text-green-600' : selected.accuracy >= 60 ? 'text-yellow-600' : 'text-red-600'}`}>
+                          <span className={`text-2xl font-bold ${selected.accuracy >= 100 ? 'text-emerald-600' : selected.accuracy >= 80 ? 'text-green-600' : selected.accuracy >= 60 ? 'text-yellow-600' : 'text-red-600'}`}>
                             {selected.accuracy}%
                           </span>
                           <span className="text-[10px] text-gray-500">({selected.evaluableCount} task{selected.evaluableCount === 1 ? '' : 's'})</span>
                         </div>
                       ) : (
-                        <p className="text-sm text-gray-500 italic">— (no evaluable tasks)</p>
+                        <p className="text-sm text-gray-500 italic">100% (no tasks yet)</p>
                       )}
                     </div>
                     <button
@@ -909,6 +980,13 @@ export default function AdminFacultyTasksPage() {
                                           </div>
                                         )}
                                       </div>
+
+                                      {/* Extension request + trail */}
+                                      <FacultyTaskExtras
+                                        task={t}
+                                        isAdmin
+                                        onChanged={() => { loadTasks(selectedId); loadSummary(); }}
+                                      />
                                     </div>
                                   </div>
                                 </li>
@@ -1323,6 +1401,89 @@ export default function AdminFacultyTasksPage() {
                 className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 text-white rounded font-semibold flex items-center gap-2"
               >
                 <FiZap /> {bulkCreating ? 'Creating…' : `Assign to ${resolvedAssigneeCount} faculty`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Performance-report modal */}
+      {showPerf && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-2xl max-w-md w-full overflow-hidden">
+            <div className="bg-emerald-600 text-white px-5 py-3 flex items-center justify-between">
+              <h3 className="font-bold flex items-center gap-2"><FiDownload /> Performance Report</h3>
+              <button onClick={() => setShowPerf(false)} className="p-1 hover:bg-white/20 rounded"><FiX /></button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 uppercase mb-2">Date range</label>
+                <div className="grid grid-cols-4 gap-2">
+                  {(['week', 'month', 'year', 'custom'] as const).map((r) => (
+                    <button
+                      key={r}
+                      type="button"
+                      onClick={() => setPerfRange(r)}
+                      className={`px-2 py-1.5 text-xs font-semibold rounded border-2 capitalize ${perfRange === r ? 'bg-emerald-600 text-white border-emerald-700' : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'}`}
+                    >
+                      {r === 'week' ? 'Last 7d' : r === 'month' ? 'This month' : r === 'year' ? 'This year' : 'Custom'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {perfRange === 'custom' && (
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-gray-700 mb-1">Start</label>
+                    <input
+                      type="date"
+                      value={perfCustom.start}
+                      onChange={(e) => setPerfCustom((p) => ({ ...p, start: e.target.value }))}
+                      className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm text-gray-900"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-gray-700 mb-1">End (inclusive)</label>
+                    <input
+                      type="date"
+                      value={perfCustom.end}
+                      onChange={(e) => setPerfCustom((p) => ({ ...p, end: e.target.value }))}
+                      className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm text-gray-900"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">Faculty filter (optional)</label>
+                <select
+                  value={perfFacultyId}
+                  onChange={(e) => setPerfFacultyId(e.target.value)}
+                  className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg text-sm text-gray-900 bg-white"
+                >
+                  <option value="">All faculty</option>
+                  {faculty.map((f) => (
+                    <option key={f.user.id} value={f.user.id}>
+                      {f.user.firstName} {f.user.lastName || ''} ({f.user.approvedRole})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <p className="text-xs text-gray-500">
+                Generates a portrait PDF with a cover page (totals + leaderboard) and one detail page per faculty
+                (live-task score breakdown + tasks-in-range table).
+              </p>
+            </div>
+            <div className="bg-gray-50 px-5 py-3 border-t border-gray-200 flex gap-2 justify-end">
+              <button onClick={() => setShowPerf(false)} className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded font-semibold">Cancel</button>
+              <button
+                onClick={handleDownloadPerf}
+                disabled={perfBusy || (perfRange === 'custom' && (!perfCustom.start || !perfCustom.end))}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-400 text-white rounded font-semibold flex items-center gap-2"
+              >
+                {perfBusy ? <FiLoader className="animate-spin" /> : <FiDownload />} {perfBusy ? 'Building…' : 'Download PDF'}
               </button>
             </div>
           </div>

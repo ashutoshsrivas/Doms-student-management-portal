@@ -237,6 +237,13 @@ async function start() {
       { name: 'group_task_id', ddl: 'CHAR(36) NULL' },
       { name: 'shared_completion', ddl: 'BOOLEAN NOT NULL DEFAULT FALSE' },
       { name: 'submitted_late', ddl: 'BOOLEAN NOT NULL DEFAULT FALSE' },
+      { name: 'extension_status', ddl: "ENUM('PENDING','APPROVED','REJECTED') NULL" },
+      { name: 'extension_requested_deadline', ddl: 'DATETIME NULL' },
+      { name: 'extension_request_reason', ddl: 'TEXT NULL' },
+      { name: 'extension_requested_at', ddl: 'DATETIME NULL' },
+      { name: 'extension_responded_by', ddl: 'CHAR(36) NULL' },
+      { name: 'extension_responded_at', ddl: 'DATETIME NULL' },
+      { name: 'extension_response_reason', ddl: 'TEXT NULL' },
     ];
     for (const col of facultyTaskColumns) {
       try {

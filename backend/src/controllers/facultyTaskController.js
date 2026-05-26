@@ -6,7 +6,7 @@
 const crypto = require('crypto');
 const { Op } = require('sequelize');
 const { sequelize } = require('../config/database');
-const { FacultyTask, User, FacultyGroup, FacultyGroupMember } = require('../models');
+const { FacultyTask, User, FacultyGroup, FacultyGroupMember, FacultyTaskUpdate } = require('../models');
 const { uploadToS3, deleteFromS3 } = require('../utils/s3Upload');
 
 const ASSIGNABLE_ROLES = ['HOD', 'FACULTY', 'COORDINATOR', 'PLACEMENT_COORDINATOR', 'TRAINER', 'MENTOR'];
@@ -22,38 +22,59 @@ function canViewTask(user, task) {
   return task.assigneeId === user.id;
 }
 
-// === Accuracy scoring (tiered) ============================================
-// Per task: completed on time = 100, ≤1 day late = 80, ≤7 days late = 60,
-// >7 days late = 30, overdue & still pending = 0.
-// Not-yet-due pending tasks are excluded from the denominator (we don't know
-// yet whether they'll be on time or late).
+// === Accuracy scoring (delta-based, credit-score style) ===================
+// Every faculty starts at a base of 100. Each live task contributes a delta:
+//   completed on time  -> +5
+//   ≤1 day late        -> +1
+//   ≤7 days late       -> -1
+//   >7 days late       -> -3
+//   overdue & pending  -> -5
+//   not-yet-due pending -> 0 (no effect yet)
+// Floor at 0, no ceiling (a high performer can exceed 100%). Because only
+// live (non-deleted) rows are fetched, deleting a task naturally removes
+// its contribution on the next call.
 const MS_PER_DAY = 86400000;
-function taskScore(task, now = Date.now()) {
-  const hasDeadline = !!task.deadline;
-  if (task.status === 'COMPLETED') {
-    if (!hasDeadline) return 100;
-    const lateMs = new Date(task.completedAt).getTime() - new Date(task.deadline).getTime();
-    if (lateMs <= 0) return 100;
-    const lateDays = lateMs / MS_PER_DAY;
-    if (lateDays <= 1) return 80;
-    if (lateDays <= 7) return 60;
-    return 30;
-  }
-  // PENDING
-  if (hasDeadline && new Date(task.deadline).getTime() < now) return 0; // overdue
-  return null; // not evaluable yet
-}
-function computeAccuracy(tasks) {
-  let sum = 0;
-  let count = 0;
+const SCORE_DELTAS = {
+  onTime: 5,
+  late1: 1,
+  late7: -1,
+  lateMore: -3,
+  overdue: -5,
+};
+const SCORE_BASE = 100;
+
+function computeAccuracy(tasks, now = Date.now()) {
+  let score = SCORE_BASE;
+  const breakdown = { onTime: 0, late1: 0, late7: 0, lateMore: 0, overdue: 0, notDueYet: 0 };
   for (const t of tasks) {
-    const s = taskScore(t);
-    if (s == null) continue;
-    sum += s;
-    count += 1;
+    if (t.status === 'COMPLETED') {
+      const hasDeadline = !!t.deadline;
+      if (!hasDeadline) { score += SCORE_DELTAS.onTime; breakdown.onTime += 1; continue; }
+      const lateMs = new Date(t.completedAt).getTime() - new Date(t.deadline).getTime();
+      if (lateMs <= 0) { score += SCORE_DELTAS.onTime; breakdown.onTime += 1; }
+      else {
+        const d = lateMs / MS_PER_DAY;
+        if (d <= 1) { score += SCORE_DELTAS.late1; breakdown.late1 += 1; }
+        else if (d <= 7) { score += SCORE_DELTAS.late7; breakdown.late7 += 1; }
+        else { score += SCORE_DELTAS.lateMore; breakdown.lateMore += 1; }
+      }
+    } else {
+      if (t.deadline && new Date(t.deadline).getTime() < now) {
+        score += SCORE_DELTAS.overdue;
+        breakdown.overdue += 1;
+      } else {
+        breakdown.notDueYet += 1;
+      }
+    }
   }
-  if (count === 0) return { percentage: null, evaluable: 0, sampleSize: tasks.length };
-  return { percentage: Math.round(sum / count), evaluable: count, sampleSize: tasks.length };
+  return {
+    percentage: Math.max(0, score),
+    base: SCORE_BASE,
+    deltas: SCORE_DELTAS,
+    evaluable: tasks.length,
+    sampleSize: tasks.length,
+    breakdown,
+  };
 }
 
 const facultyTaskController = {
@@ -617,6 +638,378 @@ const facultyTaskController = {
     } catch (error) {
       console.error('FacultyTask accuracy error:', error);
       res.status(500).json({ message: 'Failed to compute accuracy' });
+    }
+  },
+
+  // === TRAIL / UPDATES =====================================================
+  // GET /api/faculty-tasks/:id/updates  (assignee or admin)
+  listUpdates: async (req, res) => {
+    try {
+      const task = await FacultyTask.findByPk(req.params.id);
+      if (!task) return res.status(404).json({ message: 'Task not found' });
+      if (!canViewTask(req.user, task)) return res.status(403).json({ message: 'Forbidden' });
+      const updates = await FacultyTaskUpdate.findAll({
+        where: { taskId: task.id },
+        order: [['createdAt', 'ASC']],
+        include: [{ model: User, as: 'Author', attributes: ['id', 'firstName', 'lastName', 'email', 'approvedRole'] }],
+      });
+      res.json({ updates });
+    } catch (error) {
+      console.error('FacultyTask listUpdates error:', error);
+      res.status(500).json({ message: 'Failed to load updates' });
+    }
+  },
+
+  // POST /api/faculty-tasks/:id/updates  { message }
+  postUpdate: async (req, res) => {
+    try {
+      const task = await FacultyTask.findByPk(req.params.id);
+      if (!task) return res.status(404).json({ message: 'Task not found' });
+      if (!canViewTask(req.user, task)) return res.status(403).json({ message: 'Forbidden' });
+      const message = (req.body?.message || '').toString().trim();
+      if (!message) return res.status(400).json({ message: 'message is required' });
+      const row = await FacultyTaskUpdate.create({
+        taskId: task.id,
+        userId: req.user.id,
+        message: message.slice(0, 4000),
+        kind: 'USER',
+      });
+      // For shared-completion tasks, mirror the update to siblings so every
+      // member of the group sees the same conversation thread.
+      if (task.sharedCompletion && task.groupTaskId) {
+        const siblings = await FacultyTask.findAll({
+          where: { groupTaskId: task.groupTaskId, id: { [Op.ne]: task.id } },
+          attributes: ['id'],
+        });
+        if (siblings.length) {
+          await FacultyTaskUpdate.bulkCreate(siblings.map((s) => ({
+            taskId: s.id, userId: req.user.id, message: message.slice(0, 4000), kind: 'USER',
+          })));
+        }
+      }
+      const created = await FacultyTaskUpdate.findByPk(row.id, {
+        include: [{ model: User, as: 'Author', attributes: ['id', 'firstName', 'lastName', 'email', 'approvedRole'] }],
+      });
+      res.status(201).json({ update: created });
+    } catch (error) {
+      console.error('FacultyTask postUpdate error:', error);
+      res.status(500).json({ message: 'Failed to post update' });
+    }
+  },
+
+  // DELETE /api/faculty-tasks/updates/:updateId  (author or admin)
+  removeUpdate: async (req, res) => {
+    try {
+      const row = await FacultyTaskUpdate.findByPk(req.params.updateId);
+      if (!row) return res.status(404).json({ message: 'Update not found' });
+      if (req.user.role !== 'ADMIN' && row.userId !== req.user.id) {
+        return res.status(403).json({ message: 'Only the author or an admin can delete this' });
+      }
+      await row.destroy();
+      res.json({ message: 'Update deleted', id: req.params.updateId });
+    } catch (error) {
+      console.error('FacultyTask removeUpdate error:', error);
+      res.status(500).json({ message: 'Failed to delete update' });
+    }
+  },
+
+  // === EXTENSION REQUESTS =================================================
+  // POST /api/faculty-tasks/:id/extension  (assignee only)
+  // body: { requestedDeadline (ISO string), reason? }
+  // Only one PENDING request at a time. Cascades to siblings for shared.
+  requestExtension: async (req, res) => {
+    try {
+      const task = await FacultyTask.findByPk(req.params.id);
+      if (!task) return res.status(404).json({ message: 'Task not found' });
+      if (task.assigneeId !== req.user.id && req.user.role !== 'ADMIN') {
+        return res.status(403).json({ message: 'Only the assignee can request extension' });
+      }
+      if (task.status === 'COMPLETED') {
+        return res.status(400).json({ message: 'Task is already completed' });
+      }
+      if (task.extensionStatus === 'PENDING') {
+        return res.status(400).json({ message: 'An extension request is already pending for this task' });
+      }
+      const requestedDeadline = req.body?.requestedDeadline ? new Date(req.body.requestedDeadline) : null;
+      if (!requestedDeadline || isNaN(requestedDeadline.getTime())) {
+        return res.status(400).json({ message: 'requestedDeadline is required' });
+      }
+      const reason = sanitiseText(req.body?.reason, 2000);
+
+      const patch = {
+        extensionStatus: 'PENDING',
+        extensionRequestedDeadline: requestedDeadline,
+        extensionRequestReason: reason,
+        extensionRequestedAt: new Date(),
+        extensionRespondedBy: null,
+        extensionRespondedAt: null,
+        extensionResponseReason: null,
+      };
+      await task.update(patch);
+      // Cascade for shared
+      if (task.sharedCompletion && task.groupTaskId) {
+        await FacultyTask.update(patch, {
+          where: { groupTaskId: task.groupTaskId, id: { [Op.ne]: task.id } },
+        });
+      }
+      // System trail entry
+      await FacultyTaskUpdate.create({
+        taskId: task.id,
+        userId: req.user.id,
+        kind: 'SYSTEM',
+        message: `Extension requested to ${requestedDeadline.toISOString().slice(0, 16).replace('T', ' ')}${reason ? ` — "${reason.slice(0, 200)}"` : ''}`,
+      });
+      res.json({ message: 'Extension requested' });
+    } catch (error) {
+      console.error('FacultyTask requestExtension error:', error);
+      res.status(500).json({ message: 'Failed to request extension' });
+    }
+  },
+
+  // PATCH /api/faculty-tasks/:id/extension  (ADMIN)
+  // body: { decision: 'APPROVE' | 'REJECT', responseReason? }
+  // APPROVE: copy extensionRequestedDeadline -> deadline, clear request fields,
+  // status -> APPROVED. REJECT: keep records, status -> REJECTED.
+  respondExtension: async (req, res) => {
+    try {
+      const task = await FacultyTask.findByPk(req.params.id);
+      if (!task) return res.status(404).json({ message: 'Task not found' });
+      if (task.extensionStatus !== 'PENDING') {
+        return res.status(400).json({ message: 'No pending extension request' });
+      }
+      const decision = req.body?.decision;
+      if (decision !== 'APPROVE' && decision !== 'REJECT') {
+        return res.status(400).json({ message: 'decision must be APPROVE or REJECT' });
+      }
+      const responseReason = sanitiseText(req.body?.responseReason, 2000);
+      const now = new Date();
+      const requested = task.extensionRequestedDeadline;
+
+      const patch = {
+        extensionStatus: decision === 'APPROVE' ? 'APPROVED' : 'REJECTED',
+        extensionRespondedBy: req.user.id,
+        extensionRespondedAt: now,
+        extensionResponseReason: responseReason,
+      };
+      if (decision === 'APPROVE') {
+        patch.deadline = requested;
+        // submittedLate flag — if task is still pending, no change; only set on completion
+      }
+      await task.update(patch);
+      // Cascade for shared
+      if (task.sharedCompletion && task.groupTaskId) {
+        const sibPatch = { ...patch };
+        await FacultyTask.update(sibPatch, {
+          where: { groupTaskId: task.groupTaskId, id: { [Op.ne]: task.id } },
+        });
+      }
+      // System trail
+      await FacultyTaskUpdate.create({
+        taskId: task.id,
+        userId: req.user.id,
+        kind: 'SYSTEM',
+        message: decision === 'APPROVE'
+          ? `Extension APPROVED — new deadline ${requested.toISOString().slice(0, 16).replace('T', ' ')}${responseReason ? ` — "${responseReason.slice(0, 200)}"` : ''}`
+          : `Extension REJECTED${responseReason ? ` — "${responseReason.slice(0, 200)}"` : ''}`,
+      });
+      res.json({ message: `Extension ${decision === 'APPROVE' ? 'approved' : 'rejected'}` });
+    } catch (error) {
+      console.error('FacultyTask respondExtension error:', error);
+      res.status(500).json({ message: 'Failed to respond to extension' });
+    }
+  },
+
+  // DELETE /api/faculty-tasks/:id/extension  (assignee cancels own pending)
+  cancelExtension: async (req, res) => {
+    try {
+      const task = await FacultyTask.findByPk(req.params.id);
+      if (!task) return res.status(404).json({ message: 'Task not found' });
+      if (task.assigneeId !== req.user.id && req.user.role !== 'ADMIN') {
+        return res.status(403).json({ message: 'Forbidden' });
+      }
+      if (task.extensionStatus !== 'PENDING') {
+        return res.status(400).json({ message: 'No pending extension to cancel' });
+      }
+      const patch = {
+        extensionStatus: null,
+        extensionRequestedDeadline: null,
+        extensionRequestReason: null,
+        extensionRequestedAt: null,
+      };
+      await task.update(patch);
+      if (task.sharedCompletion && task.groupTaskId) {
+        await FacultyTask.update(patch, {
+          where: { groupTaskId: task.groupTaskId, id: { [Op.ne]: task.id } },
+        });
+      }
+      await FacultyTaskUpdate.create({
+        taskId: task.id,
+        userId: req.user.id,
+        kind: 'SYSTEM',
+        message: 'Extension request cancelled',
+      });
+      res.json({ message: 'Extension request cancelled' });
+    } catch (error) {
+      console.error('FacultyTask cancelExtension error:', error);
+      res.status(500).json({ message: 'Failed to cancel extension' });
+    }
+  },
+
+  // === PENDING QUEUE (ADMIN) ==============================================
+  // GET /api/faculty-tasks/pending-queue
+  // Returns all PENDING tasks bucketed: today / overdue / upcoming / undated
+  // sorted by priority desc within each bucket.
+  pendingQueue: async (req, res) => {
+    try {
+      const tasks = await FacultyTask.findAll({
+        where: { status: 'PENDING' },
+        include: [
+          { model: User, as: 'Assignee', attributes: ['id', 'firstName', 'lastName', 'email', 'approvedRole', 'department'] },
+          { model: User, as: 'Assigner', attributes: ['id', 'firstName', 'lastName', 'email'] },
+        ],
+      });
+
+      // Priority rank for sort (higher = first)
+      const pRank = { URGENT: 4, HIGH: 3, MEDIUM: 2, LOW: 1 };
+
+      const now = new Date();
+      const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+      const endOfToday = startOfToday + MS_PER_DAY;
+
+      const buckets = { overdue: [], today: [], upcoming: [], undated: [] };
+      for (const t of tasks) {
+        if (!t.deadline) buckets.undated.push(t);
+        else {
+          const d = new Date(t.deadline).getTime();
+          if (d < startOfToday) buckets.overdue.push(t);
+          else if (d < endOfToday) buckets.today.push(t);
+          else buckets.upcoming.push(t);
+        }
+      }
+      // Within each bucket: priority desc, then deadline asc (sooner first)
+      const sortFn = (a, b) => {
+        const pr = (pRank[b.priority] || 0) - (pRank[a.priority] || 0);
+        if (pr !== 0) return pr;
+        if (!a.deadline && !b.deadline) return 0;
+        if (!a.deadline) return 1;
+        if (!b.deadline) return -1;
+        return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
+      };
+      buckets.overdue.sort(sortFn);
+      buckets.today.sort(sortFn);
+      buckets.upcoming.sort(sortFn);
+      buckets.undated.sort(sortFn);
+
+      res.json({
+        buckets,
+        counts: {
+          overdue: buckets.overdue.length,
+          today: buckets.today.length,
+          upcoming: buckets.upcoming.length,
+          undated: buckets.undated.length,
+          total: tasks.length,
+        },
+      });
+    } catch (error) {
+      console.error('FacultyTask pendingQueue error:', error);
+      res.status(500).json({ message: 'Failed to load pending queue' });
+    }
+  },
+
+  // === PERFORMANCE REPORT (ADMIN) =========================================
+  // GET /api/faculty-tasks/performance-report?start=ISO&end=ISO&facultyId=optional
+  // Returns per-faculty rows with their tasks + computed score in the range.
+  // "In range" = task's createdAt within [start, end).
+  performanceReport: async (req, res) => {
+    try {
+      const start = req.query.start ? new Date(req.query.start) : null;
+      const end = req.query.end ? new Date(req.query.end) : null;
+      const facultyId = req.query.facultyId ? String(req.query.facultyId) : null;
+
+      const where = {};
+      if (start && !isNaN(start.getTime())) where.createdAt = { ...(where.createdAt || {}), [Op.gte]: start };
+      if (end && !isNaN(end.getTime())) where.createdAt = { ...(where.createdAt || {}), [Op.lt]: end };
+      if (facultyId) where.assigneeId = facultyId;
+
+      const tasks = await FacultyTask.findAll({
+        where,
+        include: [
+          { model: User, as: 'Assignee', attributes: ['id', 'firstName', 'lastName', 'email', 'approvedRole', 'department'] },
+          { model: User, as: 'Assigner', attributes: ['id', 'firstName', 'lastName', 'email'] },
+          { model: User, as: 'Remarker', attributes: ['id', 'firstName', 'lastName', 'email'] },
+        ],
+        order: [['createdAt', 'ASC']],
+      });
+
+      // Group by assignee
+      const byFaculty = new Map();
+      for (const t of tasks) {
+        if (!byFaculty.has(t.assigneeId)) {
+          byFaculty.set(t.assigneeId, {
+            user: t.Assignee ? t.Assignee.toJSON() : { id: t.assigneeId, firstName: 'Unknown', lastName: '', email: '' },
+            tasks: [],
+          });
+        }
+        byFaculty.get(t.assigneeId).tasks.push(t);
+      }
+
+      // For score: per-faculty accuracy is computed across their LIVE tasks
+      // overall (not just the range), to match the on-page accuracy display.
+      // We do one query per faculty for live tasks.
+      const fmtDate = (d) => (d ? new Date(d).toISOString().slice(0, 19).replace('T', ' ') : '');
+      const fullName = (u) => (u ? `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email : '');
+
+      const faculty = [];
+      for (const [uid, group] of byFaculty.entries()) {
+        const liveTasks = await FacultyTask.findAll({
+          where: { assigneeId: uid },
+          attributes: ['id', 'status', 'deadline', 'completedAt'],
+        });
+        const score = computeAccuracy(liveTasks);
+        const now = Date.now();
+        const rangeTaskRows = group.tasks.map((t) => {
+          const overdue = t.status !== 'COMPLETED' && t.deadline && new Date(t.deadline).getTime() < now;
+          return {
+            title: t.title,
+            priority: t.priority,
+            type: t.sharedCompletion ? 'GROUP-SHARED' : (t.groupTaskId ? 'GROUP-COPY' : 'INDIVIDUAL'),
+            status: overdue ? 'OVERDUE' : t.status,
+            assignedAt: fmtDate(t.createdAt),
+            deadline: fmtDate(t.deadline),
+            completedAt: fmtDate(t.completedAt),
+            late: t.submittedLate ? 'YES' : '',
+            documentName: t.documentName || '',
+            adminRemark: t.adminRemark || '',
+          };
+        });
+        faculty.push({
+          user: group.user,
+          fullName: fullName(group.user),
+          taskCount: group.tasks.length,
+          tasks: rangeTaskRows,
+          score: score.percentage,
+          scoreBreakdown: score.breakdown,
+        });
+      }
+
+      // Sort by score desc, then name asc
+      faculty.sort((a, b) => (b.score - a.score) || a.fullName.localeCompare(b.fullName));
+
+      res.json({
+        meta: {
+          start: start && !isNaN(start.getTime()) ? start.toISOString() : null,
+          end: end && !isNaN(end.getTime()) ? end.toISOString() : null,
+          facultyId,
+          generatedAt: new Date().toISOString(),
+          generatedBy: req.user?.email || 'admin',
+          totalTasks: tasks.length,
+          totalFaculty: faculty.length,
+        },
+        faculty,
+      });
+    } catch (error) {
+      console.error('FacultyTask performanceReport error:', error);
+      res.status(500).json({ message: 'Failed to generate performance report' });
     }
   },
 };
