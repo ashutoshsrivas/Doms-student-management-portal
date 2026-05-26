@@ -10,6 +10,12 @@ router.use(authenticateToken);
 // as the literal path, not as an :id value).
 router.get('/report', eventController.report);
 
+// Blocked dates — list visible to any authenticated user; block/unblock
+// admin-only (enforced in controller).
+router.get('/blocked-dates', eventController.listBlockedDates);
+router.post('/blocked-dates', eventController.blockDate);
+router.delete('/blocked-dates/:id', eventController.unblockDate);
+
 // Read — any authenticated user
 router.get('/', eventController.list);
 router.get('/:id', eventController.get);

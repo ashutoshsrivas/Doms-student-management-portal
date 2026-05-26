@@ -1791,6 +1791,24 @@ const Event = sequelize.define('Event', {
 Event.belongsTo(User, { foreignKey: 'createdBy', as: 'Creator' });
 User.hasMany(Event, { foreignKey: 'createdBy', as: 'CreatedEvents' });
 
+// Admin-set blocked dates. Stored as a DATEONLY ('YYYY-MM-DD'). Event
+// create / update rejects start_at that falls on any blocked date.
+const BlockedDate = sequelize.define('BlockedDate', {
+  id: {
+    type: DataTypes.UUID,
+    defaultValue: DataTypes.UUIDV4,
+    primaryKey: true,
+  },
+  date: { type: DataTypes.DATEONLY, allowNull: false, unique: true },
+  reason: { type: DataTypes.STRING(500), allowNull: true },
+  createdBy: { type: DataTypes.UUID, allowNull: false },
+}, {
+  tableName: 'blocked_dates',
+  timestamps: true,
+  underscored: true,
+});
+BlockedDate.belongsTo(User, { foreignKey: 'createdBy', as: 'Creator' });
+
 const FacultyNote = sequelize.define('FacultyNote', {
   id: {
     type: DataTypes.UUID,
@@ -1856,4 +1874,5 @@ module.exports = {
   FacultyGroupMember,
   FacultyTaskUpdate,
   Event,
+  BlockedDate,
 };

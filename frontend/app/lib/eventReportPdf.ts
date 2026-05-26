@@ -3,6 +3,7 @@
 
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import QRCode from 'qrcode';
 
 interface EventRow {
   id: string;
@@ -18,10 +19,13 @@ interface EventRow {
   creatorRole: string;
   hasImage: boolean;
   hasVideo: boolean;
+  imageUrl?: string;
+  videoUrl?: string;
   registrationUrl: string;
   hasRegistration: boolean;
   reportUploaded: boolean;
   reportName: string;
+  reportUrl?: string;
   reportUploadedAt: string | null;
 }
 
@@ -46,7 +50,27 @@ const fmtDate = (s: string | null) =>
 const fmtTime = (s: string | null) =>
   s ? new Date(s).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
 
-export function generateEventReportPDF(payload: EventReportPayload, rangeLabel: string) {
+// Pre-generate a QR data-URL for one event's URLs (parallel). Empty string
+// for URLs the event doesn't have.
+async function buildQRs(events: EventRow[]): Promise<Record<string, { image: string; video: string; report: string }>> {
+  const out: Record<string, { image: string; video: string; report: string }> = {};
+  const opts: QRCode.QRCodeToDataURLOptions = { margin: 0, scale: 4, errorCorrectionLevel: 'L' };
+  await Promise.all(events.map(async (e) => {
+    const [image, video, report] = await Promise.all([
+      e.imageUrl ? QRCode.toDataURL(e.imageUrl, opts) : Promise.resolve(''),
+      e.videoUrl ? QRCode.toDataURL(e.videoUrl, opts) : Promise.resolve(''),
+      e.reportUrl ? QRCode.toDataURL(e.reportUrl, opts) : Promise.resolve(''),
+    ]);
+    out[e.id] = { image, video, report };
+  }));
+  return out;
+}
+
+export async function generateEventReportPDF(payload: EventReportPayload, rangeLabel: string) {
+  // Pre-generate all QR codes ahead of building the table (autoTable's
+  // didDrawCell is synchronous, so we can't await inside it).
+  const qrs = await buildQRs(payload.events);
+
   const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
@@ -124,9 +148,14 @@ export function generateEventReportPDF(payload: EventReportPayload, rangeLabel: 
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(14);
     doc.text(`All events (${payload.events.length})`, margin, 50);
+    // Column indexes: 0 Date, 1 Time, 2 Title, 3 Venue, 4 Creator, 5 Status,
+    // 6 Reg, 7 Image-QR, 8 Video-QR, 9 Report-QR. The last three are drawn
+    // as small QR images (~32pt square) when the underlying URL exists.
+    const QR_SIZE = 34; // pt
+    const ROW_MIN_HEIGHT = QR_SIZE + 6;
     autoTable(doc, {
       startY: 64,
-      head: [['Date', 'Time', 'Title', 'Venue', 'Creator', 'Status', 'Reg', 'Media', 'Report']],
+      head: [['Date', 'Time', 'Title', 'Venue', 'Creator', 'Status', 'Reg', 'Image', 'Video', 'Report']],
       body: payload.events.map((e) => [
         fmtDate(e.startAt),
         `${fmtTime(e.startAt)}${e.endAt ? `–${fmtTime(e.endAt)}` : ''}`,
@@ -135,23 +164,25 @@ export function generateEventReportPDF(payload: EventReportPayload, rangeLabel: 
         e.creatorName + (e.creatorRole ? ` (${e.creatorRole})` : ''),
         e.status,
         e.hasRegistration ? 'Yes' : '—',
-        [e.hasImage ? 'IMG' : '', e.hasVideo ? 'VID' : ''].filter(Boolean).join('/') || '—',
-        e.reportUploaded ? 'Yes' : '—',
+        e.hasImage ? '' : '—',   // QR will be drawn via didDrawCell when truthy
+        e.hasVideo ? '' : '—',
+        e.reportUploaded ? '' : '—',
       ]),
-      styles: { fontSize: 8, cellPadding: 4, overflow: 'linebreak' },
-      headStyles: { fillColor: [30, 41, 59], textColor: 255, fontStyle: 'bold' },
+      styles: { fontSize: 8, cellPadding: 4, overflow: 'linebreak', minCellHeight: ROW_MIN_HEIGHT, valign: 'middle' },
+      headStyles: { fillColor: [30, 41, 59], textColor: 255, fontStyle: 'bold', halign: 'center' },
       alternateRowStyles: { fillColor: [248, 250, 252] },
       margin: { left: margin, right: margin },
       columnStyles: {
-        0: { cellWidth: 56, halign: 'center' },
-        1: { cellWidth: 56, halign: 'center' },
+        0: { cellWidth: 50, halign: 'center' },
+        1: { cellWidth: 50, halign: 'center' },
         2: { cellWidth: 'auto' },
-        3: { cellWidth: 70 },
-        4: { cellWidth: 90 },
+        3: { cellWidth: 60 },
+        4: { cellWidth: 78 },
         5: { cellWidth: 46, halign: 'center' },
-        6: { cellWidth: 28, halign: 'center' },
-        7: { cellWidth: 36, halign: 'center' },
-        8: { cellWidth: 36, halign: 'center' },
+        6: { cellWidth: 22, halign: 'center' },
+        7: { cellWidth: QR_SIZE + 6, halign: 'center' },
+        8: { cellWidth: QR_SIZE + 6, halign: 'center' },
+        9: { cellWidth: QR_SIZE + 6, halign: 'center' },
       },
       didParseCell: (data) => {
         if (data.section === 'body' && data.column.index === 5) {
@@ -160,10 +191,19 @@ export function generateEventReportPDF(payload: EventReportPayload, rangeLabel: 
           else if (txt === 'SCHEDULED') data.cell.styles.textColor = [22, 163, 74];
           data.cell.styles.fontStyle = 'bold';
         }
-        if (data.section === 'body' && data.column.index === 8 && data.cell.text[0] === 'Yes') {
-          data.cell.styles.textColor = [202, 138, 4];
-          data.cell.styles.fontStyle = 'bold';
-        }
+      },
+      didDrawCell: (data) => {
+        if (data.section !== 'body') return;
+        const ev = payload.events[data.row.index];
+        if (!ev) return;
+        const dataURL =
+          data.column.index === 7 ? qrs[ev.id]?.image :
+          data.column.index === 8 ? qrs[ev.id]?.video :
+          data.column.index === 9 ? qrs[ev.id]?.report : '';
+        if (!dataURL) return;
+        const cx = data.cell.x + (data.cell.width - QR_SIZE) / 2;
+        const cy = data.cell.y + (data.cell.height - QR_SIZE) / 2;
+        try { doc.addImage(dataURL, 'PNG', cx, cy, QR_SIZE, QR_SIZE); } catch { /* noop */ }
       },
     });
 

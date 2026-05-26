@@ -24,6 +24,13 @@ import { generateEventReportPDF } from '@/app/lib/eventReportPdf';
 
 // =========== Types ===========
 
+interface BlockedDate {
+  id: string;
+  date: string;             // YYYY-MM-DD
+  reason?: string | null;
+  Creator?: { id: string; firstName: string; lastName: string | null; email: string };
+}
+
 interface EventItem {
   id: string;
   title: string;
@@ -90,7 +97,12 @@ export default function EventsPage() {
   const [anchor, setAnchor] = useState<Date>(() => new Date());
   const [selectedDay, setSelectedDay] = useState<Date>(() => new Date());
   const [events, setEvents] = useState<EventItem[]>([]);
+  const [blockedDates, setBlockedDates] = useState<BlockedDate[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Inline "block this date" form state (admin)
+  const [blockReason, setBlockReason] = useState('');
+  const [blocking, setBlocking] = useState(false);
 
   // Create / edit modal
   const [showForm, setShowForm] = useState(false);
@@ -107,7 +119,8 @@ export default function EventsPage() {
 
   const monthCells = useMemo(() => buildMonthGrid(anchor), [anchor]);
 
-  // Fetch events for the visible window (one month + a small buffer)
+  // Fetch events for the visible window (one month + a small buffer) AND
+  // the full blocked-date list (small, no need to scope by range).
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -115,8 +128,12 @@ export default function EventsPage() {
       const last = monthCells[monthCells.length - 1];
       const from = new Date(first); from.setHours(0, 0, 0, 0);
       const to = new Date(last); to.setHours(23, 59, 59, 999);
-      const res = await apiClient.get('/events', { params: { from: from.toISOString(), to: to.toISOString() } });
-      setEvents(res.data.events || []);
+      const [evRes, bdRes] = await Promise.all([
+        apiClient.get('/events', { params: { from: from.toISOString(), to: to.toISOString() } }),
+        apiClient.get('/events/blocked-dates'),
+      ]);
+      setEvents(evRes.data.events || []);
+      setBlockedDates(bdRes.data.blockedDates || []);
     } catch (e) {
       console.error(e);
       toast.error('Failed to load events');
@@ -145,6 +162,44 @@ export default function EventsPage() {
   const selectedDayEvents = eventsByDay.get(dayKey(selectedDay)) || [];
 
   const todayKey = dayKey(new Date());
+
+  // Quick lookup: dayKey -> BlockedDate row
+  const blockedByDay = useMemo(() => {
+    const m = new Map<string, BlockedDate>();
+    for (const b of blockedDates) m.set(b.date, b);
+    return m;
+  }, [blockedDates]);
+  const selectedBlock = blockedByDay.get(dayKey(selectedDay)) || null;
+
+  // === Block / unblock handlers ===
+  const handleBlockSelected = async () => {
+    setBlocking(true);
+    try {
+      await apiClient.post('/events/blocked-dates', {
+        date: dayKey(selectedDay),
+        reason: blockReason.trim() || null,
+      });
+      toast.success('Date blocked');
+      setBlockReason('');
+      load();
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string } } };
+      toast.error(err.response?.data?.message || 'Failed to block');
+    } finally { setBlocking(false); }
+  };
+
+  const handleUnblockSelected = async () => {
+    if (!selectedBlock) return;
+    if (!confirm('Unblock this date?')) return;
+    try {
+      await apiClient.delete(`/events/blocked-dates/${selectedBlock.id}`);
+      toast.success('Date unblocked');
+      load();
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string } } };
+      toast.error(err.response?.data?.message || 'Failed to unblock');
+    }
+  };
 
   // Build [start, end] ISO strings + label for the chosen range preset
   const resolveRange = (): { start: string; end: string; label: string } | null => {
@@ -184,7 +239,7 @@ export default function EventsPage() {
     setReportBusy(true);
     try {
       const res = await apiClient.get('/events/report', { params: { start: r.start, end: r.end } });
-      generateEventReportPDF(res.data, r.label);
+      await generateEventReportPDF(res.data, r.label);
       toast.success('Report downloaded');
       setShowReport(false);
     } catch (e) {
@@ -268,20 +323,30 @@ export default function EventsPage() {
                 const isSelected = isSameDay(d, selectedDay);
                 const isToday = dayKey(d) === todayKey;
                 const dayEvents = eventsByDay.get(dayKey(d)) || [];
+                const blocked = blockedByDay.get(dayKey(d));
                 return (
                   <button
                     key={i}
                     onClick={() => setSelectedDay(d)}
-                    className={`h-24 sm:h-28 text-left p-1.5 border border-gray-100 transition relative
+                    title={blocked ? `Blocked${blocked.reason ? `: ${blocked.reason}` : ''}` : ''}
+                    className={`h-24 sm:h-28 text-left p-1.5 border border-gray-100 transition relative overflow-hidden
                       ${inMonth ? 'bg-white' : 'bg-gray-50 text-gray-400'}
+                      ${blocked
+                        ? 'bg-[repeating-linear-gradient(45deg,_rgba(248,113,113,0.18)_0,_rgba(248,113,113,0.18)_8px,_rgba(248,113,113,0.08)_8px,_rgba(248,113,113,0.08)_16px)]'
+                        : ''}
                       ${isSelected ? 'ring-2 ring-blue-500 z-10' : 'hover:bg-blue-50'}`}
                   >
                     <div className={`text-xs font-bold mb-1 inline-flex items-center justify-center w-6 h-6 rounded-full
-                      ${isToday ? 'bg-blue-600 text-white' : ''}`}>
+                      ${isToday ? 'bg-blue-600 text-white' : blocked ? 'text-red-700' : ''}`}>
                       {d.getDate()}
                     </div>
+                    {blocked && (
+                      <div className="text-[10px] uppercase font-bold text-red-700 leading-tight mb-1">
+                        Blocked
+                      </div>
+                    )}
                     <div className="space-y-0.5">
-                      {dayEvents.slice(0, 3).map((e) => (
+                      {dayEvents.slice(0, 2).map((e) => (
                         <div
                           key={e.id}
                           title={e.title}
@@ -292,8 +357,8 @@ export default function EventsPage() {
                           {fmtTime(new Date(e.startAt))} {e.title}
                         </div>
                       ))}
-                      {dayEvents.length > 3 && (
-                        <div className="text-[10px] text-gray-500 font-semibold pl-1">+ {dayEvents.length - 3} more</div>
+                      {dayEvents.length > 2 && (
+                        <div className="text-[10px] text-gray-500 font-semibold pl-1">+{dayEvents.length - 2} more</div>
                       )}
                     </div>
                   </button>
@@ -308,8 +373,55 @@ export default function EventsPage() {
               <h3 className="font-bold text-gray-900">{fmtDate(selectedDay)}</h3>
               <p className="text-xs text-gray-600 mt-0.5">
                 {selectedDayEvents.length} event{selectedDayEvents.length === 1 ? '' : 's'}
+                {selectedBlock ? ' · BLOCKED' : ''}
               </p>
             </div>
+
+            {/* Blocked-date banner */}
+            {selectedBlock && (
+              <div className="bg-red-50 border-b border-red-200 p-3">
+                <p className="text-xs font-bold uppercase text-red-800">🚫 Date blocked</p>
+                {selectedBlock.reason && (
+                  <p className="text-sm text-red-900 mt-1 italic">&quot;{selectedBlock.reason}&quot;</p>
+                )}
+                {selectedBlock.Creator && (
+                  <p className="text-[11px] text-red-700 mt-1">
+                    by {selectedBlock.Creator.firstName} {selectedBlock.Creator.lastName || ''}
+                  </p>
+                )}
+                {isAdmin && (
+                  <button
+                    onClick={handleUnblockSelected}
+                    className="mt-2 px-3 py-1 text-xs font-semibold rounded bg-white border border-red-300 text-red-700 hover:bg-red-100"
+                  >
+                    Unblock this date
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Admin "block this date" form — only when no events + not already blocked */}
+            {isAdmin && !selectedBlock && selectedDayEvents.length === 0 && (
+              <div className="border-b border-gray-200 p-3 bg-amber-50">
+                <p className="text-xs font-bold uppercase text-amber-800 mb-1">Block this date</p>
+                <input
+                  type="text"
+                  value={blockReason}
+                  onChange={(e) => setBlockReason(e.target.value)}
+                  placeholder="Reason (optional, e.g. holiday)"
+                  maxLength={500}
+                  className="w-full px-2 py-1.5 border border-amber-300 rounded text-sm text-gray-900 placeholder-amber-700/50 mb-2"
+                />
+                <button
+                  onClick={handleBlockSelected}
+                  disabled={blocking}
+                  className="px-3 py-1 text-xs font-semibold rounded bg-amber-600 hover:bg-amber-700 disabled:bg-gray-400 text-white inline-flex items-center gap-1"
+                >
+                  {blocking ? <FiLoader className="animate-spin" /> : null} Block date
+                </button>
+              </div>
+            )}
+
             {loading ? (
               <p className="p-4 text-sm text-gray-500 flex items-center gap-2"><FiLoader className="animate-spin" /> Loading…</p>
             ) : selectedDayEvents.length === 0 ? (
@@ -358,6 +470,7 @@ export default function EventsPage() {
           onEdit={(e) => { setDetail(null); setEditing(e); setShowForm(true); }}
           onChanged={() => { load(); setDetail(null); }}
           onUpdated={(e) => setDetail(e)}
+          reloadList={load}
         />
       )}
 
@@ -655,7 +768,7 @@ function EventFormModal({ initial, onClose, onSaved }: {
 // Detail modal
 // ============================================================================
 
-function EventDetailModal({ event, isAdmin, currentUserId, onClose, onEdit, onChanged, onUpdated }: {
+function EventDetailModal({ event, isAdmin, currentUserId, onClose, onEdit, onChanged, onUpdated, reloadList }: {
   event: EventItem;
   isAdmin: boolean;
   currentUserId: string;
@@ -663,6 +776,7 @@ function EventDetailModal({ event, isAdmin, currentUserId, onClose, onEdit, onCh
   onEdit: (e: EventItem) => void;
   onChanged: () => void;
   onUpdated: (e: EventItem) => void;
+  reloadList: () => void;
 }) {
   const isCreator = event.createdBy === currentUserId;
   const canEdit = isAdmin || isCreator;
@@ -674,6 +788,7 @@ function EventDetailModal({ event, isAdmin, currentUserId, onClose, onEdit, onCh
   const reportRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [lightbox, setLightbox] = useState<null | { type: 'image' | 'video'; url: string }>(null);
 
   const handleDelete = async () => {
     if (!confirm('Delete this event? This cannot be undone.')) return;
@@ -689,7 +804,8 @@ function EventDetailModal({ event, isAdmin, currentUserId, onClose, onEdit, onCh
     setCancelling(true);
     try {
       const res = await apiClient.patch(`/events/${event.id}`, { status: 'CANCELLED' });
-      onUpdated(res.data.event);
+      onUpdated(res.data.event);  // refresh modal contents
+      reloadList();               // refresh calendar chips
       toast.success('Event cancelled');
     } catch { toast.error('Failed to cancel'); }
     finally { setCancelling(false); }
@@ -739,8 +855,23 @@ function EventDetailModal({ event, isAdmin, currentUserId, onClose, onEdit, onCh
 
         <div className="overflow-y-auto flex-1">
           {event.imageUrl && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={event.imageUrl} alt={event.title} className="w-full max-h-72 object-cover" />
+            <button
+              type="button"
+              onClick={() => setLightbox({ type: 'image', url: event.imageUrl! })}
+              className="block w-full group cursor-zoom-in relative"
+              title="Click to view full resolution"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={event.imageUrl}
+                alt={event.title}
+                loading="lazy"
+                className="w-full max-h-72 object-cover group-hover:opacity-95"
+              />
+              <span className="absolute bottom-2 right-2 text-[11px] font-semibold bg-black/60 text-white px-2 py-0.5 rounded">
+                Click for full resolution
+              </span>
+            </button>
           )}
 
           <div className="p-5 space-y-4">
@@ -773,8 +904,17 @@ function EventDetailModal({ event, isAdmin, currentUserId, onClose, onEdit, onCh
 
             {event.videoUrl && (
               <div>
-                <p className="text-xs uppercase font-bold text-gray-500 mb-1">Video</p>
-                <video controls src={event.videoUrl} className="w-full max-h-72 rounded bg-black" />
+                <p className="text-xs uppercase font-bold text-gray-500 mb-1 flex items-center justify-between">
+                  <span>Video</span>
+                  <button
+                    type="button"
+                    onClick={() => setLightbox({ type: 'video', url: event.videoUrl! })}
+                    className="text-[11px] font-semibold text-blue-700 hover:underline normal-case"
+                  >
+                    Open full size
+                  </button>
+                </p>
+                <video controls preload="metadata" src={event.videoUrl} className="w-full max-h-72 rounded bg-black" />
               </div>
             )}
 
@@ -839,6 +979,49 @@ function EventDetailModal({ event, isAdmin, currentUserId, onClose, onEdit, onCh
             )}
           </div>
         </div>
+
+        {/* Lightbox overlay */}
+        {lightbox && (
+          <div
+            className="fixed inset-0 bg-black/90 z-[60] flex items-center justify-center p-4"
+            onClick={() => setLightbox(null)}
+          >
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setLightbox(null); }}
+              className="absolute top-4 right-4 bg-white/10 hover:bg-white/20 text-white rounded-full p-2 transition"
+              aria-label="Close"
+            >
+              <FiX size={24} />
+            </button>
+            <a
+              href={lightbox.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="absolute top-4 left-4 text-xs text-white/80 hover:text-white bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded font-semibold inline-flex items-center gap-1"
+            >
+              <FiExternalLink size={12} /> Open in new tab
+            </a>
+            {lightbox.type === 'image' ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={lightbox.url}
+                alt=""
+                onClick={(e) => e.stopPropagation()}
+                className="max-h-[90vh] max-w-[95vw] object-contain cursor-default"
+              />
+            ) : (
+              <video
+                controls
+                autoPlay
+                src={lightbox.url}
+                onClick={(e) => e.stopPropagation()}
+                className="max-h-[90vh] max-w-[95vw] cursor-default"
+              />
+            )}
+          </div>
+        )}
 
         {/* Actions */}
         {canEdit && (

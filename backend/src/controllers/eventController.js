@@ -4,7 +4,7 @@
 // and only creator + admin can view it.
 
 const { Op } = require('sequelize');
-const { Event, User } = require('../models');
+const { Event, User, BlockedDate } = require('../models');
 const { uploadToS3, deleteFromS3 } = require('../utils/s3Upload');
 
 const CREATOR_ROLES = ['ADMIN', 'HOD', 'FACULTY', 'COORDINATOR', 'PLACEMENT_COORDINATOR', 'TRAINER', 'MENTOR'];
@@ -20,6 +20,14 @@ const sanitiseUrl = (s) => {
   if (!/^https?:\/\//i.test(v)) return null; // reject non-http(s)
   return v;
 };
+
+/** Returns blocked-date row if startAt falls on a blocked date, else null. */
+async function findBlockingDate(startAt) {
+  if (!startAt) return null;
+  const d = new Date(startAt);
+  const isoDay = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return BlockedDate.findOne({ where: { date: isoDay } });
+}
 
 function canEdit(user, event) {
   if (!user) return false;
@@ -101,6 +109,16 @@ const eventController = {
         return res.status(400).json({ message: 'endAt must be after startAt' });
       }
 
+      // Block-list check (admin can still create on a blocked date)
+      if (req.user.role !== 'ADMIN') {
+        const blocked = await findBlockingDate(startAt);
+        if (blocked) {
+          return res.status(400).json({
+            message: `${startAt.toDateString()} is blocked${blocked.reason ? `: ${blocked.reason}` : ''}`,
+          });
+        }
+      }
+
       // Files
       const imageFile = req.files?.image?.[0] || null;
       const videoFile = req.files?.video?.[0] || null;
@@ -166,6 +184,14 @@ const eventController = {
       if (req.body?.startAt !== undefined) {
         const d = req.body.startAt ? new Date(req.body.startAt) : null;
         if (!d || isNaN(d.getTime())) return res.status(400).json({ message: 'Invalid startAt' });
+        if (req.user.role !== 'ADMIN') {
+          const blocked = await findBlockingDate(d);
+          if (blocked) {
+            return res.status(400).json({
+              message: `${d.toDateString()} is blocked${blocked.reason ? `: ${blocked.reason}` : ''}`,
+            });
+          }
+        }
         patch.startAt = d;
       }
       if (req.body?.endAt !== undefined) {
@@ -313,6 +339,8 @@ const eventController = {
           creatorRole: r.Creator?.approvedRole || '',
           hasImage: !!r.imageUrl,
           hasVideo: !!r.videoUrl,
+          imageUrl: r.imageUrl || '',
+          videoUrl: r.videoUrl || '',
           registrationUrl: r.registrationUrl || '',
           hasRegistration: !!r.registrationUrl,
           reportUploaded: !!r.postReportUrl,
@@ -363,6 +391,71 @@ const eventController = {
       res.status(500).json({ message: 'Failed to remove report' });
     }
   },
+};
+
+// === BLOCKED DATES ========================================================
+// Stored as date-only rows (one per blocked day). Admin only for write.
+
+eventController.listBlockedDates = async (req, res) => {
+  try {
+    const rows = await BlockedDate.findAll({
+      include: [{ model: User, as: 'Creator', attributes: ['id', 'firstName', 'lastName', 'email'] }],
+      order: [['date', 'ASC']],
+    });
+    res.json({ blockedDates: rows });
+  } catch (error) {
+    console.error('BlockedDate list error:', error);
+    res.status(500).json({ message: 'Failed to load blocked dates' });
+  }
+};
+
+eventController.blockDate = async (req, res) => {
+  try {
+    if (req.user.role !== 'ADMIN') return res.status(403).json({ message: 'Admin only' });
+    const date = (req.body?.date || '').toString().trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return res.status(400).json({ message: 'date must be YYYY-MM-DD' });
+    }
+    const reason = req.body?.reason ? String(req.body.reason).slice(0, 500) : null;
+
+    // Refuse if there's already an event on that date
+    const dayStart = new Date(`${date}T00:00:00`);
+    const dayEnd = new Date(`${date}T23:59:59.999`);
+    const existing = await Event.count({ where: { startAt: { [Op.gte]: dayStart, [Op.lte]: dayEnd } } });
+    if (existing > 0) {
+      return res.status(400).json({
+        message: `Cannot block ${date}: ${existing} event(s) are already scheduled on that day. Delete or reschedule them first.`,
+      });
+    }
+
+    const [row, created] = await BlockedDate.findOrCreate({
+      where: { date },
+      defaults: { date, reason, createdBy: req.user.id },
+    });
+    if (!created && (reason !== row.reason)) {
+      await row.update({ reason, createdBy: req.user.id });
+    }
+    const full = await BlockedDate.findByPk(row.id, {
+      include: [{ model: User, as: 'Creator', attributes: ['id', 'firstName', 'lastName', 'email'] }],
+    });
+    res.status(created ? 201 : 200).json({ blockedDate: full });
+  } catch (error) {
+    console.error('BlockedDate block error:', error);
+    res.status(500).json({ message: 'Failed to block date' });
+  }
+};
+
+eventController.unblockDate = async (req, res) => {
+  try {
+    if (req.user.role !== 'ADMIN') return res.status(403).json({ message: 'Admin only' });
+    const row = await BlockedDate.findByPk(req.params.id);
+    if (!row) return res.status(404).json({ message: 'Not blocked' });
+    await row.destroy();
+    res.json({ message: 'Date unblocked', id: req.params.id });
+  } catch (error) {
+    console.error('BlockedDate unblock error:', error);
+    res.status(500).json({ message: 'Failed to unblock' });
+  }
 };
 
 module.exports = eventController;
