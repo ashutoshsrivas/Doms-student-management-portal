@@ -20,6 +20,7 @@ import toast from 'react-hot-toast';
 import useAuthStore from '@/app/store/authStore';
 import apiClient from '@/app/lib/apiClient';
 import DashboardLayout from '@/app/components/DashboardLayout';
+import { generateEventReportPDF } from '@/app/lib/eventReportPdf';
 
 // =========== Types ===========
 
@@ -98,6 +99,12 @@ export default function EventsPage() {
   // Detail modal
   const [detail, setDetail] = useState<EventItem | null>(null);
 
+  // Report (admin only)
+  const [showReport, setShowReport] = useState(false);
+  const [reportRange, setReportRange] = useState<'today' | 'week' | 'month' | 'year' | 'custom'>('month');
+  const [reportCustom, setReportCustom] = useState<{ start: string; end: string }>({ start: '', end: '' });
+  const [reportBusy, setReportBusy] = useState(false);
+
   const monthCells = useMemo(() => buildMonthGrid(anchor), [anchor]);
 
   // Fetch events for the visible window (one month + a small buffer)
@@ -139,6 +146,55 @@ export default function EventsPage() {
 
   const todayKey = dayKey(new Date());
 
+  // Build [start, end] ISO strings + label for the chosen range preset
+  const resolveRange = (): { start: string; end: string; label: string } | null => {
+    const now = new Date();
+    if (reportRange === 'today') {
+      const s = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+      const e = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+      return { start: s.toISOString(), end: e.toISOString(), label: `Today (${s.toLocaleDateString()})` };
+    }
+    if (reportRange === 'week') {
+      // ISO-ish "this week" — Sunday to Saturday containing today
+      const dow = now.getDay();
+      const start = new Date(now); start.setDate(now.getDate() - dow); start.setHours(0, 0, 0, 0);
+      const end = new Date(start); end.setDate(start.getDate() + 7); end.setHours(0, 0, 0, 0);
+      return { start: start.toISOString(), end: end.toISOString(), label: `Week of ${start.toLocaleDateString()}` };
+    }
+    if (reportRange === 'month') {
+      const start = new Date(now.getFullYear(), now.getMonth(), 1);
+      const end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+      return { start: start.toISOString(), end: end.toISOString(), label: start.toLocaleDateString(undefined, { month: 'long', year: 'numeric' }) };
+    }
+    if (reportRange === 'year') {
+      const start = new Date(now.getFullYear(), 0, 1);
+      const end = new Date(now.getFullYear() + 1, 0, 1);
+      return { start: start.toISOString(), end: end.toISOString(), label: String(now.getFullYear()) };
+    }
+    if (!reportCustom.start || !reportCustom.end) { toast.error('Pick both dates'); return null; }
+    const s = new Date(reportCustom.start);
+    const e = new Date(reportCustom.end);
+    e.setHours(23, 59, 59, 999);
+    return { start: s.toISOString(), end: e.toISOString(), label: `${s.toLocaleDateString()} – ${new Date(reportCustom.end).toLocaleDateString()}` };
+  };
+
+  const handleDownloadReport = async () => {
+    const r = resolveRange();
+    if (!r) return;
+    setReportBusy(true);
+    try {
+      const res = await apiClient.get('/events/report', { params: { start: r.start, end: r.end } });
+      generateEventReportPDF(res.data, r.label);
+      toast.success('Report downloaded');
+      setShowReport(false);
+    } catch (e) {
+      console.error(e);
+      toast.error('Failed to generate report');
+    } finally {
+      setReportBusy(false);
+    }
+  };
+
   return (
     <DashboardLayout title="Event Calendar">
       <div className="py-6 px-2 md:px-4 max-w-7xl mx-auto">
@@ -148,14 +204,25 @@ export default function EventsPage() {
             <h1 className="text-3xl font-bold text-gray-900">Event Calendar</h1>
             <p className="text-gray-600 mt-1 text-sm">Browse upcoming and past events. Faculty can post new events, register links, and upload post-event reports.</p>
           </div>
-          {canCreate && (
-            <button
-              onClick={() => { setEditing(null); setShowForm(true); }}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold text-sm"
-            >
-              <FiPlus /> New Event
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            {isAdmin && (
+              <button
+                onClick={() => setShowReport(true)}
+                className="flex items-center gap-2 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-semibold text-sm"
+                title="Download a PDF report of events in a date range"
+              >
+                <FiDownload /> Export Report
+              </button>
+            )}
+            {canCreate && (
+              <button
+                onClick={() => { setEditing(null); setShowForm(true); }}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold text-sm"
+              >
+                <FiPlus /> New Event
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -292,6 +359,72 @@ export default function EventsPage() {
           onChanged={() => { load(); setDetail(null); }}
           onUpdated={(e) => setDetail(e)}
         />
+      )}
+
+      {/* Report modal (admin only) */}
+      {showReport && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-2xl max-w-md w-full overflow-hidden">
+            <div className="bg-emerald-600 text-white px-5 py-3 flex items-center justify-between">
+              <h3 className="font-bold flex items-center gap-2"><FiDownload /> Export Events Report</h3>
+              <button onClick={() => setShowReport(false)} className="p-1 hover:bg-white/20 rounded"><FiX /></button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 uppercase mb-2">Date range</label>
+                <div className="grid grid-cols-5 gap-1.5">
+                  {(['today', 'week', 'month', 'year', 'custom'] as const).map((r) => (
+                    <button
+                      key={r}
+                      type="button"
+                      onClick={() => setReportRange(r)}
+                      className={`px-2 py-1.5 text-xs font-semibold rounded border-2 capitalize ${reportRange === r ? 'bg-emerald-600 text-white border-emerald-700' : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'}`}
+                    >
+                      {r === 'today' ? 'Today' : r === 'week' ? 'Week' : r === 'month' ? 'Month' : r === 'year' ? 'Year' : 'Custom'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {reportRange === 'custom' && (
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-gray-700 mb-1">Start</label>
+                    <input
+                      type="date"
+                      value={reportCustom.start}
+                      onChange={(e) => setReportCustom((p) => ({ ...p, start: e.target.value }))}
+                      className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm text-gray-900"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-gray-700 mb-1">End (inclusive)</label>
+                    <input
+                      type="date"
+                      value={reportCustom.end}
+                      onChange={(e) => setReportCustom((p) => ({ ...p, end: e.target.value }))}
+                      className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm text-gray-900"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <p className="text-xs text-gray-500">
+                Generates a portrait PDF with a cover (totals, by-status, by-role), a complete events table, and a details section for any event that has a description, registration link, or uploaded report.
+              </p>
+            </div>
+            <div className="bg-gray-50 px-5 py-3 border-t border-gray-200 flex gap-2 justify-end">
+              <button onClick={() => setShowReport(false)} className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded font-semibold">Cancel</button>
+              <button
+                onClick={handleDownloadReport}
+                disabled={reportBusy || (reportRange === 'custom' && (!reportCustom.start || !reportCustom.end))}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-400 text-white rounded font-semibold flex items-center gap-2"
+              >
+                {reportBusy ? <FiLoader className="animate-spin" /> : <FiDownload />} {reportBusy ? 'Building…' : 'Download PDF'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </DashboardLayout>
   );

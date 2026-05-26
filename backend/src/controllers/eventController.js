@@ -262,6 +262,87 @@ const eventController = {
     }
   },
 
+  // GET /api/events/report?start=ISO&end=ISO  (ADMIN only)
+  // Returns the data needed to build a PDF export of events in a date range.
+  // Admin always sees the post-event report metadata (no scrub).
+  report: async (req, res) => {
+    try {
+      if (req.user.role !== 'ADMIN') {
+        return res.status(403).json({ message: 'Admin only' });
+      }
+      const start = req.query.start ? new Date(req.query.start) : null;
+      const end = req.query.end ? new Date(req.query.end) : null;
+      const where = {};
+      if ((start && !isNaN(start.getTime())) || (end && !isNaN(end.getTime()))) {
+        where.startAt = {};
+        if (start && !isNaN(start.getTime())) where.startAt[Op.gte] = start;
+        if (end && !isNaN(end.getTime())) where.startAt[Op.lte] = end;
+      }
+
+      const rows = await Event.findAll({
+        where,
+        include: [includeCreator],
+        order: [['startAt', 'ASC']],
+      });
+
+      // Per-status counts
+      const byStatus = { SCHEDULED: 0, CANCELLED: 0 };
+      const byCreatorRole = {};
+      for (const r of rows) {
+        byStatus[r.status] = (byStatus[r.status] || 0) + 1;
+        const role = r.Creator?.approvedRole || 'UNKNOWN';
+        byCreatorRole[role] = (byCreatorRole[role] || 0) + 1;
+      }
+
+      const now = Date.now();
+      const events = rows.map((r) => {
+        const startTs = new Date(r.startAt).getTime();
+        const endTs = r.endAt ? new Date(r.endAt).getTime() : startTs;
+        const isPast = endTs < now;
+        return {
+          id: r.id,
+          title: r.title,
+          venue: r.venue || '',
+          description: r.description || '',
+          startAt: r.startAt,
+          endAt: r.endAt || null,
+          status: r.status,
+          isPast,
+          creatorName: r.Creator ? `${r.Creator.firstName} ${r.Creator.lastName || ''}`.trim() : '—',
+          creatorEmail: r.Creator?.email || '',
+          creatorRole: r.Creator?.approvedRole || '',
+          hasImage: !!r.imageUrl,
+          hasVideo: !!r.videoUrl,
+          registrationUrl: r.registrationUrl || '',
+          hasRegistration: !!r.registrationUrl,
+          reportUploaded: !!r.postReportUrl,
+          reportName: r.postReportName || '',
+          reportUrl: r.postReportUrl || '',
+          reportUploadedAt: r.postReportUploadedAt || null,
+        };
+      });
+
+      res.json({
+        meta: {
+          start: start && !isNaN(start.getTime()) ? start.toISOString() : null,
+          end: end && !isNaN(end.getTime()) ? end.toISOString() : null,
+          generatedAt: new Date().toISOString(),
+          generatedBy: req.user?.email || 'admin',
+          totalEvents: rows.length,
+          byStatus,
+          byCreatorRole,
+          pastCount: events.filter((e) => e.isPast).length,
+          upcomingCount: events.filter((e) => !e.isPast).length,
+          reportsUploaded: events.filter((e) => e.reportUploaded).length,
+        },
+        events,
+      });
+    } catch (error) {
+      console.error('Event report error:', error);
+      res.status(500).json({ message: 'Failed to generate events report' });
+    }
+  },
+
   // DELETE /api/events/:id/report  (creator or admin) — removes the report file
   removeReport: async (req, res) => {
     try {

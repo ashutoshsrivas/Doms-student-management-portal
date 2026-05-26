@@ -6,6 +6,10 @@ const { eventMediaUpload, eventReportUpload } = require('../middleware/upload');
 
 router.use(authenticateToken);
 
+// Admin-only report (must be before /:id so express matches "report"
+// as the literal path, not as an :id value).
+router.get('/report', eventController.report);
+
 // Read — any authenticated user
 router.get('/', eventController.list);
 router.get('/:id', eventController.get);
