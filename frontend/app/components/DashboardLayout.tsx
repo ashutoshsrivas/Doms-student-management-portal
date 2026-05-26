@@ -84,6 +84,10 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
     const studentSipChildren = [
       { name: 'SIP Questions', href: '/student/sip-questions', iconKey: 'helpCircle' },
     ];
+    const facultyTasksChildren = [
+      { name: 'Pending Queue', href: '/admin/pending-tasks', iconKey: 'check' },
+      { name: 'Faculty Groups', href: '/admin/faculty-groups', iconKey: 'users' },
+    ];
 
     const roleNav: Record<string, NavItem[]> = {
       ADMIN: [
@@ -95,9 +99,7 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
         { name: 'Internships (SIP)', href: '/admin/sip', iconKey: 'briefcase', children: sipChildren },
         { name: 'File Management', href: '/admin/files', iconKey: 'hardDrive' },
         { name: 'Reports', href: '/admin/reports', iconKey: 'fileText' },
-        { name: 'Faculty Tasks', href: '/admin/faculty-tasks', iconKey: 'clipboard' },
-        { name: 'Pending Queue', href: '/admin/pending-tasks', iconKey: 'check' },
-        { name: 'Faculty Groups', href: '/admin/faculty-groups', iconKey: 'users' },
+        { name: 'Faculty Tasks', href: '/admin/faculty-tasks', iconKey: 'clipboard', children: facultyTasksChildren },
         { name: 'Announcements', href: '/admin/announcements', iconKey: 'bell' },
       ],
       FACULTY: [
@@ -294,9 +296,9 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
         <div className="flex items-center justify-between h-14 px-5 border-b border-[rgba(60,60,67,0.08)] flex-shrink-0">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-xl bg-[#007AFF] flex items-center justify-center shadow-sm shadow-blue-200">
-              <span className="text-white font-bold text-sm tracking-tight">D</span>
+              <span className="text-white font-bold text-sm tracking-tight">G</span>
             </div>
-            <h1 className="text-lg font-bold text-gray-900 tracking-tight">DOMS</h1>
+            <h1 className="text-lg font-bold text-gray-900 tracking-tight" title="Graphic Era School of Management">GESoM</h1>
           </div>
           <button
             onClick={() => setSidebarOpen(false)}

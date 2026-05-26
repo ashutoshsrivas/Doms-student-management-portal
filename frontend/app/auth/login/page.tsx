@@ -72,10 +72,11 @@ export default function LoginPage() {
         {/* Brand */}
         <div className="text-center mb-8">
           <div className="w-16 h-16 rounded-[20px] bg-[#007AFF] flex items-center justify-center mx-auto mb-4 shadow-lg shadow-blue-200/60">
-            <span className="text-white font-bold text-2xl tracking-tight">D</span>
+            <span className="text-white font-bold text-2xl tracking-tight">G</span>
           </div>
-          <h1 className="text-[28px] font-bold text-gray-900 tracking-tight leading-tight">DOMS</h1>
-          <p className="text-sm text-[rgba(60,60,67,0.55)] mt-1 font-medium">Student Management Portal</p>
+          <h1 className="text-[28px] font-bold text-gray-900 tracking-tight leading-tight">GESoM</h1>
+          <p className="text-sm text-[rgba(60,60,67,0.55)] mt-1 font-medium">Graphic Era School of Management</p>
+          <p className="text-xs text-[rgba(60,60,67,0.45)] font-medium">Student Management Portal</p>
         </div>
 
         {/* Card */}
@@ -157,7 +158,7 @@ export default function LoginPage() {
           {/* Divider */}
           <div className="my-6 flex items-center gap-3">
             <div className="flex-1 h-px bg-[rgba(60,60,67,0.1)]" />
-            <span className="text-[11px] text-gray-400 font-medium uppercase tracking-wide">New to DOMS?</span>
+            <span className="text-[11px] text-gray-400 font-medium uppercase tracking-wide">New to GESoM?</span>
             <div className="flex-1 h-px bg-[rgba(60,60,67,0.1)]" />
           </div>
 
@@ -174,7 +175,7 @@ export default function LoginPage() {
 
         {/* Footer */}
         <p className="text-center mt-6 text-[11px] text-gray-400">
-          © {new Date().getFullYear()} DOMS · Privacy · Terms of Service
+          © {new Date().getFullYear()} GESoM · Privacy · Terms of Service
         </p>
       </div>
     </div>

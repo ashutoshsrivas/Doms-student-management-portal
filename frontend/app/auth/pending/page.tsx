@@ -115,7 +115,7 @@ export default function PendingPage() {
         </div>
 
         <p className="text-center mt-5 text-[11px] text-gray-400">
-          © {new Date().getFullYear()} DOMS · All rights reserved.
+          © {new Date().getFullYear()} GESoM · All rights reserved.
         </p>
       </div>
     </div>

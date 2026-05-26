@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "DOMS - Student Management Portal",
-  description: "Comprehensive Student Management and Profile System",
+  title: "GESoM - Graphic Era School of Management",
+  description: "GESoM Student Management Portal — Graphic Era School of Management",
 };
 
 export default function RootLayout({

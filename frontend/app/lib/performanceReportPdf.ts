@@ -70,7 +70,7 @@ export function generatePerformanceReportPDF(payload: PerformancePayload, rangeL
 
   doc.setFontSize(12);
   doc.setFont('helvetica', 'normal');
-  doc.text('DOMS — Department of Management Studies', margin, 92);
+  doc.text('GESoM — Graphic Era School of Management', margin, 92);
 
   doc.setFontSize(11);
   doc.text(`Period: ${rangeLabel}`, margin, 130);
@@ -247,7 +247,7 @@ export function generatePerformanceReportPDF(payload: PerformancePayload, rangeL
     doc.setTextColor(100, 116, 139);
     doc.setFont('helvetica', 'normal');
     doc.text(`Page ${i} of ${totalPages}`, pageW / 2, pageH - 18, { align: 'center' });
-    doc.text('DOMS — Faculty Performance Report', margin, pageH - 18);
+    doc.text('GESoM — Faculty Performance Report', margin, pageH - 18);
   }
 
   // Save

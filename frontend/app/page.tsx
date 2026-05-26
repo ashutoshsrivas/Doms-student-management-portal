@@ -142,7 +142,7 @@ export default function Home() {
                 GESoM
               </span>
               <span className="text-[11px] uppercase tracking-[0.18em] text-slate-500">
-                Department of Management
+                School of Management
               </span>
             </div>
           </Link>
@@ -211,7 +211,7 @@ export default function Home() {
           <div className="max-w-3xl">
             <p className="inline-flex items-center gap-2 text-xs sm:text-sm uppercase tracking-[0.32em] text-amber-300/90 mb-6">
               <span className="w-10 h-px bg-amber-300/70" />
-              Department of Management
+              Graphic Era School of Management
             </p>
             <h1 className="font-serif text-5xl sm:text-6xl md:text-7xl font-bold text-white mb-6 leading-[1.05]">
               Shaping Future
@@ -568,7 +568,7 @@ export default function Home() {
                     GESoM
                   </p>
                   <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400">
-                    Department of Management
+                    School of Management
                   </p>
                 </div>
               </div>
@@ -674,8 +674,8 @@ export default function Home() {
           </div>
 
           <div className="border-t border-slate-800 pt-8 flex flex-col md:flex-row md:items-center md:justify-between gap-3 text-sm text-slate-500">
-            <p>© 2026 Graphic Era University — Department of Management</p>
-            <p className="text-xs tracking-wider uppercase">DOMS Portal System</p>
+            <p>© 2026 Graphic Era School of Management</p>
+            <p className="text-xs tracking-wider uppercase">GESoM Portal System</p>
           </div>
         </div>
       </footer>
