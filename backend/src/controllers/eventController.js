@@ -445,6 +445,84 @@ eventController.blockDate = async (req, res) => {
   }
 };
 
+// POST /api/events/blocked-dates/bulk
+// body: { from: 'YYYY-MM-DD', to: 'YYYY-MM-DD', reason?: string }
+// Blocks every date inclusive in the range. Skips dates that already have
+// events (with a reason in the skipped[] list) and dates already blocked.
+eventController.bulkBlockDates = async (req, res) => {
+  try {
+    if (req.user.role !== 'ADMIN') return res.status(403).json({ message: 'Admin only' });
+    const from = (req.body?.from || '').toString().trim();
+    const to = (req.body?.to || '').toString().trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) {
+      return res.status(400).json({ message: 'from and to must be YYYY-MM-DD' });
+    }
+    if (from > to) return res.status(400).json({ message: 'from must be before or equal to to' });
+    const reason = req.body?.reason ? String(req.body.reason).slice(0, 500) : null;
+
+    // Build the date list (inclusive)
+    const dates = [];
+    const cursor = new Date(`${from}T00:00:00`);
+    const last = new Date(`${to}T00:00:00`);
+    // Hard cap to avoid abuse (e.g. accidentally blocking 50 years)
+    const MAX_DAYS = 366 * 2;
+    while (cursor <= last) {
+      if (dates.length >= MAX_DAYS) {
+        return res.status(400).json({ message: `Range too large (max ${MAX_DAYS} days)` });
+      }
+      const y = cursor.getFullYear();
+      const m = String(cursor.getMonth() + 1).padStart(2, '0');
+      const d = String(cursor.getDate()).padStart(2, '0');
+      dates.push(`${y}-${m}-${d}`);
+      cursor.setDate(cursor.getDate() + 1);
+    }
+
+    // Pre-load: any events already in any of those days?
+    const dayStart = new Date(`${dates[0]}T00:00:00`);
+    const dayEnd = new Date(`${dates[dates.length - 1]}T23:59:59.999`);
+    const eventsInRange = await Event.findAll({
+      where: { startAt: { [Op.gte]: dayStart, [Op.lte]: dayEnd } },
+      attributes: ['startAt'],
+    });
+    const datesWithEvents = new Set(eventsInRange.map((e) => {
+      const dt = new Date(e.startAt);
+      return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+    }));
+
+    // Already-blocked
+    const existing = await BlockedDate.findAll({ where: { date: { [Op.in]: dates } }, attributes: ['date'] });
+    const alreadyBlocked = new Set(existing.map((b) => {
+      // DATEONLY columns come back as 'YYYY-MM-DD' strings in MySQL but in some
+      // builds may be Date objects. Normalize.
+      if (typeof b.date === 'string') return b.date;
+      const d = new Date(b.date);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    }));
+
+    const blocked = [];
+    const skipped = [];
+    for (const date of dates) {
+      if (alreadyBlocked.has(date)) { skipped.push({ date, reason: 'already blocked' }); continue; }
+      if (datesWithEvents.has(date)) { skipped.push({ date, reason: 'event scheduled on this day' }); continue; }
+      blocked.push({ date, reason, createdBy: req.user.id });
+    }
+
+    if (blocked.length) {
+      await BlockedDate.bulkCreate(blocked, { ignoreDuplicates: true });
+    }
+
+    res.status(201).json({
+      blockedCount: blocked.length,
+      skippedCount: skipped.length,
+      blocked: blocked.map((b) => b.date),
+      skipped,
+    });
+  } catch (error) {
+    console.error('BlockedDate bulkBlockDates error:', error);
+    res.status(500).json({ message: 'Failed to bulk block' });
+  }
+};
+
 eventController.unblockDate = async (req, res) => {
   try {
     if (req.user.role !== 'ADMIN') return res.status(403).json({ message: 'Admin only' });

@@ -14,6 +14,7 @@ router.get('/report', eventController.report);
 // admin-only (enforced in controller).
 router.get('/blocked-dates', eventController.listBlockedDates);
 router.post('/blocked-dates', eventController.blockDate);
+router.post('/blocked-dates/bulk', eventController.bulkBlockDates);
 router.delete('/blocked-dates/:id', eventController.unblockDate);
 
 // Read — any authenticated user

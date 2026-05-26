@@ -104,6 +104,11 @@ export default function EventsPage() {
   const [blockReason, setBlockReason] = useState('');
   const [blocking, setBlocking] = useState(false);
 
+  // Bulk block modal (admin)
+  const [showBulkBlock, setShowBulkBlock] = useState(false);
+  const [bulkBlockForm, setBulkBlockForm] = useState<{ from: string; to: string; reason: string }>({ from: '', to: '', reason: '' });
+  const [bulkBlocking, setBulkBlocking] = useState(false);
+
   // Create / edit modal
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<EventItem | null>(null);
@@ -188,6 +193,32 @@ export default function EventsPage() {
     } finally { setBlocking(false); }
   };
 
+  const handleBulkBlock = async () => {
+    if (!bulkBlockForm.from || !bulkBlockForm.to) { toast.error('Pick both dates'); return; }
+    if (bulkBlockForm.from > bulkBlockForm.to) { toast.error('Start must be on or before end'); return; }
+    setBulkBlocking(true);
+    try {
+      const res = await apiClient.post('/events/blocked-dates/bulk', {
+        from: bulkBlockForm.from,
+        to: bulkBlockForm.to,
+        reason: bulkBlockForm.reason.trim() || null,
+      });
+      const { blockedCount, skippedCount, skipped } = res.data;
+      if (skippedCount > 0) {
+        const sample = (skipped as Array<{ date: string; reason: string }>).slice(0, 3).map((s) => `${s.date} (${s.reason})`).join(', ');
+        toast.success(`Blocked ${blockedCount} day${blockedCount === 1 ? '' : 's'}; skipped ${skippedCount}${sample ? ` — e.g. ${sample}` : ''}`);
+      } else {
+        toast.success(`Blocked ${blockedCount} day${blockedCount === 1 ? '' : 's'}`);
+      }
+      setShowBulkBlock(false);
+      setBulkBlockForm({ from: '', to: '', reason: '' });
+      load();
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string } } };
+      toast.error(err.response?.data?.message || 'Failed to bulk-block');
+    } finally { setBulkBlocking(false); }
+  };
+
   const handleUnblockSelected = async () => {
     if (!selectedBlock) return;
     if (!confirm('Unblock this date?')) return;
@@ -259,7 +290,16 @@ export default function EventsPage() {
             <h1 className="text-3xl font-bold text-gray-900">Event Calendar</h1>
             <p className="text-gray-600 mt-1 text-sm">Browse upcoming and past events. Faculty can post new events, register links, and upload post-event reports.</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            {isAdmin && (
+              <button
+                onClick={() => setShowBulkBlock(true)}
+                className="flex items-center gap-2 px-3 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-semibold text-sm"
+                title="Block a range of dates so events can't be created on them"
+              >
+                <FiX /> Bulk Block
+              </button>
+            )}
             {isAdmin && (
               <button
                 onClick={() => setShowReport(true)}
@@ -472,6 +512,66 @@ export default function EventsPage() {
           onUpdated={(e) => setDetail(e)}
           reloadList={load}
         />
+      )}
+
+      {/* Bulk block modal (admin only) */}
+      {showBulkBlock && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-2xl max-w-md w-full overflow-hidden">
+            <div className="bg-amber-600 text-white px-5 py-3 flex items-center justify-between">
+              <h3 className="font-bold flex items-center gap-2"><FiX /> Bulk Block Dates</h3>
+              <button onClick={() => setShowBulkBlock(false)} className="p-1 hover:bg-white/20 rounded"><FiX /></button>
+            </div>
+            <div className="p-5 space-y-3">
+              <p className="text-xs text-gray-600">
+                Block every date in this range (inclusive). Dates that already have events scheduled,
+                or that are already blocked, will be skipped automatically.
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[11px] font-semibold text-gray-700 mb-1">From *</label>
+                  <input
+                    type="date"
+                    value={bulkBlockForm.from}
+                    onChange={(e) => setBulkBlockForm((p) => ({ ...p, from: e.target.value }))}
+                    className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm text-gray-900"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold text-gray-700 mb-1">To (inclusive) *</label>
+                  <input
+                    type="date"
+                    value={bulkBlockForm.to}
+                    onChange={(e) => setBulkBlockForm((p) => ({ ...p, to: e.target.value }))}
+                    min={bulkBlockForm.from || undefined}
+                    className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm text-gray-900"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-gray-700 mb-1">Reason (optional, applies to all)</label>
+                <input
+                  type="text"
+                  value={bulkBlockForm.reason}
+                  onChange={(e) => setBulkBlockForm((p) => ({ ...p, reason: e.target.value }))}
+                  placeholder="e.g. Mid-term examinations"
+                  maxLength={500}
+                  className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm text-gray-900"
+                />
+              </div>
+            </div>
+            <div className="bg-gray-50 px-5 py-3 border-t border-gray-200 flex gap-2 justify-end">
+              <button onClick={() => setShowBulkBlock(false)} className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded font-semibold">Cancel</button>
+              <button
+                onClick={handleBulkBlock}
+                disabled={bulkBlocking || !bulkBlockForm.from || !bulkBlockForm.to}
+                className="px-4 py-2 bg-amber-600 hover:bg-amber-700 disabled:bg-gray-400 text-white rounded font-semibold flex items-center gap-2"
+              >
+                {bulkBlocking ? <FiLoader className="animate-spin" /> : null} {bulkBlocking ? 'Blocking…' : 'Block range'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Report modal (admin only) */}
@@ -788,7 +888,7 @@ function EventDetailModal({ event, isAdmin, currentUserId, onClose, onEdit, onCh
   const reportRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [cancelling, setCancelling] = useState(false);
-  const [lightbox, setLightbox] = useState<null | { type: 'image' | 'video'; url: string }>(null);
+  const [lightbox, setLightbox] = useState<null | { type: 'image' | 'video' | 'pdf'; url: string; name?: string }>(null);
 
   const handleDelete = async () => {
     if (!confirm('Delete this event? This cannot be undone.')) return;
@@ -926,33 +1026,81 @@ function EventDetailModal({ event, isAdmin, currentUserId, onClose, onEdit, onCh
 
             {/* Post-event report — only renders when the viewer can see it */}
             {canSeeReport && (
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-                <div className="flex items-center gap-2 mb-1">
-                  <FiLock className="text-amber-700" />
-                  <p className="text-xs font-bold uppercase text-amber-900 tracking-wide">Post-event report (creator + admin only)</p>
+              <div className="bg-amber-50 border-2 border-amber-300 rounded-lg p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <FiLock className="text-amber-700" size={18} />
+                  <p className="text-sm font-bold uppercase text-amber-900 tracking-wide">Post-event report</p>
+                  <span className="text-[10px] uppercase font-semibold bg-amber-200 text-amber-900 px-1.5 py-0.5 rounded">creator + admin only</span>
                 </div>
                 {event.postReportUrl ? (
                   <>
-                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="bg-white border border-amber-200 rounded p-3 mb-2">
+                      <div className="flex items-center gap-2 mb-1">
+                        <FiFileText className="text-amber-700 shrink-0" size={18} />
+                        <p className="text-sm font-bold text-gray-900 truncate flex-1" title={event.postReportName || 'Report'}>
+                          {event.postReportName || 'Report'}
+                        </p>
+                      </div>
+                      {event.postReportUploadedAt && (
+                        <p className="text-[11px] text-gray-500">
+                          Uploaded {new Date(event.postReportUploadedAt).toLocaleString()}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {/* View — inline PDF preview in lightbox when possible */}
+                      {(event.postReportMime === 'application/pdf' || (event.postReportName || '').toLowerCase().endsWith('.pdf')) ? (
+                        <button
+                          type="button"
+                          onClick={() => setLightbox({ type: 'pdf', url: event.postReportUrl!, name: event.postReportName || 'Report' })}
+                          className="inline-flex items-center gap-1.5 px-3 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded text-sm font-semibold"
+                        >
+                          <FiFileText /> View report
+                        </button>
+                      ) : (
+                        <a
+                          href={event.postReportUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 px-3 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded text-sm font-semibold"
+                        >
+                          <FiExternalLink /> Open report
+                        </a>
+                      )}
                       <a
                         href={event.postReportUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-amber-300 rounded text-sm text-amber-900 hover:bg-amber-100 font-medium"
+                        download={event.postReportName || 'event-report'}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 bg-white border border-amber-300 text-amber-900 hover:bg-amber-100 rounded text-sm font-semibold"
                       >
-                        <FiFileText /> <span className="max-w-[16rem] truncate">{event.postReportName || 'Report'}</span> <FiDownload size={12} />
+                        <FiDownload /> Download
                       </a>
                       {(isAdmin || isCreator) && (
                         <button
                           onClick={handleRemoveReport}
-                          className="text-xs text-red-700 hover:underline font-semibold"
+                          className="ml-auto inline-flex items-center gap-1.5 px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded text-sm font-semibold"
                         >
-                          Remove
+                          <FiTrash2 /> Delete report
                         </button>
                       )}
                     </div>
-                    {event.postReportUploadedAt && (
-                      <p className="text-[11px] text-amber-700 mt-1">Uploaded {new Date(event.postReportUploadedAt).toLocaleString()}</p>
+                    {canUploadReport && (
+                      <>
+                        <p className="text-[11px] text-amber-800 mt-2">Need to replace it? Upload a new file:</p>
+                        <input
+                          ref={reportRef}
+                          type="file"
+                          accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                          onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUploadReport(f); }}
+                          className="hidden"
+                        />
+                        <button
+                          onClick={() => reportRef.current?.click()}
+                          disabled={uploading}
+                          className="mt-1 inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-amber-300 text-amber-900 hover:bg-amber-100 rounded text-xs font-semibold disabled:opacity-50"
+                        >
+                          {uploading ? <FiLoader className="animate-spin" /> : <FiUploadCloud />} {uploading ? 'Uploading…' : 'Replace report'}
+                        </button>
+                      </>
                     )}
                   </>
                 ) : canUploadReport ? (
@@ -967,13 +1115,13 @@ function EventDetailModal({ event, isAdmin, currentUserId, onClose, onEdit, onCh
                     <button
                       onClick={() => reportRef.current?.click()}
                       disabled={uploading}
-                      className="w-full border-2 border-dashed border-amber-300 rounded-lg p-3 hover:border-amber-500 hover:bg-amber-100 transition flex items-center gap-2 justify-center text-sm text-amber-900 disabled:opacity-50"
+                      className="w-full border-2 border-dashed border-amber-400 rounded-lg p-4 hover:border-amber-600 hover:bg-amber-100 transition flex items-center gap-2 justify-center text-sm text-amber-900 disabled:opacity-50 font-semibold"
                     >
-                      {uploading ? <FiLoader className="animate-spin" /> : <FiUploadCloud />} {uploading ? 'Uploading…' : 'Upload report (PDF/DOC, ≤25 MB)'}
+                      {uploading ? <FiLoader className="animate-spin" /> : <FiUploadCloud size={18} />} {uploading ? 'Uploading…' : 'Upload post-event report (PDF/DOC, ≤25 MB)'}
                     </button>
                   </>
                 ) : (
-                  <p className="text-xs text-amber-800 italic">No report uploaded yet.</p>
+                  <p className="text-sm text-amber-800 italic">No report uploaded yet.</p>
                 )}
               </div>
             )}
@@ -1011,13 +1159,21 @@ function EventDetailModal({ event, isAdmin, currentUserId, onClose, onEdit, onCh
                 onClick={(e) => e.stopPropagation()}
                 className="max-h-[90vh] max-w-[95vw] object-contain cursor-default"
               />
-            ) : (
+            ) : lightbox.type === 'video' ? (
               <video
                 controls
                 autoPlay
                 src={lightbox.url}
                 onClick={(e) => e.stopPropagation()}
                 className="max-h-[90vh] max-w-[95vw] cursor-default"
+              />
+            ) : (
+              // PDF — embed in iframe for in-browser preview
+              <iframe
+                src={`${lightbox.url}#toolbar=1&navpanes=0&view=FitH`}
+                title={lightbox.name || 'Report'}
+                onClick={(e) => e.stopPropagation()}
+                className="bg-white cursor-default w-[95vw] h-[90vh] rounded"
               />
             )}
           </div>
