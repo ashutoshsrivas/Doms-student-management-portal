@@ -4,9 +4,10 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import ProtectedRoute from '@/app/components/ProtectedRoute';
+import DashboardLayout from '@/app/components/DashboardLayout';
 import useAuthStore from '@/app/store/authStore';
 import AnnouncementCard, { Announcement } from '@/app/components/Announcements/AnnouncementCard';
-import { FiArrowLeft, FiLoader, FiPlus, FiTrash2, FiEdit2 } from 'react-icons/fi';
+import { FiLoader, FiPlus, FiTrash2, FiEdit2 } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
@@ -17,13 +18,6 @@ function AdminAnnouncementsContent() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-
-  const getBackUrl = () => {
-    if (user?.role === 'PLACEMENT_COORDINATOR') {
-      return '/coordinator/dashboard';
-    }
-    return '/admin/dashboard';
-  };
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -95,47 +89,36 @@ function AdminAnnouncementsContent() {
 
   if (authLoading || loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <FiLoader className="inline animate-spin text-blue-600 mb-4" size={32} />
-          <p className="text-gray-600">Loading announcements...</p>
+      <DashboardLayout title="Announcements">
+        <div className="min-h-[60vh] flex items-center justify-center">
+          <div className="text-center">
+            <FiLoader className="inline animate-spin text-blue-600 mb-4" size={32} />
+            <p className="text-gray-600">Loading announcements...</p>
+          </div>
         </div>
-      </div>
+      </DashboardLayout>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Link
-                href={getBackUrl()}
-                className="p-2 hover:bg-gray-100 rounded-lg transition"
-              >
-                <FiArrowLeft size={20} />
-              </Link>
-              <div>
-                <h1 className="text-3xl font-bold text-gray-900">Manage Announcements</h1>
-                <p className="text-gray-600 mt-1">View and manage all announcements</p>
-              </div>
-            </div>
-            <Link
-              href="/admin/announcements/create"
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition"
-            >
-              <FiPlus size={18} /> Create Announcement
-            </Link>
+    <DashboardLayout title="Announcements">
+      <div className="py-6 px-2 md:px-4 max-w-6xl mx-auto">
+        {/* Page header */}
+        <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Manage Announcements</h1>
+            <p className="text-gray-600 mt-1 text-sm">View and manage all announcements visible to students and faculty.</p>
           </div>
+          <Link
+            href="/admin/announcements/create"
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition"
+          >
+            <FiPlus size={18} /> Create Announcement
+          </Link>
         </div>
-      </div>
 
-      {/* Content */}
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {announcements.length === 0 ? (
-          <div className="text-center py-12 bg-white rounded-lg">
+          <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
             <p className="text-gray-600 text-lg">No announcements yet</p>
             <Link
               href="/admin/announcements/create"
@@ -149,7 +132,6 @@ function AdminAnnouncementsContent() {
             {announcements.map((announcement) => (
               <div key={announcement.id} className="relative">
                 <AnnouncementCard announcement={announcement} />
-                {/* Actions Overlay */}
                 <div className="absolute top-4 right-4 flex gap-2">
                   <Link
                     href={`/admin/announcements/${announcement.id}/edit`}
@@ -174,7 +156,7 @@ function AdminAnnouncementsContent() {
           </div>
         )}
       </div>
-    </div>
+    </DashboardLayout>
   );
 }
 

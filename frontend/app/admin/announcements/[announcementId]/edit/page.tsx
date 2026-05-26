@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import ProtectedRoute from '@/app/components/ProtectedRoute';
+import DashboardLayout from '@/app/components/DashboardLayout';
 import useAuthStore from '@/app/store/authStore';
 import { FiArrowLeft, FiLoader, FiX, FiImage } from 'react-icons/fi';
 import toast from 'react-hot-toast';
@@ -17,13 +18,9 @@ function EditAnnouncementContent() {
   const { user, token, isLoading: authLoading } = useAuthStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const getBackUrl = () => {
-    if (user?.role === 'PLACEMENT_COORDINATOR') {
-      return '/coordinator/dashboard';
-    }
-    return '/admin/dashboard';
-  };
-  
+  const getBackUrl = () => '/admin/announcements';
+
+
   const [formData, setFormData] = useState({
     title: '',
     content: '',
@@ -193,34 +190,33 @@ function EditAnnouncementContent() {
 
   if (authLoading || pageLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <FiLoader className="animate-spin text-blue-600" size={32} />
-      </div>
+      <DashboardLayout title="Edit Announcement">
+        <div className="min-h-[60vh] flex items-center justify-center">
+          <FiLoader className="animate-spin text-blue-600" size={32} />
+        </div>
+      </DashboardLayout>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="flex items-center gap-4">
-            <Link
-              href={getBackUrl()}
-              className="p-2 hover:bg-gray-100 rounded-lg transition"
-            >
-              <FiArrowLeft size={20} />
-            </Link>
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">Edit Announcement</h1>
-              <p className="text-gray-600 mt-1">Update announcement details</p>
-            </div>
+    <DashboardLayout title="Edit Announcement">
+      <div className="py-6 px-2 md:px-4 max-w-4xl mx-auto">
+        <div className="flex items-center gap-4 mb-6">
+          <Link
+            href={getBackUrl()}
+            className="p-2 hover:bg-gray-100 rounded-lg transition border border-gray-200 bg-white"
+          >
+            <FiArrowLeft size={20} />
+          </Link>
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Edit Announcement</h1>
+            <p className="text-gray-600 mt-1 text-sm">Update announcement details.</p>
           </div>
         </div>
       </div>
 
       {/* Form */}
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-4xl mx-auto px-2 md:px-4">
         <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-sm">
           <div className="p-6 space-y-6">
             {/* Title */}
@@ -393,7 +389,7 @@ function EditAnnouncementContent() {
           </div>
         </form>
       </div>
-    </div>
+    </DashboardLayout>
   );
 }
 

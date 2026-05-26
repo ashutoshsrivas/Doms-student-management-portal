@@ -92,4 +92,40 @@ const assessmentUpload = multer({
   },
 });
 
-module.exports = { upload, excelUpload, resumeUpload, assessmentUpload };
+// Event uploads: image ≤10 MB, video ≤80 MB. Each accepts only its own MIME
+// family (jpeg/png/webp/gif for image, mp4/webm/quicktime for video). The
+// /events POST endpoint accepts BOTH in a single multipart request via
+// .fields([{name:'image',maxCount:1},{name:'video',maxCount:1}]).
+const eventMediaFileFilter = (req, file, cb) => {
+  const isImg = file.fieldname === 'image';
+  const isVid = file.fieldname === 'video';
+  const imgOk = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+  const vidOk = ['video/mp4', 'video/webm', 'video/quicktime', 'video/x-matroska'];
+  if (isImg && imgOk.includes(file.mimetype)) return cb(null, true);
+  if (isVid && vidOk.includes(file.mimetype)) return cb(null, true);
+  return cb(new Error(`Unsupported file type for ${file.fieldname}: ${file.mimetype}`), false);
+};
+
+const eventMediaUpload = multer({
+  storage,
+  fileFilter: eventMediaFileFilter,
+  limits: {
+    // Multer enforces a single max per file. Set to the larger ceiling
+    // (video: 80MB) — the controller additionally enforces the
+    // image-specific 10MB cap by checking req.files.image[0].size.
+    fileSize: 80 * 1024 * 1024,
+  },
+});
+
+const eventReportUpload = multer({
+  storage,
+  fileFilter: (req, file, cb) => {
+    const ok = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+    const ext = file.originalname.substring(file.originalname.lastIndexOf('.')).toLowerCase();
+    if (ok.includes(file.mimetype) || ['.pdf', '.doc', '.docx'].includes(ext)) return cb(null, true);
+    return cb(new Error('Event report must be PDF, DOC, or DOCX'), false);
+  },
+  limits: { fileSize: 25 * 1024 * 1024 },
+});
+
+module.exports = { upload, excelUpload, resumeUpload, assessmentUpload, eventMediaUpload, eventReportUpload };

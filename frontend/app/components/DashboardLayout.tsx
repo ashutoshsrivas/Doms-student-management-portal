@@ -88,6 +88,14 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
       { name: 'Pending Queue', href: '/admin/pending-tasks', iconKey: 'check' },
       { name: 'Faculty Groups', href: '/admin/faculty-groups', iconKey: 'users' },
     ];
+    const adminAnnouncementsChildren = [
+      { name: 'Posts', href: '/admin/announcements', iconKey: 'bell' },
+      { name: 'Event Calendar', href: '/events', iconKey: 'calendar' },
+    ];
+    const studentAnnouncementsChildren = [
+      { name: 'Posts', href: '/student/announcements', iconKey: 'bell' },
+      { name: 'Event Calendar', href: '/events', iconKey: 'calendar' },
+    ];
 
     const roleNav: Record<string, NavItem[]> = {
       ADMIN: [
@@ -100,20 +108,20 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
         { name: 'File Management', href: '/admin/files', iconKey: 'hardDrive' },
         { name: 'Reports', href: '/admin/reports', iconKey: 'fileText' },
         { name: 'Faculty Tasks', href: '/admin/faculty-tasks', iconKey: 'clipboard', children: facultyTasksChildren },
-        { name: 'Announcements', href: '/admin/announcements', iconKey: 'bell' },
+        { name: 'Announcements', href: '/admin/announcements', iconKey: 'bell', children: adminAnnouncementsChildren },
       ],
       FACULTY: [
         { name: 'Dashboard', href: '/faculty/dashboard', iconKey: 'chart' },
         { name: 'Assessments', href: '/faculty/assessments', iconKey: 'check' },
         { name: 'My Mentees', href: '/faculty/mentors', iconKey: 'users' },
         { name: 'My Tasks', href: '/faculty/tasks', iconKey: 'clipboard' },
-        { name: 'Announcements', href: '/student/announcements', iconKey: 'bell' },
+        { name: 'Announcements', href: '/student/announcements', iconKey: 'bell', children: studentAnnouncementsChildren },
       ],
       HOD: [
         { name: 'Dashboard', href: '/admin/dashboard', iconKey: 'chart' },
         { name: 'Internships (SIP)', href: '/admin/sip', iconKey: 'briefcase', children: sipChildren },
         { name: 'My Tasks', href: '/faculty/tasks', iconKey: 'clipboard' },
-        { name: 'Announcements', href: '/admin/announcements', iconKey: 'bell' },
+        { name: 'Announcements', href: '/admin/announcements', iconKey: 'bell', children: adminAnnouncementsChildren },
       ],
       PLACEMENT_COORDINATOR: [
         { name: 'Dashboard', href: '/coordinator/dashboard', iconKey: 'chart' },
@@ -122,31 +130,31 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
         { name: 'Internships (SIP)', href: '/admin/sip', iconKey: 'briefcase', children: sipChildren },
         { name: 'Job Matching', href: '/coordinator/job-matching', iconKey: 'zap' },
         { name: 'My Tasks', href: '/faculty/tasks', iconKey: 'clipboard' },
-        { name: 'Announcements', href: '/admin/announcements', iconKey: 'bell' },
+        { name: 'Announcements', href: '/admin/announcements', iconKey: 'bell', children: adminAnnouncementsChildren },
       ],
       TRAINER: [
         { name: 'Dashboard', href: '/trainer/dashboard', iconKey: 'chart' },
         { name: 'Assessments', href: '/trainer/assessments', iconKey: 'check' },
         { name: 'My Tasks', href: '/faculty/tasks', iconKey: 'clipboard' },
-        { name: 'Announcements', href: '/student/announcements', iconKey: 'bell' },
+        { name: 'Announcements', href: '/student/announcements', iconKey: 'bell', children: studentAnnouncementsChildren },
       ],
       COORDINATOR: [
         { name: 'Dashboard', href: '/coordinator/dashboard', iconKey: 'chart' },
         { name: 'My Tasks', href: '/faculty/tasks', iconKey: 'clipboard' },
-        { name: 'Announcements', href: '/admin/announcements', iconKey: 'bell' },
+        { name: 'Announcements', href: '/admin/announcements', iconKey: 'bell', children: adminAnnouncementsChildren },
       ],
       MENTOR: [
         { name: 'Dashboard', href: '/faculty/dashboard', iconKey: 'chart' },
         { name: 'My Mentees', href: '/faculty/mentors', iconKey: 'users' },
         { name: 'My Tasks', href: '/faculty/tasks', iconKey: 'clipboard' },
-        { name: 'Announcements', href: '/student/announcements', iconKey: 'bell' },
+        { name: 'Announcements', href: '/student/announcements', iconKey: 'bell', children: studentAnnouncementsChildren },
       ],
       STUDENT: [
         { name: 'My Assessments', href: '/student/assessments', iconKey: 'list' },
         { name: 'My Mentors', href: '/student/mentors', iconKey: 'users' },
         { name: 'My Profile', href: '/student/profile', iconKey: 'user' },
         { name: 'Internship (SIP)', href: '/student/sip', iconKey: 'briefcase', children: studentSipChildren },
-        { name: 'Announcements', href: '/student/announcements', iconKey: 'bell' },
+        { name: 'Announcements', href: '/student/announcements', iconKey: 'bell', children: studentAnnouncementsChildren },
       ],
     };
 

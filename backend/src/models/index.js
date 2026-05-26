@@ -1749,6 +1749,48 @@ FacultyTask.hasMany(FacultyTaskUpdate, { foreignKey: 'taskId', as: 'Updates', on
 FacultyTaskUpdate.belongsTo(User, { foreignKey: 'userId', as: 'Author' });
 FacultyTask.belongsTo(User, { foreignKey: 'extensionRespondedBy', as: 'ExtensionResponder' });
 
+// ============ EVENT MODEL ============
+// Faculty (any assignable role) creates events; everyone authenticated can
+// view; admin can reschedule/delete any; creator + admin can see the
+// post-event report.
+const Event = sequelize.define('Event', {
+  id: {
+    type: DataTypes.UUID,
+    defaultValue: DataTypes.UUIDV4,
+    primaryKey: true,
+  },
+  title: { type: DataTypes.STRING, allowNull: false },
+  description: { type: DataTypes.TEXT, allowNull: true },
+  venue: { type: DataTypes.STRING, allowNull: true },
+  startAt: { type: DataTypes.DATE, allowNull: false },
+  endAt: { type: DataTypes.DATE, allowNull: true },
+  imageUrl: { type: DataTypes.STRING(1024), allowNull: true },
+  videoUrl: { type: DataTypes.STRING(1024), allowNull: true },
+  // Single user-supplied URL — either an external registration link or a
+  // Google Forms / Microsoft Forms URL. The UI labels it generically.
+  registrationUrl: { type: DataTypes.STRING(1024), allowNull: true },
+  // Post-event report (uploaded after the fact by the creator). Visible
+  // ONLY to the creator and admin.
+  postReportUrl: { type: DataTypes.STRING(1024), allowNull: true },
+  postReportName: { type: DataTypes.STRING, allowNull: true },
+  postReportMime: { type: DataTypes.STRING, allowNull: true },
+  postReportUploadedAt: { type: DataTypes.DATE, allowNull: true },
+  status: {
+    type: DataTypes.ENUM('SCHEDULED', 'CANCELLED'),
+    defaultValue: 'SCHEDULED',
+    allowNull: false,
+  },
+  createdBy: { type: DataTypes.UUID, allowNull: false },
+}, {
+  tableName: 'events',
+  timestamps: true,
+  underscored: true,
+  indexes: [{ fields: ['start_at'] }],
+});
+
+Event.belongsTo(User, { foreignKey: 'createdBy', as: 'Creator' });
+User.hasMany(Event, { foreignKey: 'createdBy', as: 'CreatedEvents' });
+
 const FacultyNote = sequelize.define('FacultyNote', {
   id: {
     type: DataTypes.UUID,
@@ -1813,4 +1855,5 @@ module.exports = {
   FacultyGroup,
   FacultyGroupMember,
   FacultyTaskUpdate,
+  Event,
 };

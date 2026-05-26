@@ -23,6 +23,7 @@ const shareLinkRoutes = require('./routes/shareLinkRoutes');
 const facultyTaskRoutes = require('./routes/facultyTaskRoutes');
 const facultyNoteRoutes = require('./routes/facultyNoteRoutes');
 const facultyGroupRoutes = require('./routes/facultyGroupRoutes');
+const eventRoutes = require('./routes/eventRoutes');
 const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
@@ -70,6 +71,7 @@ app.use('/api/share-links', shareLinkRoutes);
 app.use('/api/faculty-tasks', facultyTaskRoutes);
 app.use('/api/faculty-notes', facultyNoteRoutes);
 app.use('/api/faculty-groups', facultyGroupRoutes);
+app.use('/api/events', eventRoutes);
 
 // Health check
 app.get('/health', (req, res) => {

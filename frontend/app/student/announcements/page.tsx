@@ -4,8 +4,9 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import useAuthStore from '@/app/store/authStore';
+import DashboardLayout from '@/app/components/DashboardLayout';
 import AnnouncementCard, { type Announcement } from '@/app/components/Announcements/AnnouncementCard';
-import { FiArrowLeft, FiLoader, FiAlertCircle, FiPlus, FiSearch, FiX, FiChevronDown, FiFilter } from 'react-icons/fi';
+import { FiLoader, FiAlertCircle, FiPlus, FiSearch, FiX, FiChevronDown, FiFilter } from 'react-icons/fi';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
 
@@ -123,33 +124,26 @@ export default function AnnouncementsPage() {
 
   if (authLoading || loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <FiLoader className="inline animate-spin text-blue-600 mb-4" size={32} />
-          <p className="text-gray-600">Loading announcements...</p>
+      <DashboardLayout title="Announcements">
+        <div className="min-h-[60vh] flex items-center justify-center">
+          <div className="text-center">
+            <FiLoader className="inline animate-spin text-blue-600 mb-4" size={32} />
+            <p className="text-gray-600">Loading announcements...</p>
+          </div>
         </div>
-      </div>
+      </DashboardLayout>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Link
-                href="/student/dashboard"
-                className="p-2 hover:bg-gray-100 rounded-lg transition"
-              >
-                <FiArrowLeft size={20} />
-              </Link>
-              <div>
-                <h1 className="text-3xl font-bold text-gray-900">Announcements</h1>
-                <p className="text-gray-600 mt-1">Stay updated with important announcements</p>
-              </div>
-            </div>
+    <DashboardLayout title="Announcements">
+      <div className="py-6 px-2 md:px-4 max-w-6xl mx-auto">
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Announcements</h1>
+            <p className="text-gray-600 mt-1 text-sm">Stay updated with important announcements.</p>
+          </div>
+          <div>
             {canCreateAnnouncements && (
               <Link
                 href="/admin/announcements/create"
@@ -327,6 +321,6 @@ export default function AnnouncementsPage() {
           </div>
         )}
       </div>
-    </div>
+    </DashboardLayout>
   );
 }
