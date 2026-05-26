@@ -13,7 +13,7 @@ import { useRouter } from 'next/navigation';
 import {
   FiArrowLeft, FiPlus, FiX, FiCheck, FiTrash2, FiAlertCircle, FiRefreshCw,
   FiDownload, FiCalendar, FiFileText, FiLock, FiEdit2, FiFlag,
-  FiMessageSquare, FiSave, FiLoader, FiClock,
+  FiMessageSquare, FiSave, FiLoader, FiClock, FiUsers, FiZap,
 } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 import useAuthStore from '@/app/store/authStore';
@@ -52,6 +52,15 @@ interface FacultyRow {
   pendingCount: number;
   completedCount: number;
   overdueCount: number;
+  lateSubmittedCount: number;
+  accuracy: number | null;
+  evaluableCount: number;
+}
+
+interface FacultyGroupLite {
+  id: string;
+  name: string;
+  Members: { userId: string }[];
 }
 
 interface Task {
@@ -67,6 +76,9 @@ interface Task {
   createdAt: string;
   adminRemark?: string | null;
   remarkedAt?: string | null;
+  groupTaskId?: string | null;
+  sharedCompletion?: boolean;
+  submittedLate?: boolean;
   Assignee?: {
     id: string;
     firstName: string;
@@ -154,6 +166,24 @@ export default function AdminFacultyTasksPage() {
   // Report download state
   const [reportBusy, setReportBusy] = useState<null | 'xlsx' | 'pdf'>(null);
 
+  // Bulk-assign modal + groups
+  const [groups, setGroups] = useState<FacultyGroupLite[]>([]);
+  const [showBulk, setShowBulk] = useState(false);
+  const [bulkForm, setBulkForm] = useState<{
+    title: string;
+    description: string;
+    deadline: string;
+    priority: Priority;
+    mode: 'INDIVIDUAL' | 'SHARED';
+    assigneeIds: Set<string>;
+    groupIds: Set<string>;
+  }>({
+    title: '', description: '', deadline: '', priority: 'MEDIUM',
+    mode: 'INDIVIDUAL', assigneeIds: new Set(), groupIds: new Set(),
+  });
+  const [bulkCreating, setBulkCreating] = useState(false);
+  const [bulkSearch, setBulkSearch] = useState('');
+
   // Role gate
   useEffect(() => {
     if (user && user.role !== 'ADMIN') router.push('/dashboard');
@@ -202,7 +232,18 @@ export default function AdminFacultyTasksPage() {
     }
   }, []);
 
-  useEffect(() => { loadSummary(); }, [loadSummary]);
+  const loadGroups = useCallback(async () => {
+    try {
+      const res = await apiClient.get('/faculty-groups');
+      const gs = (res.data.groups || []) as Array<FacultyGroupLite & { Members: Array<{ userId: string }> }>;
+      setGroups(gs.map((g) => ({ id: g.id, name: g.name, Members: g.Members || [] })));
+    } catch (e) {
+      console.error(e);
+      // Not fatal — bulk-assign just won't show groups
+    }
+  }, []);
+
+  useEffect(() => { loadSummary(); loadGroups(); }, [loadSummary, loadGroups]);
   useEffect(() => {
     if (selectedId) {
       loadTasks(selectedId);
@@ -346,6 +387,61 @@ export default function AdminFacultyTasksPage() {
     }
   };
 
+  // === Bulk assign ===
+  const resolvedAssigneeCount = useMemo(() => {
+    const set = new Set<string>(bulkForm.assigneeIds);
+    for (const gid of bulkForm.groupIds) {
+      const g = groups.find((gg) => gg.id === gid);
+      if (g) for (const m of g.Members) set.add(m.userId);
+    }
+    return set.size;
+  }, [bulkForm.assigneeIds, bulkForm.groupIds, groups]);
+
+  const handleBulkCreate = async () => {
+    const title = bulkForm.title.trim();
+    if (!title) { toast.error('Title is required'); return; }
+    if (resolvedAssigneeCount === 0) { toast.error('Pick at least one faculty or group'); return; }
+    setBulkCreating(true);
+    try {
+      const res = await apiClient.post('/faculty-tasks/bulk', {
+        title,
+        description: bulkForm.description.trim() || null,
+        deadline: bulkForm.deadline || null,
+        priority: bulkForm.priority,
+        mode: bulkForm.mode,
+        assigneeIds: Array.from(bulkForm.assigneeIds),
+        groupIds: Array.from(bulkForm.groupIds),
+      });
+      const { created, mode } = res.data;
+      toast.success(
+        mode === 'SHARED'
+          ? `Shared task created for ${created} faculty (completing one cascades to all)`
+          : `Task copied to ${created} faculty (each independent)`
+      );
+      setShowBulk(false);
+      setBulkForm({
+        title: '', description: '', deadline: '', priority: 'MEDIUM',
+        mode: 'INDIVIDUAL', assigneeIds: new Set(), groupIds: new Set(),
+      });
+      loadSummary();
+      if (selectedId) loadTasks(selectedId);
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string } } };
+      toast.error(err.response?.data?.message || 'Failed to bulk-assign');
+    } finally {
+      setBulkCreating(false);
+    }
+  };
+
+  const bulkVisibleFaculty = useMemo(() => {
+    const q = bulkSearch.trim().toLowerCase();
+    if (!q) return faculty;
+    return faculty.filter((f) => {
+      const name = `${f.user.firstName} ${f.user.lastName || ''}`.toLowerCase();
+      return name.includes(q) || f.user.email.toLowerCase().includes(q) || (f.user.department || '').toLowerCase().includes(q);
+    });
+  }, [faculty, bulkSearch]);
+
   // === Report ===
   const handleDownloadReport = async (format: 'xlsx' | 'pdf') => {
     setReportBusy(format);
@@ -446,6 +542,19 @@ export default function AdminFacultyTasksPage() {
               </button>
             </div>
             <button
+              onClick={() => setShowBulk(true)}
+              className="flex items-center gap-2 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold text-sm"
+              title="Assign one task to multiple faculty or groups at once"
+            >
+              <FiZap /> Bulk Assign
+            </button>
+            <button
+              onClick={() => router.push('/admin/faculty-groups')}
+              className="flex items-center gap-2 px-3 py-2 text-gray-700 bg-white hover:bg-gray-100 border border-gray-300 rounded-lg"
+            >
+              <FiUsers /> Groups
+            </button>
+            <button
               onClick={() => router.back()}
               className="flex items-center gap-2 px-3 py-2 text-gray-700 bg-white hover:bg-gray-100 border border-gray-300 rounded-lg"
             >
@@ -482,7 +591,7 @@ export default function AdminFacultyTasksPage() {
                           {f.user.firstName} {f.user.lastName || ''}
                         </div>
                         <div className="text-xs text-gray-600 mt-0.5">{f.user.approvedRole}{f.user.department ? ` · ${f.user.department}` : ''}</div>
-                        <div className="flex items-center gap-2 mt-2 text-xs">
+                        <div className="flex items-center gap-2 mt-2 text-xs flex-wrap">
                           <span className="px-2 py-0.5 rounded bg-yellow-100 text-yellow-800 font-semibold">
                             {f.pendingCount} pending
                           </span>
@@ -494,7 +603,23 @@ export default function AdminFacultyTasksPage() {
                               {f.overdueCount} overdue
                             </span>
                           )}
+                          {f.lateSubmittedCount > 0 && (
+                            <span className="px-2 py-0.5 rounded bg-orange-100 text-orange-800 font-semibold">
+                              {f.lateSubmittedCount} late-subm
+                            </span>
+                          )}
                         </div>
+                        {f.accuracy != null && (
+                          <div className="mt-2 flex items-center gap-1.5">
+                            <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                              <div
+                                className={`h-full ${f.accuracy >= 80 ? 'bg-green-500' : f.accuracy >= 60 ? 'bg-yellow-500' : 'bg-red-500'}`}
+                                style={{ width: `${f.accuracy}%` }}
+                              />
+                            </div>
+                            <span className="text-[10px] font-bold text-gray-700">{f.accuracy}%</span>
+                          </div>
+                        )}
                       </button>
                     </li>
                   );
@@ -514,18 +639,34 @@ export default function AdminFacultyTasksPage() {
               <>
                 {/* Header card */}
                 <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-4 flex items-center justify-between flex-wrap gap-3">
-                  <div>
+                  <div className="min-w-0">
                     <h2 className="text-xl font-bold text-gray-900">
                       {selected.user.firstName} {selected.user.lastName || ''}
                     </h2>
                     <p className="text-sm text-gray-600">{selected.user.email} · <span className="font-semibold">{selected.user.approvedRole}</span>{selected.user.department ? ` · ${selected.user.department}` : ''}</p>
                   </div>
-                  <button
-                    onClick={() => setShowAssign(true)}
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold text-sm"
-                  >
-                    <FiPlus /> Assign Task
-                  </button>
+                  {/* Accuracy card */}
+                  <div className="flex items-center gap-4 flex-wrap">
+                    <div className="text-right">
+                      <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Accuracy</p>
+                      {selected.accuracy != null ? (
+                        <div className="flex items-baseline gap-1 justify-end">
+                          <span className={`text-2xl font-bold ${selected.accuracy >= 80 ? 'text-green-600' : selected.accuracy >= 60 ? 'text-yellow-600' : 'text-red-600'}`}>
+                            {selected.accuracy}%
+                          </span>
+                          <span className="text-[10px] text-gray-500">({selected.evaluableCount} task{selected.evaluableCount === 1 ? '' : 's'})</span>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-500 italic">— (no evaluable tasks)</p>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => setShowAssign(true)}
+                      className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold text-sm"
+                    >
+                      <FiPlus /> Assign Task
+                    </button>
+                  </div>
                 </div>
 
                 {/* Filters */}
@@ -614,6 +755,21 @@ export default function AdminFacultyTasksPage() {
                                             }`}>
                                               {t.status === 'COMPLETED' ? 'COMPLETED' : (overdue ? 'OVERDUE' : 'PENDING')}
                                             </span>
+                                            {t.submittedLate && (
+                                              <span className="text-[11px] px-2 py-0.5 rounded-full font-bold bg-orange-100 text-orange-800 border border-orange-300">
+                                                SUBMITTED LATE
+                                              </span>
+                                            )}
+                                            {t.sharedCompletion && (
+                                              <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full font-semibold bg-purple-100 text-purple-800 border border-purple-300" title="Group-shared: completing this cascades to all faculty in the group">
+                                                <FiUsers size={10} /> Group-shared
+                                              </span>
+                                            )}
+                                            {t.groupTaskId && !t.sharedCompletion && (
+                                              <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full font-semibold bg-slate-100 text-slate-700 border border-slate-300" title="Bulk copy: each faculty has an independent copy of this task">
+                                                <FiUsers size={10} /> Bulk copy
+                                              </span>
+                                            )}
                                           </div>
 
                                           {t.description && (
@@ -978,6 +1134,195 @@ export default function AdminFacultyTasksPage() {
                 className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded font-semibold"
               >
                 {saving ? 'Saving…' : 'Save changes'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk-assign modal */}
+      {showBulk && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="bg-indigo-600 text-white px-5 py-3 flex items-center justify-between">
+              <h3 className="font-bold flex items-center gap-2"><FiZap /> Bulk Assign Task</h3>
+              <button onClick={() => setShowBulk(false)} className="p-1 hover:bg-white/20 rounded"><FiX /></button>
+            </div>
+            <div className="p-5 space-y-4 overflow-y-auto flex-1">
+              {/* Mode */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 uppercase mb-2">Assignment mode</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setBulkForm((p) => ({ ...p, mode: 'INDIVIDUAL' }))}
+                    className={`p-3 text-left rounded-lg border-2 transition ${bulkForm.mode === 'INDIVIDUAL' ? 'bg-blue-50 border-blue-600' : 'bg-white border-gray-300 hover:border-gray-400'}`}
+                  >
+                    <p className="font-bold text-sm text-gray-900">📋 Individual copies</p>
+                    <p className="text-xs text-gray-600 mt-1">Each faculty gets their own independent task. They each complete it separately.</p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBulkForm((p) => ({ ...p, mode: 'SHARED' }))}
+                    className={`p-3 text-left rounded-lg border-2 transition ${bulkForm.mode === 'SHARED' ? 'bg-purple-50 border-purple-600' : 'bg-white border-gray-300 hover:border-gray-400'}`}
+                  >
+                    <p className="font-bold text-sm text-gray-900">👥 Shared (group) task</p>
+                    <p className="text-xs text-gray-600 mt-1">One task visible to all. When anyone completes it, it&apos;s done for everyone.</p>
+                  </button>
+                </div>
+              </div>
+
+              {/* Title */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">Title *</label>
+                <input
+                  type="text"
+                  value={bulkForm.title}
+                  onChange={(e) => setBulkForm((p) => ({ ...p, title: e.target.value }))}
+                  maxLength={250}
+                  placeholder="e.g. Submit monthly placement update"
+                  className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              {/* Priority */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">Priority</label>
+                <div className="grid grid-cols-4 gap-2">
+                  {PRIORITY_OPTIONS.map((p) => {
+                    const active = bulkForm.priority === p;
+                    const st = PRIORITY_STYLE[p];
+                    return (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => setBulkForm((prev) => ({ ...prev, priority: p }))}
+                        className={`flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-semibold rounded border-2 transition ${active ? st.pickerActive : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'}`}
+                      >
+                        <FiFlag size={11} /> {st.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">Deadline (optional)</label>
+                  <input
+                    type="datetime-local"
+                    value={bulkForm.deadline}
+                    onChange={(e) => setBulkForm((p) => ({ ...p, deadline: e.target.value }))}
+                    className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+                <div className="flex items-end">
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 w-full">
+                    <p className="text-[10px] uppercase font-bold text-gray-500">Will assign to</p>
+                    <p className="text-lg font-bold text-gray-900">{resolvedAssigneeCount} faculty</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Description */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">Description (optional)</label>
+                <textarea
+                  value={bulkForm.description}
+                  onChange={(e) => setBulkForm((p) => ({ ...p, description: e.target.value }))}
+                  rows={2}
+                  className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              {/* Groups */}
+              {groups.length > 0 && (
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 uppercase mb-2">
+                    Pick groups ({bulkForm.groupIds.size} selected)
+                  </label>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-44 overflow-y-auto p-1">
+                    {groups.map((g) => {
+                      const checked = bulkForm.groupIds.has(g.id);
+                      return (
+                        <label key={g.id} className={`flex items-center gap-2 px-3 py-2 rounded border cursor-pointer transition ${checked ? 'bg-indigo-50 border-indigo-400' : 'bg-white border-gray-300 hover:border-gray-400'}`}>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => setBulkForm((p) => {
+                              const next = new Set(p.groupIds);
+                              if (checked) next.delete(g.id); else next.add(g.id);
+                              return { ...p, groupIds: next };
+                            })}
+                            className="w-4 h-4 accent-indigo-600"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-semibold text-gray-900 truncate">{g.name}</p>
+                            <p className="text-[11px] text-gray-600">{g.Members.length} member{g.Members.length === 1 ? '' : 's'}</p>
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Individual faculty pick */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-semibold text-gray-700 uppercase">
+                    Pick faculty ({bulkForm.assigneeIds.size} selected)
+                  </label>
+                  <input
+                    type="text"
+                    value={bulkSearch}
+                    onChange={(e) => setBulkSearch(e.target.value)}
+                    placeholder="Search faculty…"
+                    className="px-2 py-1 border border-gray-300 rounded text-xs text-gray-900 placeholder-gray-500"
+                  />
+                </div>
+                <div className="border-2 border-gray-200 rounded-lg max-h-56 overflow-y-auto divide-y divide-gray-100">
+                  {bulkVisibleFaculty.length === 0 ? (
+                    <p className="p-3 text-sm text-gray-500 italic">No faculty match.</p>
+                  ) : (
+                    bulkVisibleFaculty.map((f) => {
+                      const checked = bulkForm.assigneeIds.has(f.user.id);
+                      return (
+                        <label key={f.user.id} className="flex items-center gap-3 px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => setBulkForm((p) => {
+                              const next = new Set(p.assigneeIds);
+                              if (checked) next.delete(f.user.id); else next.add(f.user.id);
+                              return { ...p, assigneeIds: next };
+                            })}
+                            className="w-4 h-4 accent-indigo-600"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium text-gray-900 truncate">{f.user.firstName} {f.user.lastName || ''}</p>
+                            <p className="text-xs text-gray-600 truncate">{f.user.email} · {f.user.approvedRole}{f.user.department ? ` · ${f.user.department}` : ''}</p>
+                          </div>
+                          {f.accuracy != null && (
+                            <span className={`text-[11px] font-bold shrink-0 ${f.accuracy >= 80 ? 'text-green-600' : f.accuracy >= 60 ? 'text-yellow-600' : 'text-red-600'}`}>
+                              {f.accuracy}%
+                            </span>
+                          )}
+                        </label>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            </div>
+            <div className="bg-gray-50 px-5 py-3 border-t border-gray-200 flex gap-2 justify-end">
+              <button onClick={() => setShowBulk(false)} className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded font-semibold">Cancel</button>
+              <button
+                onClick={handleBulkCreate}
+                disabled={bulkCreating || !bulkForm.title.trim() || resolvedAssigneeCount === 0}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 text-white rounded font-semibold flex items-center gap-2"
+              >
+                <FiZap /> {bulkCreating ? 'Creating…' : `Assign to ${resolvedAssigneeCount} faculty`}
               </button>
             </div>
           </div>

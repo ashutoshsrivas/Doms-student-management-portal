@@ -3,8 +3,10 @@
 // - Assignee sees their own tasks, marks them done, and can attach a
 //   supporting document (uploaded to S3 via uploadToS3).
 
+const crypto = require('crypto');
 const { Op } = require('sequelize');
-const { FacultyTask, User } = require('../models');
+const { sequelize } = require('../config/database');
+const { FacultyTask, User, FacultyGroup, FacultyGroupMember } = require('../models');
 const { uploadToS3, deleteFromS3 } = require('../utils/s3Upload');
 
 const ASSIGNABLE_ROLES = ['HOD', 'FACULTY', 'COORDINATOR', 'PLACEMENT_COORDINATOR', 'TRAINER', 'MENTOR'];
@@ -18,6 +20,40 @@ function canViewTask(user, task) {
   if (!user) return false;
   if (user.role === 'ADMIN') return true;
   return task.assigneeId === user.id;
+}
+
+// === Accuracy scoring (tiered) ============================================
+// Per task: completed on time = 100, ≤1 day late = 80, ≤7 days late = 60,
+// >7 days late = 30, overdue & still pending = 0.
+// Not-yet-due pending tasks are excluded from the denominator (we don't know
+// yet whether they'll be on time or late).
+const MS_PER_DAY = 86400000;
+function taskScore(task, now = Date.now()) {
+  const hasDeadline = !!task.deadline;
+  if (task.status === 'COMPLETED') {
+    if (!hasDeadline) return 100;
+    const lateMs = new Date(task.completedAt).getTime() - new Date(task.deadline).getTime();
+    if (lateMs <= 0) return 100;
+    const lateDays = lateMs / MS_PER_DAY;
+    if (lateDays <= 1) return 80;
+    if (lateDays <= 7) return 60;
+    return 30;
+  }
+  // PENDING
+  if (hasDeadline && new Date(task.deadline).getTime() < now) return 0; // overdue
+  return null; // not evaluable yet
+}
+function computeAccuracy(tasks) {
+  let sum = 0;
+  let count = 0;
+  for (const t of tasks) {
+    const s = taskScore(t);
+    if (s == null) continue;
+    sum += s;
+    count += 1;
+  }
+  if (count === 0) return { percentage: null, evaluable: 0, sampleSize: tasks.length };
+  return { percentage: Math.round(sum / count), evaluable: count, sampleSize: tasks.length };
 }
 
 const facultyTaskController = {
@@ -116,28 +152,40 @@ const facultyTaskController = {
       });
 
       const tasks = await FacultyTask.findAll({
-        attributes: ['assigneeId', 'status', 'deadline'],
+        attributes: ['assigneeId', 'status', 'deadline', 'completedAt', 'submittedLate'],
       });
 
       const now = Date.now();
       const map = new Map();
+      const taskBuckets = new Map();
       for (const u of users) {
         map.set(u.id, {
           user: u.toJSON(),
           pendingCount: 0,
           completedCount: 0,
           overdueCount: 0,
+          lateSubmittedCount: 0,
+          accuracy: null,
         });
+        taskBuckets.set(u.id, []);
       }
       for (const t of tasks) {
         const row = map.get(t.assigneeId);
         if (!row) continue;
+        taskBuckets.get(t.assigneeId).push(t);
         if (t.status === 'COMPLETED') {
           row.completedCount += 1;
+          if (t.submittedLate) row.lateSubmittedCount += 1;
         } else {
           row.pendingCount += 1;
           if (t.deadline && new Date(t.deadline).getTime() < now) row.overdueCount += 1;
         }
+      }
+      // Attach accuracy per-faculty using the shared scoring helper
+      for (const [uid, row] of map.entries()) {
+        const { percentage, evaluable } = computeAccuracy(taskBuckets.get(uid) || []);
+        row.accuracy = percentage;
+        row.evaluableCount = evaluable;
       }
 
       res.json({ faculty: Array.from(map.values()) });
@@ -217,7 +265,12 @@ const facultyTaskController = {
       }
 
       const patch = { status: 'COMPLETED' };
-      if (task.status !== 'COMPLETED') patch.completedAt = new Date();
+      const now = new Date();
+      if (task.status !== 'COMPLETED') {
+        patch.completedAt = now;
+        // Set submittedLate if there's a deadline and we're past it.
+        patch.submittedLate = !!(task.deadline && now.getTime() > new Date(task.deadline).getTime());
+      }
 
       if (req.file) {
         try {
@@ -242,6 +295,29 @@ const facultyTaskController = {
 
       await task.update(patch);
 
+      // If this is a shared-completion (group) task, propagate to all siblings.
+      // The submittedLate flag is computed per-sibling using each one's own
+      // deadline (in practice they share the same deadline, but compute it
+      // safely anyway).
+      if (task.sharedCompletion && task.groupTaskId) {
+        const siblings = await FacultyTask.findAll({
+          where: { groupTaskId: task.groupTaskId, id: { [Op.ne]: task.id } },
+        });
+        for (const s of siblings) {
+          const sPatch = {
+            status: 'COMPLETED',
+            completedAt: patch.completedAt || s.completedAt || now,
+          };
+          if (patch.documentUrl) {
+            sPatch.documentUrl = patch.documentUrl;
+            sPatch.documentName = patch.documentName;
+            sPatch.documentMime = patch.documentMime;
+          }
+          sPatch.submittedLate = !!(s.deadline && sPatch.completedAt.getTime?.() > new Date(s.deadline).getTime());
+          await s.update(sPatch);
+        }
+      }
+
       const updated = await FacultyTask.findByPk(task.id, {
         include: [
           { model: User, as: 'Assignee', attributes: ['id', 'firstName', 'lastName', 'email', 'approvedRole'] },
@@ -261,7 +337,14 @@ const facultyTaskController = {
     try {
       const task = await FacultyTask.findByPk(req.params.id);
       if (!task) return res.status(404).json({ message: 'Task not found' });
-      await task.update({ status: 'PENDING', completedAt: null });
+      await task.update({ status: 'PENDING', completedAt: null, submittedLate: false });
+      // Cascade to siblings if shared
+      if (task.sharedCompletion && task.groupTaskId) {
+        await FacultyTask.update(
+          { status: 'PENDING', completedAt: null, submittedLate: false },
+          { where: { groupTaskId: task.groupTaskId, id: { [Op.ne]: task.id } } },
+        );
+      }
       res.json({ task });
     } catch (error) {
       console.error('FacultyTask reopen error:', error);
@@ -338,6 +421,8 @@ const facultyTaskController = {
           assignedAt: fmtDate(t.createdAt),
           deadline: fmtDate(t.deadline),
           status: overdue ? 'OVERDUE' : t.status,
+          lateSubmission: t.submittedLate ? 'YES' : '',
+          taskType: t.sharedCompletion ? 'GROUP-SHARED' : (t.groupTaskId ? 'GROUP-COPY' : 'INDIVIDUAL'),
           completedAt: fmtDate(t.completedAt),
           daysToComplete: t.completedAt && t.createdAt
             ? Math.round((new Date(t.completedAt).getTime() - new Date(t.createdAt).getTime()) / 86400000)
@@ -363,7 +448,9 @@ const facultyTaskController = {
         columns: [
           { key: 'title', label: 'Title' },
           { key: 'priority', label: 'Priority' },
+          { key: 'taskType', label: 'Type' },
           { key: 'status', label: 'Status' },
+          { key: 'lateSubmission', label: 'Late?' },
           { key: 'assignee', label: 'Assignee' },
           { key: 'assigneeEmail', label: 'Email' },
           { key: 'assigneeRole', label: 'Role' },
@@ -391,18 +478,145 @@ const facultyTaskController = {
   },
 
   // DELETE /api/faculty-tasks/:id  (ADMIN)
+  // For SHARED tasks: deleting one row deletes ALL sibling rows (per user
+  // choice: "delete from everyone"). For INDIVIDUAL: only this row.
   remove: async (req, res) => {
     try {
       const task = await FacultyTask.findByPk(req.params.id);
       if (!task) return res.status(404).json({ message: 'Task not found' });
-      if (task.documentUrl) {
-        try { await deleteFromS3(task.documentUrl); } catch (e) { /* best effort */ }
+
+      const siblings = task.sharedCompletion && task.groupTaskId
+        ? await FacultyTask.findAll({ where: { groupTaskId: task.groupTaskId } })
+        : [task];
+
+      // Best-effort: delete uploaded documents from S3 before removing rows.
+      for (const s of siblings) {
+        if (s.documentUrl) {
+          try { await deleteFromS3(s.documentUrl); } catch (e) { /* best effort */ }
+        }
       }
-      await task.destroy();
-      res.json({ message: 'Task deleted', id: req.params.id });
+      await FacultyTask.destroy({ where: { id: { [Op.in]: siblings.map((s) => s.id) } } });
+      res.json({ message: 'Task deleted', deletedCount: siblings.length, shared: task.sharedCompletion });
     } catch (error) {
       console.error('FacultyTask delete error:', error);
       res.status(500).json({ message: 'Failed to delete task' });
+    }
+  },
+
+  // POST /api/faculty-tasks/bulk  (ADMIN)
+  // body: {
+  //   assigneeIds: string[],            // direct user ids
+  //   groupIds:    string[],            // expand to group members
+  //   mode: 'INDIVIDUAL' | 'SHARED',    // default INDIVIDUAL
+  //   title, description?, deadline?, priority?
+  // }
+  // INDIVIDUAL: creates N independent rows (no group_task_id).
+  // SHARED: creates N rows sharing one new group_task_id, sharedCompletion=true.
+  bulkCreate: async (req, res) => {
+    try {
+      const cleanTitle = sanitiseTitle(req.body?.title);
+      if (!cleanTitle) return res.status(400).json({ message: 'title is required' });
+      const mode = req.body?.mode === 'SHARED' ? 'SHARED' : 'INDIVIDUAL';
+      const direct = Array.isArray(req.body?.assigneeIds) ? req.body.assigneeIds : [];
+      const groups = Array.isArray(req.body?.groupIds) ? req.body.groupIds : [];
+
+      // Resolve members of each requested group
+      let groupMemberIds = [];
+      if (groups.length) {
+        const members = await FacultyGroupMember.findAll({
+          where: { groupId: { [Op.in]: groups } },
+          attributes: ['userId'],
+        });
+        groupMemberIds = members.map((m) => m.userId);
+      }
+
+      // Dedupe + validate role
+      const allIds = Array.from(new Set([...direct, ...groupMemberIds]));
+      if (allIds.length === 0) return res.status(400).json({ message: 'No assignees resolved' });
+
+      const validUsers = await User.findAll({
+        where: {
+          id: { [Op.in]: allIds },
+          approvedRole: { [Op.in]: ASSIGNABLE_ROLES },
+          status: 'ACTIVE',
+        },
+        attributes: ['id', 'approvedRole'],
+      });
+      if (validUsers.length === 0) {
+        return res.status(400).json({ message: `No valid assignees (must be ${ASSIGNABLE_ROLES.join(', ')} and ACTIVE)` });
+      }
+
+      const groupTaskId = mode === 'SHARED' ? crypto.randomUUID() : null;
+      const sharedCompletion = mode === 'SHARED';
+      const baseRow = {
+        assignedBy: req.user.id,
+        title: cleanTitle,
+        description: sanitiseText(req.body?.description, 5000),
+        deadline: req.body?.deadline ? new Date(req.body.deadline) : null,
+        priority: sanitisePriority(req.body?.priority),
+        groupTaskId,
+        sharedCompletion,
+      };
+
+      const rows = validUsers.map((u) => ({ ...baseRow, assigneeId: u.id }));
+      const created = await FacultyTask.bulkCreate(rows);
+      res.status(201).json({
+        created: created.length,
+        mode,
+        groupTaskId,
+        skipped: allIds.length - validUsers.length,
+      });
+    } catch (error) {
+      console.error('FacultyTask bulkCreate error:', error);
+      res.status(500).json({ message: 'Failed to create bulk tasks' });
+    }
+  },
+
+  // GET /api/faculty-tasks/accuracy?userId=X  (any authenticated user; non-admin
+  //   may only query their own id)
+  // Returns: { userId, percentage, evaluable, sampleSize, breakdown: {...} }
+  accuracy: async (req, res) => {
+    try {
+      const requestedId = (req.query.userId || req.user.id).toString();
+      if (req.user.role !== 'ADMIN' && requestedId !== req.user.id) {
+        return res.status(403).json({ message: 'Forbidden' });
+      }
+      const tasks = await FacultyTask.findAll({
+        where: { assigneeId: requestedId },
+        attributes: ['id', 'status', 'deadline', 'completedAt', 'submittedLate'],
+      });
+      const result = computeAccuracy(tasks);
+
+      // Breakdown for transparency / UI explanation
+      const now = Date.now();
+      const breakdown = {
+        completedOnTime: 0,
+        completedLate1: 0,   // ≤1 day
+        completedLate7: 0,   // ≤7 days
+        completedLateMore: 0,
+        overduePending: 0,
+        notDueYet: 0,
+      };
+      for (const t of tasks) {
+        if (t.status === 'COMPLETED') {
+          if (!t.deadline) { breakdown.completedOnTime += 1; continue; }
+          const lateMs = new Date(t.completedAt).getTime() - new Date(t.deadline).getTime();
+          if (lateMs <= 0) breakdown.completedOnTime += 1;
+          else {
+            const d = lateMs / 86400000;
+            if (d <= 1) breakdown.completedLate1 += 1;
+            else if (d <= 7) breakdown.completedLate7 += 1;
+            else breakdown.completedLateMore += 1;
+          }
+        } else {
+          if (t.deadline && new Date(t.deadline).getTime() < now) breakdown.overduePending += 1;
+          else breakdown.notDueYet += 1;
+        }
+      }
+      res.json({ userId: requestedId, ...result, breakdown });
+    } catch (error) {
+      console.error('FacultyTask accuracy error:', error);
+      res.status(500).json({ message: 'Failed to compute accuracy' });
     }
   },
 };

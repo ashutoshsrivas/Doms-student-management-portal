@@ -22,6 +22,7 @@ const publicProfileRoutes = require('./routes/publicProfileRoutes');
 const shareLinkRoutes = require('./routes/shareLinkRoutes');
 const facultyTaskRoutes = require('./routes/facultyTaskRoutes');
 const facultyNoteRoutes = require('./routes/facultyNoteRoutes');
+const facultyGroupRoutes = require('./routes/facultyGroupRoutes');
 const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
@@ -68,6 +69,7 @@ app.use('/api/public', publicProfileRoutes);
 app.use('/api/share-links', shareLinkRoutes);
 app.use('/api/faculty-tasks', facultyTaskRoutes);
 app.use('/api/faculty-notes', facultyNoteRoutes);
+app.use('/api/faculty-groups', facultyGroupRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
@@ -232,6 +234,9 @@ async function start() {
       { name: 'admin_remark', ddl: 'TEXT NULL' },
       { name: 'remarked_at', ddl: 'DATETIME NULL' },
       { name: 'remarked_by', ddl: 'CHAR(36) NULL' },
+      { name: 'group_task_id', ddl: 'CHAR(36) NULL' },
+      { name: 'shared_completion', ddl: 'BOOLEAN NOT NULL DEFAULT FALSE' },
+      { name: 'submitted_late', ddl: 'BOOLEAN NOT NULL DEFAULT FALSE' },
     ];
     for (const col of facultyTaskColumns) {
       try {

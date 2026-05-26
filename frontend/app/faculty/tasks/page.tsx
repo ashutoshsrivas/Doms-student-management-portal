@@ -11,6 +11,7 @@ import { useRouter } from 'next/navigation';
 import {
   FiArrowLeft, FiCheck, FiClock, FiCalendar, FiPaperclip, FiAlertCircle,
   FiFileText, FiDownload, FiUpload, FiX, FiFlag, FiMessageSquare,
+  FiUsers, FiTrendingUp,
 } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 import useAuthStore from '@/app/store/authStore';
@@ -39,8 +40,25 @@ interface Task {
   createdAt: string;
   adminRemark?: string | null;
   remarkedAt?: string | null;
+  groupTaskId?: string | null;
+  sharedCompletion?: boolean;
+  submittedLate?: boolean;
   Assigner?: { id: string; firstName: string; lastName: string | null; email: string };
   Remarker?: { id: string; firstName: string; lastName: string | null; email: string };
+}
+
+interface Accuracy {
+  percentage: number | null;
+  evaluable: number;
+  sampleSize: number;
+  breakdown?: {
+    completedOnTime: number;
+    completedLate1: number;
+    completedLate7: number;
+    completedLateMore: number;
+    overduePending: number;
+    notDueYet: number;
+  };
 }
 
 const fmtDate = (s: string | null | undefined) => (s ? new Date(s).toLocaleString() : '—');
@@ -67,6 +85,7 @@ export default function MyTasksPage() {
   const { user } = useAuthStore();
 
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [accuracy, setAccuracy] = useState<Accuracy | null>(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<'pending' | 'completed'>('pending');
 
@@ -85,8 +104,12 @@ export default function MyTasksPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await apiClient.get('/faculty-tasks');
-      setTasks(res.data.tasks || []);
+      const [tRes, aRes] = await Promise.all([
+        apiClient.get('/faculty-tasks'),
+        apiClient.get('/faculty-tasks/accuracy'),
+      ]);
+      setTasks(tRes.data.tasks || []);
+      setAccuracy(aRes.data || null);
     } catch (e) {
       console.error(e);
       toast.error('Failed to load tasks');
@@ -146,7 +169,7 @@ export default function MyTasksPage() {
   return (
     <DashboardLayout title="My Tasks">
       <div className="py-6 px-2 md:px-4 max-w-5xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">My Tasks</h1>
             <p className="text-gray-600 mt-1 text-sm">Tasks assigned to you by the admin — sorted by deadline.</p>
@@ -158,6 +181,62 @@ export default function MyTasksPage() {
             <FiArrowLeft /> Back
           </button>
         </div>
+
+        {/* Accuracy card */}
+        {accuracy && (
+          <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-4 mb-4 flex items-center gap-4 flex-wrap">
+            <div className="flex items-center gap-3">
+              <div className={`p-3 rounded-full ${accuracy.percentage == null ? 'bg-gray-100 text-gray-500' : accuracy.percentage >= 80 ? 'bg-green-100 text-green-700' : accuracy.percentage >= 60 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>
+                <FiTrendingUp size={22} />
+              </div>
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Accuracy</p>
+                {accuracy.percentage == null ? (
+                  <p className="text-2xl font-bold text-gray-600">—</p>
+                ) : (
+                  <p className={`text-3xl font-bold ${accuracy.percentage >= 80 ? 'text-green-600' : accuracy.percentage >= 60 ? 'text-yellow-600' : 'text-red-600'}`}>
+                    {accuracy.percentage}%
+                  </p>
+                )}
+                <p className="text-xs text-gray-500 mt-0.5">based on {accuracy.evaluable} evaluable task{accuracy.evaluable === 1 ? '' : 's'}</p>
+              </div>
+            </div>
+            {accuracy.breakdown && (
+              <div className="flex-1 grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+                <div className="bg-green-50 border border-green-200 rounded px-2 py-1.5">
+                  <span className="font-bold text-green-700">{accuracy.breakdown.completedOnTime}</span>
+                  <span className="text-gray-600"> on time</span>
+                  <span className="block text-[10px] text-gray-500">100 pts each</span>
+                </div>
+                <div className="bg-yellow-50 border border-yellow-200 rounded px-2 py-1.5">
+                  <span className="font-bold text-yellow-700">{accuracy.breakdown.completedLate1}</span>
+                  <span className="text-gray-600"> ≤1d late</span>
+                  <span className="block text-[10px] text-gray-500">80 pts each</span>
+                </div>
+                <div className="bg-orange-50 border border-orange-200 rounded px-2 py-1.5">
+                  <span className="font-bold text-orange-700">{accuracy.breakdown.completedLate7}</span>
+                  <span className="text-gray-600"> ≤7d late</span>
+                  <span className="block text-[10px] text-gray-500">60 pts each</span>
+                </div>
+                <div className="bg-red-50 border border-red-200 rounded px-2 py-1.5">
+                  <span className="font-bold text-red-700">{accuracy.breakdown.completedLateMore}</span>
+                  <span className="text-gray-600"> &gt;7d late</span>
+                  <span className="block text-[10px] text-gray-500">30 pts each</span>
+                </div>
+                <div className="bg-red-100 border border-red-300 rounded px-2 py-1.5">
+                  <span className="font-bold text-red-800">{accuracy.breakdown.overduePending}</span>
+                  <span className="text-gray-700"> overdue</span>
+                  <span className="block text-[10px] text-gray-600">0 pts each</span>
+                </div>
+                <div className="bg-gray-50 border border-gray-200 rounded px-2 py-1.5">
+                  <span className="font-bold text-gray-700">{accuracy.breakdown.notDueYet}</span>
+                  <span className="text-gray-600"> upcoming</span>
+                  <span className="block text-[10px] text-gray-500">excluded</span>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Tabs */}
         <div className="border-b border-gray-200 mb-4 flex">
@@ -230,6 +309,16 @@ export default function MyTasksPage() {
                                   }`}>
                                     {t.status === 'COMPLETED' ? 'COMPLETED' : overdue ? 'OVERDUE' : 'PENDING'}
                                   </span>
+                                  {t.submittedLate && (
+                                    <span className="text-[11px] px-2 py-0.5 rounded-full font-bold bg-orange-100 text-orange-800 border border-orange-300" title="Submitted after the deadline">
+                                      SUBMITTED LATE
+                                    </span>
+                                  )}
+                                  {t.sharedCompletion && (
+                                    <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full font-semibold bg-purple-100 text-purple-800 border border-purple-300" title="Group task — completing it marks it done for everyone in the group">
+                                      <FiUsers size={10} /> Group task
+                                    </span>
+                                  )}
                                 </div>
                                 {t.description && (
                                   <p className="text-sm text-gray-700 mt-2 whitespace-pre-wrap">{t.description}</p>

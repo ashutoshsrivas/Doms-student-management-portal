@@ -96,6 +96,7 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
         { name: 'File Management', href: '/admin/files', iconKey: 'hardDrive' },
         { name: 'Reports', href: '/admin/reports', iconKey: 'fileText' },
         { name: 'Faculty Tasks', href: '/admin/faculty-tasks', iconKey: 'clipboard' },
+        { name: 'Faculty Groups', href: '/admin/faculty-groups', iconKey: 'users' },
         { name: 'Announcements', href: '/admin/announcements', iconKey: 'bell' },
       ],
       FACULTY: [

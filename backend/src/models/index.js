@@ -1589,6 +1589,25 @@ const FacultyTask = sequelize.define('FacultyTask', {
     type: DataTypes.UUID,
     allowNull: true,
   },
+  // groupTaskId links sibling rows that came from the same admin action.
+  // For INDIVIDUAL/COPY mode: NULL (rows independent).
+  // For SHARED mode: same UUID across all siblings, AND sharedCompletion=true.
+  groupTaskId: {
+    type: DataTypes.UUID,
+    allowNull: true,
+  },
+  sharedCompletion: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false,
+    allowNull: false,
+  },
+  // Set true on completion when completedAt > deadline. Lets the UI flag
+  // "submitted late" without a re-compute on every render.
+  submittedLate: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false,
+    allowNull: false,
+  },
 }, {
   tableName: 'faculty_tasks',
   timestamps: true,
@@ -1599,6 +1618,64 @@ FacultyTask.belongsTo(User, { foreignKey: 'assigneeId', as: 'Assignee' });
 User.hasMany(FacultyTask, { foreignKey: 'assigneeId', as: 'AssignedTasks' });
 FacultyTask.belongsTo(User, { foreignKey: 'assignedBy', as: 'Assigner' });
 FacultyTask.belongsTo(User, { foreignKey: 'remarkedBy', as: 'Remarker' });
+
+// ============ FACULTY GROUP MODELS ============
+// An admin-curated bundle of users that can be assigned tasks together.
+// When a task is assigned to a group in SHARED mode, each member gets a
+// faculty_tasks row linked by group_task_id; completing one cascades to
+// all siblings.
+
+const FacultyGroup = sequelize.define('FacultyGroup', {
+  id: {
+    type: DataTypes.UUID,
+    defaultValue: DataTypes.UUIDV4,
+    primaryKey: true,
+  },
+  name: {
+    type: DataTypes.STRING,
+    allowNull: false,
+  },
+  description: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+  },
+  createdBy: {
+    type: DataTypes.UUID,
+    allowNull: false,
+  },
+}, {
+  tableName: 'faculty_groups',
+  timestamps: true,
+  underscored: true,
+});
+
+const FacultyGroupMember = sequelize.define('FacultyGroupMember', {
+  id: {
+    type: DataTypes.UUID,
+    defaultValue: DataTypes.UUIDV4,
+    primaryKey: true,
+  },
+  groupId: {
+    type: DataTypes.UUID,
+    allowNull: false,
+  },
+  userId: {
+    type: DataTypes.UUID,
+    allowNull: false,
+  },
+}, {
+  tableName: 'faculty_group_members',
+  timestamps: true,
+  underscored: true,
+  indexes: [
+    { unique: true, fields: ['group_id', 'user_id'] },
+  ],
+});
+
+FacultyGroup.belongsTo(User, { foreignKey: 'createdBy', as: 'Creator' });
+FacultyGroup.hasMany(FacultyGroupMember, { foreignKey: 'groupId', as: 'Members', onDelete: 'CASCADE' });
+FacultyGroupMember.belongsTo(FacultyGroup, { foreignKey: 'groupId', as: 'Group' });
+FacultyGroupMember.belongsTo(User, { foreignKey: 'userId', as: 'User' });
 
 const FacultyNote = sequelize.define('FacultyNote', {
   id: {
@@ -1661,4 +1738,6 @@ module.exports = {
   ShareLink,
   FacultyTask,
   FacultyNote,
+  FacultyGroup,
+  FacultyGroupMember,
 };
