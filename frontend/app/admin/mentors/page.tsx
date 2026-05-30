@@ -77,15 +77,19 @@ export default function MentorTeamManagement() {
 
   const fetchFaculties = async () => {
     try {
-      // Faculty Member picker = every non-STUDENT user. The backend allows
-      // any active staff (admin / HOD / faculty / chair-head / coordinator
-      // / PC / trainer / mentor) to be assigned as a team's mentor.
-      const res = await apiClient.get('/users');
+      // Faculty Member picker = every non-STUDENT user. The /api/users
+      // endpoint paginates with limit=20 by default — pass a high limit
+      // so the small staff population fits in one call. (Even on a
+      // ~500-user campus, the staff slice is well under 200.)
+      const res = await apiClient.get('/users', { params: { limit: 1000, page: 1 } });
       const all = (res.data.users || []) as Faculty[];
       const eligible = all
         .filter((u) => u.approvedRole && u.approvedRole !== 'STUDENT')
         .sort((a, b) => (`${a.firstName} ${a.lastName}`).localeCompare(`${b.firstName} ${b.lastName}`));
       setFaculties(eligible);
+      if (eligible.length === 0) {
+        toast.error('No assignable users found — only students exist in this account.');
+      }
     } catch (error) {
       console.error('Failed to fetch faculties:', error);
       toast.error('Failed to load user list — check your permissions');
