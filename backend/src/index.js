@@ -25,6 +25,7 @@ const facultyTaskRoutes = require('./routes/facultyTaskRoutes');
 const facultyNoteRoutes = require('./routes/facultyNoteRoutes');
 const facultyGroupRoutes = require('./routes/facultyGroupRoutes');
 const eventRoutes = require('./routes/eventRoutes');
+const permissionRoutes = require('./routes/permissionRoutes');
 const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
