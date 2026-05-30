@@ -10,13 +10,21 @@ router.use((req, res, next) => {
   next();
 });
 
+// ============ MONITORING (ADMIN / HOD / CHAIR_HEAD) ============
+router.get(
+  '/monitoring',
+  authenticateToken,
+  authorizeRole('ADMIN', 'HOD', 'CHAIR_HEAD'),
+  mentorController.getMonitoring,
+);
+
 // ============ MENTOR TEAM MANAGEMENT (ADMIN) ============
 
 // Create mentor team
 router.post(
   '/teams',
   authenticateToken,
-  authorizeRole('ADMIN', 'HOD'),
+  authorizeRole('ADMIN', 'HOD', 'CHAIR_HEAD'),
   mentorController.createMentorTeam
 );
 
@@ -38,7 +46,7 @@ router.get(
 router.put(
   '/teams/:teamId',
   authenticateToken,
-  authorizeRole('ADMIN', 'HOD'),
+  authorizeRole('ADMIN', 'HOD', 'CHAIR_HEAD'),
   mentorController.updateMentorTeam
 );
 
@@ -46,7 +54,7 @@ router.put(
 router.delete(
   '/teams/:teamId',
   authenticateToken,
-  authorizeRole('ADMIN', 'HOD'),
+  authorizeRole('ADMIN', 'HOD', 'CHAIR_HEAD'),
   mentorController.deleteMentorTeam
 );
 
@@ -54,7 +62,7 @@ router.delete(
 router.post(
   '/teams/:teamId/members',
   authenticateToken,
-  authorizeRole('ADMIN', 'HOD'),
+  authorizeRole('ADMIN', 'HOD', 'CHAIR_HEAD'),
   mentorController.addTeamMembers
 );
 
@@ -62,7 +70,7 @@ router.post(
 router.delete(
   '/teams/:teamId/members/:memberId',
   authenticateToken,
-  authorizeRole('ADMIN', 'HOD'),
+  authorizeRole('ADMIN', 'HOD', 'CHAIR_HEAD'),
   mentorController.removeTeamMember
 );
 
@@ -72,7 +80,7 @@ router.delete(
 router.post(
   '/teams/:teamId/requirements',
   authenticateToken,
-  authorizeRole('FACULTY', 'ADMIN', 'HOD'),
+  authorizeRole('FACULTY', 'ADMIN', 'HOD', 'CHAIR_HEAD'),
   mentorController.createRequirement
 );
 
@@ -94,7 +102,7 @@ router.get(
 router.put(
   '/requirements/:requirementId',
   authenticateToken,
-  authorizeRole('FACULTY', 'ADMIN', 'HOD'),
+  authorizeRole('FACULTY', 'ADMIN', 'HOD', 'CHAIR_HEAD'),
   mentorController.updateRequirement
 );
 
@@ -102,7 +110,7 @@ router.put(
 router.delete(
   '/requirements/:requirementId',
   authenticateToken,
-  authorizeRole('FACULTY', 'ADMIN', 'HOD'),
+  authorizeRole('FACULTY', 'ADMIN', 'HOD', 'CHAIR_HEAD'),
   mentorController.deleteRequirement
 );
 
@@ -121,7 +129,7 @@ router.post(
 router.get(
   '/requirements/:requirementId/responses',
   authenticateToken,
-  authorizeRole('FACULTY', 'ADMIN', 'HOD'),
+  authorizeRole('FACULTY', 'ADMIN', 'HOD', 'CHAIR_HEAD'),
   mentorController.getRequirementResponses
 );
 
@@ -137,7 +145,7 @@ router.get(
 router.put(
   '/responses/:responseId/feedback',
   authenticateToken,
-  authorizeRole('FACULTY', 'ADMIN', 'HOD'),
+  authorizeRole('FACULTY', 'ADMIN', 'HOD', 'CHAIR_HEAD'),
   mentorController.provideFeedback
 );
 

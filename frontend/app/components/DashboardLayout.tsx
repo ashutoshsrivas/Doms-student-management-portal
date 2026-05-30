@@ -104,6 +104,7 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
         { name: 'Sessions', href: '/admin/sessions', iconKey: 'calendar' },
         { name: 'Assessments', href: '/admin/assessments', iconKey: 'check' },
         { name: 'Mentor Teams', href: '/admin/mentors', iconKey: 'users' },
+        { name: 'Mentor Monitoring', href: '/admin/mentor-monitoring', iconKey: 'list' },
         { name: 'Internships (SIP)', href: '/admin/sip', iconKey: 'briefcase', children: sipChildren },
         { name: 'File Management', href: '/admin/files', iconKey: 'hardDrive' },
         { name: 'Reports', href: '/admin/reports', iconKey: 'fileText' },
@@ -117,6 +118,16 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
         { name: 'My Tasks', href: '/faculty/tasks', iconKey: 'clipboard' },
         { name: 'Announcements', href: '/student/announcements', iconKey: 'bell', children: studentAnnouncementsChildren },
       ],
+      // CHAIR_HEAD = FACULTY + Mentor Team management + Mentor Monitoring
+      CHAIR_HEAD: [
+        { name: 'Dashboard', href: '/faculty/dashboard', iconKey: 'chart' },
+        { name: 'Assessments', href: '/faculty/assessments', iconKey: 'check' },
+        { name: 'My Mentees', href: '/faculty/mentors', iconKey: 'users' },
+        { name: 'Mentor Teams', href: '/admin/mentors', iconKey: 'users' },
+        { name: 'Mentor Monitoring', href: '/admin/mentor-monitoring', iconKey: 'list' },
+        { name: 'My Tasks', href: '/faculty/tasks', iconKey: 'clipboard' },
+        { name: 'Announcements', href: '/student/announcements', iconKey: 'bell', children: studentAnnouncementsChildren },
+      ],
       // HOD = ADMIN clone (same sidebar, same access). Only difference is
       // the role label on their account.
       HOD: [
@@ -125,6 +136,7 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
         { name: 'Sessions', href: '/admin/sessions', iconKey: 'calendar' },
         { name: 'Assessments', href: '/admin/assessments', iconKey: 'check' },
         { name: 'Mentor Teams', href: '/admin/mentors', iconKey: 'users' },
+        { name: 'Mentor Monitoring', href: '/admin/mentor-monitoring', iconKey: 'list' },
         { name: 'Internships (SIP)', href: '/admin/sip', iconKey: 'briefcase', children: sipChildren },
         { name: 'File Management', href: '/admin/files', iconKey: 'hardDrive' },
         { name: 'Reports', href: '/admin/reports', iconKey: 'fileText' },

@@ -94,7 +94,8 @@ const User = sequelize.define('User', {
       'PLACEMENT_COORDINATOR',
       'TRAINER',
       'STUDENT',
-      'MENTOR'
+      'MENTOR',
+      'CHAIR_HEAD'
     ),
     allowNull: false,
   },
@@ -107,7 +108,8 @@ const User = sequelize.define('User', {
       'PLACEMENT_COORDINATOR',
       'TRAINER',
       'STUDENT',
-      'MENTOR'
+      'MENTOR',
+      'CHAIR_HEAD'
     ),
     allowNull: true,
   },

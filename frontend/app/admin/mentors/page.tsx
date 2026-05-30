@@ -94,7 +94,7 @@ export default function MentorTeamManagement() {
 
   // Redirect if not admin
   useEffect(() => {
-    if (!['ADMIN', 'HOD'].includes(user?.role || '')) {
+    if (!['ADMIN', 'HOD', 'CHAIR_HEAD'].includes(user?.role || '')) {
       router.push('/dashboard');
     }
   }, [user?.role, router]);
@@ -246,7 +246,7 @@ export default function MentorTeamManagement() {
     }));
   };
 
-  if (!user || !['ADMIN', 'HOD'].includes(user.role)) {
+  if (!user || !['ADMIN', 'HOD', 'CHAIR_HEAD'].includes(user.role)) {
     return null;
   }
 

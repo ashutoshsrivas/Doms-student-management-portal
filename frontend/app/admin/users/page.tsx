@@ -31,7 +31,7 @@ interface UserStats {
   roleStats: Record<string, number>;
 }
 
-const roles = ['ADMIN', 'HOD', 'FACULTY', 'COORDINATOR', 'PLACEMENT_COORDINATOR', 'TRAINER', 'STUDENT', 'MENTOR'];
+const roles = ['ADMIN', 'HOD', 'FACULTY', 'CHAIR_HEAD', 'COORDINATOR', 'PLACEMENT_COORDINATOR', 'TRAINER', 'STUDENT', 'MENTOR'];
 const statuses = ['ACTIVE', 'INACTIVE', 'PENDING', 'APPROVED', 'REJECTED'];
 
 export default function UsersPage() {

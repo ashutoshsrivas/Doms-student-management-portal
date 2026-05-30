@@ -833,4 +833,114 @@ module.exports = {
       res.status(500).json({ message: 'Failed to fetch requirements' });
     }
   },
+
+  // ============ MONITORING (ADMIN / HOD / CHAIR_HEAD) ============
+  // Read-only oversight: every mentor team in the selected session (or all
+  // sessions if no sessionId), each with its requirements and per-student
+  // response stats. Used by the /admin/mentor-monitoring page.
+  getMonitoring: async (req, res) => {
+    try {
+      const sessionId = req.query.sessionId || null;
+
+      const teamWhere = {};
+      if (sessionId) teamWhere.sessionId = sessionId;
+
+      const teams = await MentorTeam.findAll({
+        where: teamWhere,
+        include: [
+          { model: User, as: 'Faculty', attributes: ['id', 'firstName', 'lastName', 'email', 'approvedRole'] },
+          { model: AcademicSession, as: 'AcademicSession', attributes: ['id', 'name'] },
+          {
+            model: MentorTeamMember,
+            as: 'MentorTeamMembers',
+            include: [{
+              model: StudentSession,
+              as: 'StudentSession',
+              include: [{ model: User, as: 'Student', attributes: ['id', 'firstName', 'lastName', 'email'] }],
+            }],
+          },
+          {
+            model: MentorRequirement,
+            include: [{
+              model: MentorResponse,
+              include: [{
+                model: StudentSession,
+                as: 'StudentSession',
+                include: [{ model: User, as: 'Student', attributes: ['id', 'firstName', 'lastName', 'email'] }],
+              }],
+            }],
+          },
+        ],
+        order: [['createdAt', 'DESC']],
+      });
+
+      // Shape the response for the UI: per-team summary + per-requirement
+      // response-vs-pending counts so the frontend doesn't have to compute.
+      const out = teams.map((t) => {
+        const reqs = (t.MentorRequirements || []).map((r) => {
+          const responses = r.MentorResponses || [];
+          const memberCount = (t.MentorTeamMembers || []).length;
+          return {
+            id: r.id,
+            title: r.title,
+            description: r.description,
+            dueDate: r.dueDate,
+            createdAt: r.createdAt,
+            memberCount,
+            responseCount: responses.length,
+            pendingCount: Math.max(0, memberCount - responses.length),
+            responses: responses.map((rp) => ({
+              id: rp.id,
+              status: rp.status,
+              feedback: rp.feedback,
+              fileUrl: rp.fileUrl,
+              text: rp.text,
+              submittedAt: rp.submittedAt,
+              respondedAt: rp.respondedAt,
+              student: rp.StudentSession?.Student
+                ? {
+                    id: rp.StudentSession.Student.id,
+                    name: `${rp.StudentSession.Student.firstName || ''} ${rp.StudentSession.Student.lastName || ''}`.trim(),
+                    email: rp.StudentSession.Student.email,
+                  }
+                : null,
+            })),
+          };
+        });
+        return {
+          team: {
+            id: t.id,
+            teamName: t.teamName,
+            description: t.description,
+            status: t.status,
+            createdAt: t.createdAt,
+            Faculty: t.Faculty,
+            AcademicSession: t.AcademicSession,
+            memberCount: (t.MentorTeamMembers || []).length,
+            members: (t.MentorTeamMembers || []).map((m) => ({
+              id: m.id,
+              student: m.StudentSession?.Student
+                ? {
+                    id: m.StudentSession.Student.id,
+                    name: `${m.StudentSession.Student.firstName || ''} ${m.StudentSession.Student.lastName || ''}`.trim(),
+                    email: m.StudentSession.Student.email,
+                  }
+                : null,
+            })),
+          },
+          requirements: reqs,
+          totals: {
+            requirements: reqs.length,
+            responses: reqs.reduce((s, r) => s + r.responseCount, 0),
+            pendingResponses: reqs.reduce((s, r) => s + r.pendingCount, 0),
+          },
+        };
+      });
+
+      res.json({ teams: out });
+    } catch (error) {
+      console.error('Mentor monitoring error:', error);
+      res.status(500).json({ message: 'Failed to load monitoring data' });
+    }
+  },
 };

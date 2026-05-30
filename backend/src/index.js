@@ -263,6 +263,18 @@ async function start() {
       }
     }
 
+    // Add CHAIR_HEAD to the users.requested_role and users.approved_role
+    // ENUMs if it isn't already a member. Safe to re-run: MySQL silently
+    // succeeds when the new ENUM list already contains every existing value.
+    try {
+      const ENUM_VALUES = "'ADMIN','HOD','FACULTY','COORDINATOR','PLACEMENT_COORDINATOR','TRAINER','STUDENT','MENTOR','CHAIR_HEAD'";
+      await sequelize.query(`ALTER TABLE users MODIFY COLUMN requested_role ENUM(${ENUM_VALUES}) NOT NULL`);
+      await sequelize.query(`ALTER TABLE users MODIFY COLUMN approved_role ENUM(${ENUM_VALUES}) NULL`);
+      console.log('users.requested_role / approved_role ENUM includes CHAIR_HEAD');
+    } catch (e) {
+      console.error('Error extending users role ENUMs:', e.message);
+    }
+
     // Bootstrap default admin user
     await bootstrap();
 
