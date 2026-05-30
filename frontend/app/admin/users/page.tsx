@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { FiSearch, FiPlus, FiEdit2, FiTrash2, FiFilter, FiKey } from 'react-icons/fi';
 import useAuthStore from '@/app/store/authStore';
+import usePermissions from '@/app/lib/usePermissions';
 import apiClient from '@/app/lib/apiClient';
 import toast from 'react-hot-toast';
 import DashboardLayout from '@/app/components/DashboardLayout';
@@ -69,12 +70,14 @@ export default function UsersPage() {
   const [deleteConfirm, setDeleteConfirm] = useState<{ show: boolean; userId?: string }>({ show: false });
   const [resetPassConfirm, setResetPassConfirm] = useState<{ show: boolean; userId?: string; userName?: string }>({ show: false });
 
-  // Redirect if not admin
+  // Allow ADMIN OR users explicitly granted users.view
+  const { loaded: permsLoaded, hasPerm } = usePermissions();
   useEffect(() => {
-    if (currentUser && currentUser.role !== 'ADMIN') {
-      router.push('/dashboard');
-    }
-  }, [currentUser, router]);
+    if (!currentUser) return;
+    if (currentUser.role === 'ADMIN') return;
+    if (!permsLoaded) return;
+    if (!hasPerm('users.view')) router.push('/dashboard');
+  }, [currentUser, permsLoaded, hasPerm, router]);
 
   // Fetch users
   const fetchUsers = useCallback(async () => {

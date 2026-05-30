@@ -3,39 +3,51 @@
 import { useEffect, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import useAuthStore from '@/app/store/authStore';
+import usePermissions from '@/app/lib/usePermissions';
 
 interface ProtectedRouteProps {
   children: ReactNode;
+  /** Legacy: list of base roles that may access the route. */
   requiredRoles?: string[];
+  /**
+   * Optional: a permission key. If the user has this permission (via role
+   * default, custom role, or per-user override), they're allowed in
+   * regardless of their base role. Set this on admin-tier pages so the
+   * Roles & Permissions grid actually controls access.
+   */
+  requiredPerm?: string;
 }
 
-export default function ProtectedRoute({ children, requiredRoles = [] }: ProtectedRouteProps) {
+export default function ProtectedRoute({ children, requiredRoles = [], requiredPerm }: ProtectedRouteProps) {
   const router = useRouter();
   const { user, isAuthenticated, token } = useAuthStore();
+  const { loaded: permsLoaded, hasPerm } = usePermissions();
 
   // Wait for user to be loaded with required properties
   const isUserLoaded = user && user.role;
 
   useEffect(() => {
-    // Skip if still loading
-    if (!isUserLoaded && (isAuthenticated || token)) {
-      // Still waiting for user data to load
-      return;
-    }
+    // Still loading user data — wait
+    if (!isUserLoaded && (isAuthenticated || token)) return;
 
-    // Check if user has access
+    // Not logged in
     if (!isAuthenticated && !token) {
       router.push('/auth/login');
       return;
     }
 
     if (isAuthenticated && user) {
-      if (requiredRoles.length > 0 && !requiredRoles.includes(user.role)) {
+      const roleOK = requiredRoles.length === 0 || requiredRoles.includes(user.role);
+      // If the page also offers a permission gate, wait for perms to load
+      // before deciding (avoids a flash-redirect for users who hold the
+      // perm via override).
+      if (!roleOK && requiredPerm && !permsLoaded) return;
+      const permOK = requiredPerm ? hasPerm(requiredPerm) : false;
+      if (!roleOK && !permOK) {
         router.push('/unauthorized');
-        return;
       }
     }
-  }, [isUserLoaded, isAuthenticated, token, user?.role, router, requiredRoles]);
+  }, [isUserLoaded, isAuthenticated, token, user?.role, router, requiredRoles, requiredPerm, permsLoaded, hasPerm]);
 
   if (!isUserLoaded && (isAuthenticated || token)) {
     return (

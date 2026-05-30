@@ -24,7 +24,7 @@ import {
   FiLock,
 } from 'react-icons/fi';
 import useAuthStore from '@/app/store/authStore';
-import usePermissions from '@/app/lib/usePermissions';
+import usePermissions, { clearPermissionsCache } from '@/app/lib/usePermissions';
 import apiClient from '@/app/lib/apiClient';
 import toast from 'react-hot-toast';
 
@@ -75,6 +75,7 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
   }, [user?.id]);
 
   const handleLogout = () => {
+    clearPermissionsCache();
     logout();
     toast.success('Logged out successfully');
     router.push('/auth/login');
