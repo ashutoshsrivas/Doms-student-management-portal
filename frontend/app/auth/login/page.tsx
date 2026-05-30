@@ -38,10 +38,15 @@ export default function LoginPage() {
         HOD: '/admin/dashboard',
         STUDENT: '/student/dashboard',
         PLACEMENT_COORDINATOR: '/coordinator/dashboard',
+        COORDINATOR: '/coordinator/dashboard',
         FACULTY: '/faculty/dashboard',
+        CHAIR_HEAD: '/faculty/dashboard',
+        MENTOR: '/faculty/dashboard',
         TRAINER: '/trainer/dashboard',
       };
-      router.push(roleRoutes[result.user.role] || '/dashboard');
+      // Fallback to /profile (which exists for every role) instead of the
+      // bare /dashboard which is a 404.
+      router.push(roleRoutes[result.user.role] || '/profile');
     } catch (error: unknown) {
       const err = error as { response?: { data?: { message?: string; status?: string } }; message?: string };
       const errorMessage = err.response?.data?.message || err.message || 'Login failed';
