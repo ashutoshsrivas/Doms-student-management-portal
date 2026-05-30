@@ -1809,6 +1809,64 @@ const BlockedDate = sequelize.define('BlockedDate', {
 });
 BlockedDate.belongsTo(User, { foreignKey: 'createdBy', as: 'Creator' });
 
+// ============ PERMISSIONS LAYER ============
+// Permission catalog: every action that can be gated. Seeded on startup.
+const Permission = sequelize.define('Permission', {
+  id: {
+    type: DataTypes.UUID,
+    defaultValue: DataTypes.UUIDV4,
+    primaryKey: true,
+  },
+  key: { type: DataTypes.STRING, allowNull: false, unique: true },
+  label: { type: DataTypes.STRING, allowNull: false },
+  area: { type: DataTypes.STRING, allowNull: false },
+  description: { type: DataTypes.STRING(500), allowNull: true },
+}, {
+  tableName: 'permissions',
+  timestamps: true,
+  underscored: true,
+  indexes: [{ fields: ['area'] }],
+});
+
+// Per-base-role defaults. Composite unique on (role_name, permission_id).
+const RolePermission = sequelize.define('RolePermission', {
+  id: {
+    type: DataTypes.UUID,
+    defaultValue: DataTypes.UUIDV4,
+    primaryKey: true,
+  },
+  roleName: { type: DataTypes.STRING, allowNull: false },     // e.g. 'ADMIN', 'FACULTY'
+  permissionId: { type: DataTypes.UUID, allowNull: false },
+}, {
+  tableName: 'role_permissions',
+  timestamps: true,
+  underscored: true,
+  indexes: [{ unique: true, fields: ['role_name', 'permission_id'] }],
+});
+RolePermission.belongsTo(Permission, { foreignKey: 'permissionId', as: 'Permission' });
+
+// Per-user overrides. `granted=true` adds a permission the role normally
+// wouldn't have; `granted=false` revokes one it normally would. Sparse — most
+// users have zero rows here.
+const UserPermission = sequelize.define('UserPermission', {
+  id: {
+    type: DataTypes.UUID,
+    defaultValue: DataTypes.UUIDV4,
+    primaryKey: true,
+  },
+  userId: { type: DataTypes.UUID, allowNull: false },
+  permissionId: { type: DataTypes.UUID, allowNull: false },
+  granted: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
+}, {
+  tableName: 'user_permissions',
+  timestamps: true,
+  underscored: true,
+  indexes: [{ unique: true, fields: ['user_id', 'permission_id'] }],
+});
+UserPermission.belongsTo(User, { foreignKey: 'userId', as: 'User', onDelete: 'CASCADE' });
+UserPermission.belongsTo(Permission, { foreignKey: 'permissionId', as: 'Permission' });
+User.hasMany(UserPermission, { foreignKey: 'userId', as: 'PermissionOverrides', onDelete: 'CASCADE' });
+
 const FacultyNote = sequelize.define('FacultyNote', {
   id: {
     type: DataTypes.UUID,
@@ -1875,4 +1933,7 @@ module.exports = {
   FacultyTaskUpdate,
   Event,
   BlockedDate,
+  Permission,
+  RolePermission,
+  UserPermission,
 };

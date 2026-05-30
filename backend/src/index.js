@@ -4,6 +4,7 @@ const express = require('express');
 const cors = require('cors');
 const { sequelize } = require('./config/database');
 const bootstrap = require('./bootstrap');
+const { seedPermissions } = require('./permissions/seeder');
 const authRoutes = require('./routes/authRoutes');
 const userRoutes = require('./routes/userRoutes');
 const sessionRoutes = require('./routes/sessionRoutes');
@@ -261,6 +262,14 @@ async function start() {
           console.error(`Error adding ${col.name} to faculty_tasks:`, error.message);
         }
       }
+    }
+
+    // Seed permission catalog + role defaults (idempotent).
+    try {
+      const { Permission, RolePermission } = require('./models');
+      await seedPermissions({ Permission, RolePermission });
+    } catch (e) {
+      console.error('Permission seeder failed:', e.message);
     }
 
     // Bootstrap default admin user

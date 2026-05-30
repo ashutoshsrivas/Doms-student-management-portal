@@ -3,6 +3,7 @@ const router = express.Router();
 const authController = require('../controllers/authController');
 const { authenticateToken, authorizeRole } = require('../middleware/auth');
 const { upload } = require('../middleware/upload');
+const { getEffectivePermissions } = require('../permissions/service');
 
 // Public routes
 router.post('/signup', authController.signup);
@@ -11,6 +12,21 @@ router.post('/refresh-token', authController.refreshToken);
 
 // Protected routes
 router.get('/profile', authenticateToken, authController.getProfile);
+
+// Effective permissions for the logged-in user — the frontend uses this
+// to drive sidebar/button visibility hints. The backend re-enforces every
+// permission server-side so this is UX only.
+router.get('/me/permissions', authenticateToken, async (req, res, next) => {
+  try {
+    const perms = await getEffectivePermissions(req.user);
+    res.json({
+      role: req.user.role,
+      permissions: Array.from(perms).sort(),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
 router.put('/profile', authenticateToken, upload.single('profileImage'), authController.updateProfile);
 router.post('/logout', authenticateToken, authController.logout);
 router.post('/reset-password', authenticateToken, authController.resetPassword);
