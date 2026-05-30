@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { FiPlus, FiEdit2, FiTrash2, FiUsers, FiChevronDown } from 'react-icons/fi';
 import useAuthStore from '@/app/store/authStore';
-import usePermissions from '@/app/lib/usePermissions';
 import apiClient from '@/app/lib/apiClient';
 import toast from 'react-hot-toast';
 import DashboardLayout from '@/app/components/DashboardLayout';
@@ -247,11 +246,8 @@ export default function MentorTeamManagement() {
     }));
   };
 
-  const { loaded: permsLoaded, hasPerm } = usePermissions();
-  if (!user) return null;
-  if (user.role !== 'ADMIN') {
-    if (!permsLoaded) return null;
-    if (!hasPerm('mentors.view_all')) return null;
+  if (!user || user.role !== 'ADMIN') {
+    return null;
   }
 
   return (

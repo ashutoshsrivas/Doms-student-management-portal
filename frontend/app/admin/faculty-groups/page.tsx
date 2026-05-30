@@ -13,7 +13,6 @@ import {
 } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 import useAuthStore from '@/app/store/authStore';
-import usePermissions from '@/app/lib/usePermissions';
 import apiClient from '@/app/lib/apiClient';
 import DashboardLayout from '@/app/components/DashboardLayout';
 
@@ -68,13 +67,9 @@ export default function AdminFacultyGroupsPage() {
   // Member-picker for right pane "add member"
   const [memberSearch, setMemberSearch] = useState('');
 
-  const { loaded: permsLoaded, hasPerm } = usePermissions();
   useEffect(() => {
-    if (!user) return;
-    if (user.role === 'ADMIN') return;
-    if (!permsLoaded) return;
-    if (!hasPerm('groups.view')) router.push('/dashboard');
-  }, [user, permsLoaded, hasPerm, router]);
+    if (user && user.role !== 'ADMIN') router.push('/dashboard');
+  }, [user, router]);
 
   const load = useCallback(async () => {
     setLoading(true);

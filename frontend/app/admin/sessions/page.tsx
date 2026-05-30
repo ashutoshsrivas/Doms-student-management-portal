@@ -15,7 +15,6 @@ import {
   FiChevronRight,
 } from 'react-icons/fi';
 import useAuthStore from '@/app/store/authStore';
-import usePermissions from '@/app/lib/usePermissions';
 import apiClient from '@/app/lib/apiClient';
 import toast from 'react-hot-toast';
 import DashboardLayout from '@/app/components/DashboardLayout';
@@ -74,14 +73,12 @@ export default function SessionsPage() {
   const [copying, setCopying] = useState(false);
   const [uploading, setUploading] = useState(false);
 
-  // Allow ADMIN OR users explicitly granted sessions.view
-  const { loaded: permsLoaded, hasPerm } = usePermissions();
+  // Redirect if not admin
   useEffect(() => {
-    if (!user) return;
-    if (user.role === 'ADMIN') return;
-    if (!permsLoaded) return;
-    if (!hasPerm('sessions.view')) router.push('/dashboard');
-  }, [user, permsLoaded, hasPerm, router]);
+    if (user?.role !== 'ADMIN') {
+      router.push('/dashboard');
+    }
+  }, [user?.role, router]);
 
   // Fetch sessions
   const fetchSessions = useCallback(async () => {

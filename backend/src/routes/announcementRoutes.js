@@ -1,25 +1,29 @@
 const express = require('express');
 const router = express.Router();
-const { authenticateToken } = require('../middleware/auth');
-const { requirePerm } = require('../permissions/service');
+const { authenticateToken, authorizeRole } = require('../middleware/auth');
 const { assessmentUpload } = require('../middleware/upload');
 const announcementController = require('../controllers/announcementController');
 
-// Public — no auth required
+// Public route - get all public announcements (no auth required)
 router.get('/public', announcementController.getPublicAnnouncements);
 
-// Single announcement — requires auth to evaluate private-vs-public visibility
+// Get single announcement (requires auth to check permissions for private announcements)
 router.get('/:id', authenticateToken, announcementController.getAnnouncementById);
 
-// List all announcements visible to the user
+// Protected routes - require authentication
+// Get all announcements (public + private)
 router.get('/', authenticateToken, announcementController.getAllAnnouncements);
 
-// Create / update / delete / archive — gated by permission keys.
-// Defaults seeded so ADMIN, HOD, PLACEMENT_COORDINATOR all have
-// `announcements.create` etc. → behavior matches the prior role-only gate.
-router.post('/',          authenticateToken, requirePerm('announcements.create'), assessmentUpload.single('file'), announcementController.createAnnouncement);
-router.put('/:id',        authenticateToken, requirePerm('announcements.edit'),   assessmentUpload.single('file'), announcementController.updateAnnouncement);
-router.delete('/:id',     authenticateToken, requirePerm('announcements.delete'), announcementController.deleteAnnouncement);
-router.patch('/:id/archive', authenticateToken, requirePerm('announcements.edit'), announcementController.archiveAnnouncement);
+// Create announcement (only Admin, HOD, Placement Coordinator)
+router.post('/', authenticateToken, authorizeRole('ADMIN', 'HOD', 'PLACEMENT_COORDINATOR'), assessmentUpload.single('file'), announcementController.createAnnouncement);
+
+// Update announcement
+router.put('/:id', authenticateToken, authorizeRole('ADMIN', 'HOD', 'PLACEMENT_COORDINATOR'), assessmentUpload.single('file'), announcementController.updateAnnouncement);
+
+// Delete announcement
+router.delete('/:id', authenticateToken, authorizeRole('ADMIN', 'HOD', 'PLACEMENT_COORDINATOR'), announcementController.deleteAnnouncement);
+
+// Archive announcement
+router.patch('/:id/archive', authenticateToken, authorizeRole('ADMIN', 'HOD', 'PLACEMENT_COORDINATOR'), announcementController.archiveAnnouncement);
 
 module.exports = router;

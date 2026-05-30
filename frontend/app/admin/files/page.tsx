@@ -727,7 +727,7 @@ function FileManagerContent() {
 
 export default function FileManagementPage() {
   return (
-    <ProtectedRoute requiredRoles={['ADMIN']} requiredPerm="files.view">
+    <ProtectedRoute requiredRoles={['ADMIN']}>
       <FileManagerContent />
     </ProtectedRoute>
   );

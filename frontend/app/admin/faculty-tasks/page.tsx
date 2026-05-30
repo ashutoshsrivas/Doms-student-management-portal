@@ -17,7 +17,6 @@ import {
 } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 import useAuthStore from '@/app/store/authStore';
-import usePermissions from '@/app/lib/usePermissions';
 import apiClient from '@/app/lib/apiClient';
 import DashboardLayout from '@/app/components/DashboardLayout';
 import FacultyTaskExtras from '@/app/components/FacultyTaskExtras';
@@ -200,14 +199,10 @@ export default function AdminFacultyTasksPage() {
   const [bulkCreating, setBulkCreating] = useState(false);
   const [bulkSearch, setBulkSearch] = useState('');
 
-  // Role / permission gate — allow ADMIN or anyone granted tasks.view_all
-  const { loaded: permsLoaded, hasPerm } = usePermissions();
+  // Role gate
   useEffect(() => {
-    if (!user) return;
-    if (user.role === 'ADMIN') return;
-    if (!permsLoaded) return;
-    if (!hasPerm('tasks.view_all')) router.push('/dashboard');
-  }, [user, permsLoaded, hasPerm, router]);
+    if (user && user.role !== 'ADMIN') router.push('/dashboard');
+  }, [user, router]);
 
   const loadSummary = useCallback(async () => {
     setLoading(true);

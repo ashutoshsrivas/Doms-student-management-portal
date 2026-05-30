@@ -4,7 +4,6 @@ const express = require('express');
 const cors = require('cors');
 const { sequelize } = require('./config/database');
 const bootstrap = require('./bootstrap');
-const { seedPermissions } = require('./permissions/seeder');
 const authRoutes = require('./routes/authRoutes');
 const userRoutes = require('./routes/userRoutes');
 const sessionRoutes = require('./routes/sessionRoutes');
@@ -25,8 +24,6 @@ const facultyTaskRoutes = require('./routes/facultyTaskRoutes');
 const facultyNoteRoutes = require('./routes/facultyNoteRoutes');
 const facultyGroupRoutes = require('./routes/facultyGroupRoutes');
 const eventRoutes = require('./routes/eventRoutes');
-const permissionRoutes = require('./routes/permissionRoutes');
-const customRoleRoutes = require('./routes/customRoleRoutes');
 const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
@@ -75,8 +72,6 @@ app.use('/api/faculty-tasks', facultyTaskRoutes);
 app.use('/api/faculty-notes', facultyNoteRoutes);
 app.use('/api/faculty-groups', facultyGroupRoutes);
 app.use('/api/events', eventRoutes);
-app.use('/api/permissions', permissionRoutes);
-app.use('/api/custom-roles', customRoleRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
@@ -266,14 +261,6 @@ async function start() {
           console.error(`Error adding ${col.name} to faculty_tasks:`, error.message);
         }
       }
-    }
-
-    // Seed permission catalog + role defaults (idempotent).
-    try {
-      const { Permission, RolePermission } = require('./models');
-      await seedPermissions({ Permission, RolePermission });
-    } catch (e) {
-      console.error('Permission seeder failed:', e.message);
     }
 
     // Bootstrap default admin user

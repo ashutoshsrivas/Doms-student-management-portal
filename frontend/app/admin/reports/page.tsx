@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { FiDownload, FiFileText, FiGrid, FiLoader, FiAlertCircle } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 import useAuthStore from '@/app/store/authStore';
-import usePermissions from '@/app/lib/usePermissions';
 import apiClient from '@/app/lib/apiClient';
 import DashboardLayout from '@/app/components/DashboardLayout';
 import { exportToExcel, exportToPDF, type ReportPayload } from '@/app/lib/reportExports';
@@ -56,15 +55,14 @@ export default function AdminReportsPage() {
     }
   }, []);
 
-  const { loaded: permsLoaded, hasPerm } = usePermissions();
   useEffect(() => {
     if (!user) return;
     if (user.role !== 'ADMIN') {
-      if (!permsLoaded) return;
-      if (!hasPerm('reports.view')) { router.push('/dashboard'); return; }
+      router.push('/dashboard');
+      return;
     }
     loadCatalog();
-  }, [user, permsLoaded, hasPerm, router, loadCatalog]);
+  }, [user, router, loadCatalog]);
 
   const fetchReport = useCallback(
     async (r: ReportType): Promise<ReportPayload | null> => {

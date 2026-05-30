@@ -21,10 +21,8 @@ import {
   FiHardDrive,
   FiFileText,
   FiClipboard,
-  FiLock,
 } from 'react-icons/fi';
 import useAuthStore from '@/app/store/authStore';
-import usePermissions, { clearPermissionsCache } from '@/app/lib/usePermissions';
 import apiClient from '@/app/lib/apiClient';
 import toast from 'react-hot-toast';
 
@@ -32,10 +30,6 @@ interface NavItem {
   name: string;
   href: string;
   iconKey: string;
-  /** If set, the item also appears for any user who has this permission
-   *  even if their base role doesn't list it. Used to bubble up new
-   *  capabilities granted via Roles & Permissions. */
-  requiredPerm?: string;
   children?: NavItem[];
 }
 
@@ -48,7 +42,6 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
   const router = useRouter();
   const pathname = usePathname();
   const { user, logout, setUser } = useAuthStore();
-  const { hasPerm } = usePermissions();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [profileImage, setProfileImage] = useState<string | null>(null);
@@ -75,58 +68,46 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
   }, [user?.id]);
 
   const handleLogout = () => {
-    clearPermissionsCache();
     logout();
     toast.success('Logged out successfully');
     router.push('/auth/login');
   };
 
   const getNavigation = (): NavItem[] => {
-    const baseNav: NavItem[] = [
+    const baseNav = [
       { name: 'Profile', href: '/profile', iconKey: 'user' },
     ];
 
-    const sipChildren: NavItem[] = [
+    const sipChildren = [
       { name: 'SIP Questions', href: '/admin/sip-questions', iconKey: 'helpCircle' },
     ];
-    const studentSipChildren: NavItem[] = [
+    const studentSipChildren = [
       { name: 'SIP Questions', href: '/student/sip-questions', iconKey: 'helpCircle' },
     ];
-    const facultyTasksChildren: NavItem[] = [
-      { name: 'Pending Queue', href: '/admin/pending-tasks', iconKey: 'check', requiredPerm: 'tasks.view_pending_queue' },
-      { name: 'Faculty Groups', href: '/admin/faculty-groups', iconKey: 'users', requiredPerm: 'groups.view' },
+    const facultyTasksChildren = [
+      { name: 'Pending Queue', href: '/admin/pending-tasks', iconKey: 'check' },
+      { name: 'Faculty Groups', href: '/admin/faculty-groups', iconKey: 'users' },
     ];
-    const adminAnnouncementsChildren: NavItem[] = [
+    const adminAnnouncementsChildren = [
       { name: 'Posts', href: '/admin/announcements', iconKey: 'bell' },
       { name: 'Event Calendar', href: '/events', iconKey: 'calendar' },
     ];
-    const studentAnnouncementsChildren: NavItem[] = [
+    const studentAnnouncementsChildren = [
       { name: 'Posts', href: '/student/announcements', iconKey: 'bell' },
       { name: 'Event Calendar', href: '/events', iconKey: 'calendar' },
     ];
 
-    // Admin-tier items, each tagged with the permission that should
-    // surface them in any user's sidebar. ADMIN by default has all of
-    // these. Other roles only see one if they've been granted the
-    // matching permission via Roles & Permissions.
-    const adminItems: NavItem[] = [
-      { name: 'Users',            href: '/admin/users',             iconKey: 'users',     requiredPerm: 'users.view' },
-      { name: 'Sessions',         href: '/admin/sessions',          iconKey: 'calendar',  requiredPerm: 'sessions.view' },
-      { name: 'Assessments',      href: '/admin/assessments',       iconKey: 'check',     requiredPerm: 'assessments.view_all' },
-      { name: 'Mentor Teams',     href: '/admin/mentors',           iconKey: 'users',     requiredPerm: 'mentors.view_all' },
-      { name: 'Internships (SIP)',href: '/admin/sip',               iconKey: 'briefcase', requiredPerm: 'sip.view_all', children: sipChildren },
-      { name: 'File Management',  href: '/admin/files',             iconKey: 'hardDrive', requiredPerm: 'files.view' },
-      { name: 'Reports',          href: '/admin/reports',           iconKey: 'fileText',  requiredPerm: 'reports.view' },
-      { name: 'Faculty Tasks',    href: '/admin/faculty-tasks',     iconKey: 'clipboard', requiredPerm: 'tasks.view_all', children: facultyTasksChildren },
-      { name: 'Roles & Permissions', href: '/admin/roles-permissions', iconKey: 'lock',   requiredPerm: 'admin.manage_roles' },
-    ];
-
-    // Per-role self-service items + things every user of that role
-    // sees regardless of permission grants.
     const roleNav: Record<string, NavItem[]> = {
       ADMIN: [
         { name: 'Dashboard', href: '/admin/dashboard', iconKey: 'chart' },
-        ...adminItems,
+        { name: 'Users', href: '/admin/users', iconKey: 'users' },
+        { name: 'Sessions', href: '/admin/sessions', iconKey: 'calendar' },
+        { name: 'Assessments', href: '/admin/assessments', iconKey: 'check' },
+        { name: 'Mentor Teams', href: '/admin/mentors', iconKey: 'users' },
+        { name: 'Internships (SIP)', href: '/admin/sip', iconKey: 'briefcase', children: sipChildren },
+        { name: 'File Management', href: '/admin/files', iconKey: 'hardDrive' },
+        { name: 'Reports', href: '/admin/reports', iconKey: 'fileText' },
+        { name: 'Faculty Tasks', href: '/admin/faculty-tasks', iconKey: 'clipboard', children: facultyTasksChildren },
         { name: 'Announcements', href: '/admin/announcements', iconKey: 'bell', children: adminAnnouncementsChildren },
       ],
       FACULTY: [
@@ -177,37 +158,7 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
       ],
     };
 
-    const roleItems = roleNav[user?.role as string] || [];
-
-    // Bubble in admin-tier items the user has been granted permission for
-    // but that aren't already in their role list. This is what makes the
-    // grid in /admin/roles-permissions actually reflect in the sidebar
-    // (e.g. admin grants HOD `users.view` → HOD's sidebar now shows Users).
-    const presentHrefs = new Set<string>();
-    const collect = (items: NavItem[]) => {
-      for (const it of items) {
-        presentHrefs.add(it.href);
-        if (it.children) collect(it.children);
-      }
-    };
-    collect(roleItems);
-    const bubbled = adminItems.filter((it) =>
-      !presentHrefs.has(it.href) && it.requiredPerm && hasPerm(it.requiredPerm),
-    );
-
-    // Filter children by their requiredPerm (so e.g. Faculty Tasks → Pending
-    // Queue hides if the user lacks tasks.view_pending_queue).
-    const filterChildren = (items: NavItem[]): NavItem[] => items.map((it) => {
-      if (!it.children) return it;
-      const kept = it.children.filter((c) => !c.requiredPerm || hasPerm(c.requiredPerm));
-      return { ...it, children: kept };
-    });
-
-    return [
-      ...filterChildren(roleItems),
-      ...filterChildren(bubbled),
-      ...baseNav,
-    ];
+    return [...(roleNav[user?.role as string] || []), ...baseNav];
   };
 
   const getIcon = (iconKey: string) => {
@@ -225,7 +176,6 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
       hardDrive:  <FiHardDrive className="w-4.5 h-4.5" />,
       fileText:   <FiFileText className="w-4.5 h-4.5" />,
       clipboard:  <FiClipboard className="w-4.5 h-4.5" />,
-      lock:       <FiLock className="w-4.5 h-4.5" />,
     };
     return iconMap[iconKey] || <FiBarChart2 className="w-4.5 h-4.5" />;
   };
