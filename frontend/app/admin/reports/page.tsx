@@ -57,7 +57,7 @@ export default function AdminReportsPage() {
 
   useEffect(() => {
     if (!user) return;
-    if (user.role !== 'ADMIN') {
+    if (!['ADMIN', 'HOD'].includes(user.role)) {
       router.push('/dashboard');
       return;
     }

@@ -75,7 +75,7 @@ export default function SessionsPage() {
 
   // Redirect if not admin
   useEffect(() => {
-    if (user?.role !== 'ADMIN') {
+    if (!['ADMIN', 'HOD'].includes(user?.role || '')) {
       router.push('/dashboard');
     }
   }, [user?.role, router]);

@@ -117,9 +117,18 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
         { name: 'My Tasks', href: '/faculty/tasks', iconKey: 'clipboard' },
         { name: 'Announcements', href: '/student/announcements', iconKey: 'bell', children: studentAnnouncementsChildren },
       ],
+      // HOD = ADMIN clone (same sidebar, same access). Only difference is
+      // the role label on their account.
       HOD: [
         { name: 'Dashboard', href: '/admin/dashboard', iconKey: 'chart' },
+        { name: 'Users', href: '/admin/users', iconKey: 'users' },
+        { name: 'Sessions', href: '/admin/sessions', iconKey: 'calendar' },
+        { name: 'Assessments', href: '/admin/assessments', iconKey: 'check' },
+        { name: 'Mentor Teams', href: '/admin/mentors', iconKey: 'users' },
         { name: 'Internships (SIP)', href: '/admin/sip', iconKey: 'briefcase', children: sipChildren },
+        { name: 'File Management', href: '/admin/files', iconKey: 'hardDrive' },
+        { name: 'Reports', href: '/admin/reports', iconKey: 'fileText' },
+        { name: 'Faculty Tasks', href: '/admin/faculty-tasks', iconKey: 'clipboard', children: facultyTasksChildren },
         { name: 'My Tasks', href: '/faculty/tasks', iconKey: 'clipboard' },
         { name: 'Announcements', href: '/admin/announcements', iconKey: 'bell', children: adminAnnouncementsChildren },
       ],

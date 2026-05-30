@@ -19,19 +19,19 @@ router.post('/reset-password', authenticateToken, authController.resetPassword);
 router.get(
   '/pending-requests',
   authenticateToken,
-  authorizeRole('ADMIN'),
+  authorizeRole('ADMIN', 'HOD'),
   authController.getPendingRequests
 );
 router.post(
   '/approve-user',
   authenticateToken,
-  authorizeRole('ADMIN'),
+  authorizeRole('ADMIN', 'HOD'),
   authController.approveUser
 );
 router.post(
   '/reject-user',
   authenticateToken,
-  authorizeRole('ADMIN'),
+  authorizeRole('ADMIN', 'HOD'),
   authController.rejectUser
 );
 

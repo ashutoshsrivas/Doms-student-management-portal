@@ -19,31 +19,31 @@ router.get('/me/categories', authenticateToken, sessionController.getStudentEnro
 router.post(
   '/',
   authenticateToken,
-  authorizeRole('ADMIN'),
+  authorizeRole('ADMIN', 'HOD'),
   sessionController.createSession
 );
 router.put(
   '/:sessionId',
   authenticateToken,
-  authorizeRole('ADMIN'),
+  authorizeRole('ADMIN', 'HOD'),
   sessionController.updateSession
 );
 router.post(
   '/:sessionId/activate',
   authenticateToken,
-  authorizeRole('ADMIN'),
+  authorizeRole('ADMIN', 'HOD'),
   sessionController.activateSession
 );
 router.post(
   '/:sessionId/onboard-student',
   authenticateToken,
-  authorizeRole('ADMIN'),
+  authorizeRole('ADMIN', 'HOD'),
   sessionController.onboardStudent
 );
 router.post(
   '/:sessionId/upload-students',
   authenticateToken,
-  authorizeRole('ADMIN'),
+  authorizeRole('ADMIN', 'HOD'),
   excelUpload.single('file'),
   (err, req, res, next) => {
     // Handle multer errors
@@ -58,7 +58,7 @@ router.post(
 router.post(
   '/:sessionId/create-registration-link',
   authenticateToken,
-  authorizeRole('ADMIN'),
+  authorizeRole('ADMIN', 'HOD'),
   sessionController.createRegistrationLink
 );
 router.get(
@@ -69,7 +69,7 @@ router.get(
 router.delete(
   '/:studentSessionId/drop-student',
   authenticateToken,
-  authorizeRole('ADMIN'),
+  authorizeRole('ADMIN', 'HOD'),
   sessionController.dropStudent
 );
 
@@ -77,7 +77,7 @@ router.delete(
 router.post(
   '/:sessionId/categories',
   authenticateToken,
-  authorizeRole('ADMIN'),
+  authorizeRole('ADMIN', 'HOD'),
   sessionController.createCategory
 );
 router.get(
@@ -88,31 +88,31 @@ router.get(
 router.put(
   '/categories/:categoryId',
   authenticateToken,
-  authorizeRole('ADMIN'),
+  authorizeRole('ADMIN', 'HOD'),
   sessionController.updateCategory
 );
 router.delete(
   '/categories/:categoryId',
   authenticateToken,
-  authorizeRole('ADMIN'),
+  authorizeRole('ADMIN', 'HOD'),
   sessionController.deleteCategory
 );
 router.post(
   '/categories/:categoryId/assign',
   authenticateToken,
-  authorizeRole('ADMIN'),
+  authorizeRole('ADMIN', 'HOD'),
   sessionController.assignStudentToCategory
 );
 router.post(
   '/categories/:categoryId/assign-bulk',
   authenticateToken,
-  authorizeRole('ADMIN'),
+  authorizeRole('ADMIN', 'HOD'),
   sessionController.bulkAssignStudentsToCategory
 );
 router.post(
   '/categories/:categoryId/remove',
   authenticateToken,
-  authorizeRole('ADMIN'),
+  authorizeRole('ADMIN', 'HOD'),
   sessionController.removeStudentFromCategory
 );
 router.get(

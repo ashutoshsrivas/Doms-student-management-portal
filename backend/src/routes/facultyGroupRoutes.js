@@ -4,7 +4,7 @@ const facultyGroupController = require('../controllers/facultyGroupController');
 const { authenticateToken, authorizeRole } = require('../middleware/auth');
 
 // Groups management is admin-only.
-router.use(authenticateToken, authorizeRole('ADMIN'));
+router.use(authenticateToken, authorizeRole('ADMIN', 'HOD'));
 
 router.get('/', facultyGroupController.list);
 router.post('/', facultyGroupController.create);

@@ -8,14 +8,14 @@ const { upload, resumeUpload } = require('../middleware/upload');
 router.get(
   '/admin/filter',
   authenticateToken,
-  authorizeRole('ADMIN'),
+  authorizeRole('ADMIN', 'HOD'),
   userController.getUsersWithFilters
 );
 
 router.get(
   '/admin/statistics',
   authenticateToken,
-  authorizeRole('ADMIN'),
+  authorizeRole('ADMIN', 'HOD'),
   userController.getUserStatistics
 );
 
@@ -23,7 +23,7 @@ router.get(
 router.get(
   '/',
   authenticateToken,
-  authorizeRole('ADMIN'),
+  authorizeRole('ADMIN', 'HOD'),
   userController.getAllUsers
 );
 
@@ -67,7 +67,7 @@ router.delete(
 router.post(
   '/',
   authenticateToken,
-  authorizeRole('ADMIN'),
+  authorizeRole('ADMIN', 'HOD'),
   userController.createUser
 );
 
@@ -75,7 +75,7 @@ router.post(
 router.put(
   '/:userId',
   authenticateToken,
-  authorizeRole('ADMIN'),
+  authorizeRole('ADMIN', 'HOD'),
   userController.updateUser
 );
 
@@ -83,7 +83,7 @@ router.put(
 router.post(
   '/:userId/reset-password',
   authenticateToken,
-  authorizeRole('ADMIN'),
+  authorizeRole('ADMIN', 'HOD'),
   userController.resetUserPassword
 );
 
@@ -91,7 +91,7 @@ router.post(
 router.delete(
   '/:userId',
   authenticateToken,
-  authorizeRole('ADMIN'),
+  authorizeRole('ADMIN', 'HOD'),
   userController.deleteUser
 );
 
@@ -99,7 +99,7 @@ router.delete(
 router.put(
   '/:userId/role',
   authenticateToken,
-  authorizeRole('ADMIN'),
+  authorizeRole('ADMIN', 'HOD'),
   userController.updateUserRole
 );
 
@@ -107,7 +107,7 @@ router.put(
 router.put(
   '/:userId/deactivate',
   authenticateToken,
-  authorizeRole('ADMIN'),
+  authorizeRole('ADMIN', 'HOD'),
   userController.deactivateUser
 );
 
@@ -115,7 +115,7 @@ router.put(
 router.put(
   '/:userId/reactivate',
   authenticateToken,
-  authorizeRole('ADMIN'),
+  authorizeRole('ADMIN', 'HOD'),
   userController.reactivateUser
 );
 

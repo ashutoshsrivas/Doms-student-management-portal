@@ -71,7 +71,7 @@ export default function UsersPage() {
 
   // Redirect if not admin
   useEffect(() => {
-    if (currentUser && currentUser.role !== 'ADMIN') {
+    if (currentUser && !['ADMIN', 'HOD'].includes(currentUser.role)) {
       router.push('/dashboard');
     }
   }, [currentUser, router]);

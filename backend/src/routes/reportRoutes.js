@@ -4,7 +4,7 @@ const reportController = require('../controllers/reportController');
 const { authenticateToken, authorizeRole } = require('../middleware/auth');
 
 // Every report route requires an authenticated ADMIN.
-router.use(authenticateToken, authorizeRole('ADMIN'));
+router.use(authenticateToken, authorizeRole('ADMIN', 'HOD'));
 
 // Metadata
 router.get('/types', reportController.listReports);

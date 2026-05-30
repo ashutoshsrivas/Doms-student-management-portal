@@ -201,7 +201,7 @@ export default function AdminFacultyTasksPage() {
 
   // Role gate
   useEffect(() => {
-    if (user && user.role !== 'ADMIN') router.push('/dashboard');
+    if (user && !['ADMIN', 'HOD'].includes(user.role)) router.push('/dashboard');
   }, [user, router]);
 
   const loadSummary = useCallback(async () => {

@@ -7,12 +7,12 @@ const { assessmentUpload } = require('../middleware/upload');
 router.use(authenticateToken);
 
 // --- Admin-only routes (specific paths first, before any :id catch) ------
-router.post('/', authorizeRole('ADMIN'), facultyTaskController.create);
-router.post('/bulk', authorizeRole('ADMIN'), facultyTaskController.bulkCreate);
-router.get('/summary', authorizeRole('ADMIN'), facultyTaskController.summary);
-router.get('/report', authorizeRole('ADMIN'), facultyTaskController.report);
-router.get('/pending-queue', authorizeRole('ADMIN'), facultyTaskController.pendingQueue);
-router.get('/performance-report', authorizeRole('ADMIN'), facultyTaskController.performanceReport);
+router.post('/', authorizeRole('ADMIN', 'HOD'), facultyTaskController.create);
+router.post('/bulk', authorizeRole('ADMIN', 'HOD'), facultyTaskController.bulkCreate);
+router.get('/summary', authorizeRole('ADMIN', 'HOD'), facultyTaskController.summary);
+router.get('/report', authorizeRole('ADMIN', 'HOD'), facultyTaskController.report);
+router.get('/pending-queue', authorizeRole('ADMIN', 'HOD'), facultyTaskController.pendingQueue);
+router.get('/performance-report', authorizeRole('ADMIN', 'HOD'), facultyTaskController.performanceReport);
 
 // --- Authenticated user (gating inside the controller) -------------------
 // /accuracy must come before /:id, otherwise express matches "accuracy" as
@@ -31,7 +31,7 @@ router.post('/:id/updates', facultyTaskController.postUpdate);
 
 // Extension flow
 router.post('/:id/extension', facultyTaskController.requestExtension);
-router.patch('/:id/extension', authorizeRole('ADMIN'), facultyTaskController.respondExtension);
+router.patch('/:id/extension', authorizeRole('ADMIN', 'HOD'), facultyTaskController.respondExtension);
 router.delete('/:id/extension', facultyTaskController.cancelExtension);
 
 // Mark-done (assignee or admin)
@@ -42,9 +42,9 @@ router.patch(
 );
 
 // Admin-only edits
-router.patch('/:id', authorizeRole('ADMIN'), facultyTaskController.update);
-router.patch('/:id/remark', authorizeRole('ADMIN'), facultyTaskController.setRemark);
-router.patch('/:id/reopen', authorizeRole('ADMIN'), facultyTaskController.reopen);
-router.delete('/:id', authorizeRole('ADMIN'), facultyTaskController.remove);
+router.patch('/:id', authorizeRole('ADMIN', 'HOD'), facultyTaskController.update);
+router.patch('/:id/remark', authorizeRole('ADMIN', 'HOD'), facultyTaskController.setRemark);
+router.patch('/:id/reopen', authorizeRole('ADMIN', 'HOD'), facultyTaskController.reopen);
+router.delete('/:id', authorizeRole('ADMIN', 'HOD'), facultyTaskController.remove);
 
 module.exports = router;

@@ -8,7 +8,7 @@
 const { Op } = require('sequelize');
 const { FacultyGroup, FacultyGroupMember, User } = require('../models');
 
-const ASSIGNABLE_ROLES = ['HOD', 'FACULTY', 'COORDINATOR', 'PLACEMENT_COORDINATOR', 'TRAINER', 'MENTOR'];
+const ASSIGNABLE_ROLES = ['ADMIN', 'HOD', 'FACULTY', 'COORDINATOR', 'PLACEMENT_COORDINATOR', 'TRAINER', 'MENTOR'];
 
 const sanitiseName = (s) => (s || '').toString().trim().slice(0, 200);
 const sanitiseText = (s, max = 2000) => (s == null ? null : String(s).slice(0, max));

@@ -68,7 +68,7 @@ export default function AdminFacultyGroupsPage() {
   const [memberSearch, setMemberSearch] = useState('');
 
   useEffect(() => {
-    if (user && user.role !== 'ADMIN') router.push('/dashboard');
+    if (user && !['ADMIN', 'HOD'].includes(user.role)) router.push('/dashboard');
   }, [user, router]);
 
   const load = useCallback(async () => {

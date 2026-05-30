@@ -31,12 +31,12 @@ async function findBlockingDate(startAt) {
 
 function canEdit(user, event) {
   if (!user) return false;
-  if (user.role === 'ADMIN') return true;
+  if (user.role === 'ADMIN' || user.role === 'HOD') return true;
   return event.createdBy === user.id;
 }
 function canSeeReport(user, event) {
   if (!user) return false;
-  if (user.role === 'ADMIN') return true;
+  if (user.role === 'ADMIN' || user.role === 'HOD') return true;
   return event.createdBy === user.id;
 }
 
@@ -110,7 +110,7 @@ const eventController = {
       }
 
       // Block-list check (admin can still create on a blocked date)
-      if (req.user.role !== 'ADMIN') {
+      if (!['ADMIN', 'HOD'].includes(req.user.role)) {
         const blocked = await findBlockingDate(startAt);
         if (blocked) {
           return res.status(400).json({
@@ -184,7 +184,7 @@ const eventController = {
       if (req.body?.startAt !== undefined) {
         const d = req.body.startAt ? new Date(req.body.startAt) : null;
         if (!d || isNaN(d.getTime())) return res.status(400).json({ message: 'Invalid startAt' });
-        if (req.user.role !== 'ADMIN') {
+        if (!['ADMIN', 'HOD'].includes(req.user.role)) {
           const blocked = await findBlockingDate(d);
           if (blocked) {
             return res.status(400).json({
@@ -261,7 +261,7 @@ const eventController = {
     try {
       const event = await Event.findByPk(req.params.id);
       if (!event) return res.status(404).json({ message: 'Event not found' });
-      if (req.user.id !== event.createdBy && req.user.role !== 'ADMIN') {
+      if (req.user.id !== event.createdBy && !['ADMIN', 'HOD'].includes(req.user.role)) {
         return res.status(403).json({ message: 'Only the event creator can upload the report' });
       }
       if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
@@ -293,7 +293,7 @@ const eventController = {
   // Admin always sees the post-event report metadata (no scrub).
   report: async (req, res) => {
     try {
-      if (req.user.role !== 'ADMIN') {
+      if (!['ADMIN', 'HOD'].includes(req.user.role)) {
         return res.status(403).json({ message: 'Admin only' });
       }
       const start = req.query.start ? new Date(req.query.start) : null;
@@ -411,7 +411,7 @@ eventController.listBlockedDates = async (req, res) => {
 
 eventController.blockDate = async (req, res) => {
   try {
-    if (req.user.role !== 'ADMIN') return res.status(403).json({ message: 'Admin only' });
+    if (!['ADMIN', 'HOD'].includes(req.user.role)) return res.status(403).json({ message: 'Admin only' });
     const date = (req.body?.date || '').toString().trim();
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       return res.status(400).json({ message: 'date must be YYYY-MM-DD' });
@@ -451,7 +451,7 @@ eventController.blockDate = async (req, res) => {
 // events (with a reason in the skipped[] list) and dates already blocked.
 eventController.bulkBlockDates = async (req, res) => {
   try {
-    if (req.user.role !== 'ADMIN') return res.status(403).json({ message: 'Admin only' });
+    if (!['ADMIN', 'HOD'].includes(req.user.role)) return res.status(403).json({ message: 'Admin only' });
     const from = (req.body?.from || '').toString().trim();
     const to = (req.body?.to || '').toString().trim();
     if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) {
@@ -525,7 +525,7 @@ eventController.bulkBlockDates = async (req, res) => {
 
 eventController.unblockDate = async (req, res) => {
   try {
-    if (req.user.role !== 'ADMIN') return res.status(403).json({ message: 'Admin only' });
+    if (!['ADMIN', 'HOD'].includes(req.user.role)) return res.status(403).json({ message: 'Admin only' });
     const row = await BlockedDate.findByPk(req.params.id);
     if (!row) return res.status(404).json({ message: 'Not blocked' });
     await row.destroy();

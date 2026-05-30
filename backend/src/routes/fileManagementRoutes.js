@@ -6,7 +6,7 @@ const ctrl = require('../controllers/fileManagementController');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
 
-const adminOnly = [authenticateToken, authorizeRole('ADMIN')];
+const adminOnly = [authenticateToken, authorizeRole('ADMIN', 'HOD')];
 
 router.get('/folders',        ...adminOnly, ctrl.listFolders);
 router.get('/files',          ...adminOnly, ctrl.listFiles);

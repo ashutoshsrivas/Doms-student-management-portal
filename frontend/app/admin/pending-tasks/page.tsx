@@ -60,7 +60,7 @@ export default function AdminPendingTasksPage() {
   const [priorityFilter, setPriorityFilter] = useState<'ALL' | Priority>('ALL');
 
   useEffect(() => {
-    if (user && user.role !== 'ADMIN') router.push('/dashboard');
+    if (user && !['ADMIN', 'HOD'].includes(user.role)) router.push('/dashboard');
   }, [user, router]);
 
   const load = useCallback(async () => {

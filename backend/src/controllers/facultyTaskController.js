@@ -9,7 +9,8 @@ const { sequelize } = require('../config/database');
 const { FacultyTask, User, FacultyGroup, FacultyGroupMember, FacultyTaskUpdate } = require('../models');
 const { uploadToS3, deleteFromS3 } = require('../utils/s3Upload');
 
-const ASSIGNABLE_ROLES = ['HOD', 'FACULTY', 'COORDINATOR', 'PLACEMENT_COORDINATOR', 'TRAINER', 'MENTOR'];
+// ADMIN is included so HOD can hand admins tasks too (and vice versa).
+const ASSIGNABLE_ROLES = ['ADMIN', 'HOD', 'FACULTY', 'COORDINATOR', 'PLACEMENT_COORDINATOR', 'TRAINER', 'MENTOR'];
 const PRIORITIES = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'];
 
 const sanitiseTitle = (s) => (s || '').toString().trim().slice(0, 250);
@@ -18,7 +19,7 @@ const sanitisePriority = (p) => (PRIORITIES.includes(p) ? p : 'MEDIUM');
 
 function canViewTask(user, task) {
   if (!user) return false;
-  if (user.role === 'ADMIN') return true;
+  if (user.role === 'ADMIN' || user.role === 'HOD') return true;
   return task.assigneeId === user.id;
 }
 
@@ -127,7 +128,7 @@ const facultyTaskController = {
     try {
       const { assigneeId, status } = req.query;
       const where = {};
-      if (req.user.role === 'ADMIN') {
+      if (req.user.role === 'ADMIN' || req.user.role === 'HOD') {
         if (assigneeId) where.assigneeId = String(assigneeId);
       } else {
         where.assigneeId = req.user.id;
@@ -281,7 +282,7 @@ const facultyTaskController = {
       const task = await FacultyTask.findByPk(req.params.id);
       if (!task) return res.status(404).json({ message: 'Task not found' });
 
-      if (req.user.role !== 'ADMIN' && task.assigneeId !== req.user.id) {
+      if (!['ADMIN', 'HOD'].includes(req.user.role) && task.assigneeId !== req.user.id) {
         return res.status(403).json({ message: 'Only the assignee or an admin can complete this task' });
       }
 
@@ -599,7 +600,7 @@ const facultyTaskController = {
   accuracy: async (req, res) => {
     try {
       const requestedId = (req.query.userId || req.user.id).toString();
-      if (req.user.role !== 'ADMIN' && requestedId !== req.user.id) {
+      if (!['ADMIN', 'HOD'].includes(req.user.role) && requestedId !== req.user.id) {
         return res.status(403).json({ message: 'Forbidden' });
       }
       const tasks = await FacultyTask.findAll({
@@ -702,7 +703,7 @@ const facultyTaskController = {
     try {
       const row = await FacultyTaskUpdate.findByPk(req.params.updateId);
       if (!row) return res.status(404).json({ message: 'Update not found' });
-      if (req.user.role !== 'ADMIN' && row.userId !== req.user.id) {
+      if (!['ADMIN', 'HOD'].includes(req.user.role) && row.userId !== req.user.id) {
         return res.status(403).json({ message: 'Only the author or an admin can delete this' });
       }
       await row.destroy();
@@ -721,7 +722,7 @@ const facultyTaskController = {
     try {
       const task = await FacultyTask.findByPk(req.params.id);
       if (!task) return res.status(404).json({ message: 'Task not found' });
-      if (task.assigneeId !== req.user.id && req.user.role !== 'ADMIN') {
+      if (task.assigneeId !== req.user.id && !['ADMIN', 'HOD'].includes(req.user.role)) {
         return res.status(403).json({ message: 'Only the assignee can request extension' });
       }
       if (task.status === 'COMPLETED') {
@@ -824,7 +825,7 @@ const facultyTaskController = {
     try {
       const task = await FacultyTask.findByPk(req.params.id);
       if (!task) return res.status(404).json({ message: 'Task not found' });
-      if (task.assigneeId !== req.user.id && req.user.role !== 'ADMIN') {
+      if (task.assigneeId !== req.user.id && !['ADMIN', 'HOD'].includes(req.user.role)) {
         return res.status(403).json({ message: 'Forbidden' });
       }
       if (task.extensionStatus !== 'PENDING') {

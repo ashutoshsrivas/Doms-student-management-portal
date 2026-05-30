@@ -3,7 +3,7 @@ const router = express.Router();
 const facultyNoteController = require('../controllers/facultyNoteController');
 const { authenticateToken, authorizeRole } = require('../middleware/auth');
 
-router.use(authenticateToken, authorizeRole('ADMIN'));
+router.use(authenticateToken, authorizeRole('ADMIN', 'HOD'));
 
 router.post('/', facultyNoteController.create);
 router.get('/', facultyNoteController.list);

@@ -23,7 +23,7 @@ module.exports = {
       }
 
       // Check authorization
-      if (assessment.createdBy !== userId && req.user.role !== 'ADMIN') {
+      if (assessment.createdBy !== userId && !['ADMIN', 'HOD'].includes(req.user.role)) {
         return res.status(403).json({ message: 'Not authorized to create rubric for this assessment' });
       }
 
@@ -190,7 +190,7 @@ module.exports = {
       }
 
       // Check authorization
-      if (rubric.createdBy !== userId && req.user.role !== 'ADMIN') {
+      if (rubric.createdBy !== userId && !['ADMIN', 'HOD'].includes(req.user.role)) {
         return res.status(403).json({ message: 'Not authorized to update this rubric' });
       }
 
@@ -222,7 +222,7 @@ module.exports = {
       }
 
       // Check authorization
-      if (rubric.createdBy !== userId && req.user.role !== 'ADMIN') {
+      if (rubric.createdBy !== userId && !['ADMIN', 'HOD'].includes(req.user.role)) {
         return res.status(403).json({ message: 'Not authorized to delete this rubric' });
       }
 
@@ -269,7 +269,7 @@ module.exports = {
       }
 
       // Check authorization
-      if (rubric.createdBy !== userId && req.user.role !== 'ADMIN') {
+      if (rubric.createdBy !== userId && !['ADMIN', 'HOD'].includes(req.user.role)) {
         return res.status(403).json({ message: 'Not authorized to add criteria to this rubric' });
       }
 
@@ -313,7 +313,7 @@ module.exports = {
       }
 
       // Check authorization
-      if (criterion.Rubric.createdBy !== userId && req.user.role !== 'ADMIN') {
+      if (criterion.Rubric.createdBy !== userId && !['ADMIN', 'HOD'].includes(req.user.role)) {
         return res.status(403).json({ message: 'Not authorized to update this criteria' });
       }
 
@@ -356,7 +356,7 @@ module.exports = {
       }
 
       // Check authorization
-      if (criterion.Rubric.createdBy !== userId && req.user.role !== 'ADMIN') {
+      if (criterion.Rubric.createdBy !== userId && !['ADMIN', 'HOD'].includes(req.user.role)) {
         return res.status(403).json({ message: 'Not authorized to delete this criteria' });
       }
 
@@ -398,7 +398,7 @@ module.exports = {
       }
 
       // Check authorization - only assessment creator or admin can grade
-      if (submission.Assessment.createdBy !== userId && req.user.role !== 'ADMIN') {
+      if (submission.Assessment.createdBy !== userId && !['ADMIN', 'HOD'].includes(req.user.role)) {
         return res.status(403).json({ message: 'Not authorized to grade this submission' });
       }
 

@@ -16,7 +16,7 @@ router.use((req, res, next) => {
 router.post(
   '/teams',
   authenticateToken,
-  authorizeRole('ADMIN'),
+  authorizeRole('ADMIN', 'HOD'),
   mentorController.createMentorTeam
 );
 
@@ -38,7 +38,7 @@ router.get(
 router.put(
   '/teams/:teamId',
   authenticateToken,
-  authorizeRole('ADMIN'),
+  authorizeRole('ADMIN', 'HOD'),
   mentorController.updateMentorTeam
 );
 
@@ -46,7 +46,7 @@ router.put(
 router.delete(
   '/teams/:teamId',
   authenticateToken,
-  authorizeRole('ADMIN'),
+  authorizeRole('ADMIN', 'HOD'),
   mentorController.deleteMentorTeam
 );
 
@@ -54,7 +54,7 @@ router.delete(
 router.post(
   '/teams/:teamId/members',
   authenticateToken,
-  authorizeRole('ADMIN'),
+  authorizeRole('ADMIN', 'HOD'),
   mentorController.addTeamMembers
 );
 
@@ -62,7 +62,7 @@ router.post(
 router.delete(
   '/teams/:teamId/members/:memberId',
   authenticateToken,
-  authorizeRole('ADMIN'),
+  authorizeRole('ADMIN', 'HOD'),
   mentorController.removeTeamMember
 );
 
@@ -72,7 +72,7 @@ router.delete(
 router.post(
   '/teams/:teamId/requirements',
   authenticateToken,
-  authorizeRole('FACULTY', 'ADMIN'),
+  authorizeRole('FACULTY', 'ADMIN', 'HOD'),
   mentorController.createRequirement
 );
 
@@ -94,7 +94,7 @@ router.get(
 router.put(
   '/requirements/:requirementId',
   authenticateToken,
-  authorizeRole('FACULTY', 'ADMIN'),
+  authorizeRole('FACULTY', 'ADMIN', 'HOD'),
   mentorController.updateRequirement
 );
 
@@ -102,7 +102,7 @@ router.put(
 router.delete(
   '/requirements/:requirementId',
   authenticateToken,
-  authorizeRole('FACULTY', 'ADMIN'),
+  authorizeRole('FACULTY', 'ADMIN', 'HOD'),
   mentorController.deleteRequirement
 );
 
@@ -121,7 +121,7 @@ router.post(
 router.get(
   '/requirements/:requirementId/responses',
   authenticateToken,
-  authorizeRole('FACULTY', 'ADMIN'),
+  authorizeRole('FACULTY', 'ADMIN', 'HOD'),
   mentorController.getRequirementResponses
 );
 
@@ -137,7 +137,7 @@ router.get(
 router.put(
   '/responses/:responseId/feedback',
   authenticateToken,
-  authorizeRole('FACULTY', 'ADMIN'),
+  authorizeRole('FACULTY', 'ADMIN', 'HOD'),
   mentorController.provideFeedback
 );
 
