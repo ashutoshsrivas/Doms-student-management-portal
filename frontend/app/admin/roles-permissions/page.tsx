@@ -202,14 +202,22 @@ export default function RolesPermissionsPage() {
           </button>
         </div>
 
-        {/* Safety note */}
+        {/* Safety notes */}
+        <div className="bg-green-50 border-l-4 border-green-500 p-3 mb-2 text-xs text-green-900">
+          <p className="font-bold uppercase tracking-wide">🛡 Self-lockout protection ON</p>
+          <p className="mt-1">
+            The server refuses any change that would remove your own
+            <code className="bg-green-100 px-1 rounded mx-1">admin.manage_roles</code>
+            permission — whether via a role default, a user override, a custom-role edit, or
+            an unassignment. You can&apos;t accidentally lock yourself out of this page.
+          </p>
+        </div>
         <div className="bg-yellow-50 border-l-4 border-yellow-400 p-3 mb-4 text-xs text-yellow-900">
-          <p className="font-bold uppercase tracking-wide">⚠ Heads up</p>
+          <p className="font-bold uppercase tracking-wide">⚠ Migration note</p>
           <p className="mt-1">
             Some routes still use the older role-only gate and will not yet reflect your edits here —
             we&apos;re migrating them feature-by-feature. The most-touched areas (Events, Faculty Groups,
-            Announcements) are migrated; others follow soon. Revoking <code>admin.manage_roles</code>
-            from yourself will lock you out of this page — don&apos;t do that.
+            Announcements, Faculty Tasks) are migrated; sessions, users, SIP, files and mentor teams follow.
           </p>
         </div>
 

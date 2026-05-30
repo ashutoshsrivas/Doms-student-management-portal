@@ -14,13 +14,17 @@ const { Permission, RolePermission, UserPermission, UserCustomRole, CustomRolePe
  *
  * Returns Set<string>.
  */
-async function getEffectivePermissions(user) {
+// opts.transaction lets a mutation pre-check whether the caller would lose
+// `admin.manage_roles` after a not-yet-committed change in the same tx.
+async function getEffectivePermissions(user, opts = {}) {
+  const { transaction } = opts;
   if (!user || !user.role) return new Set();
   // 1) Base role defaults
   const rolePerms = await RolePermission.findAll({
     where: { roleName: user.role },
     attributes: ['permissionId'],
     include: [{ model: Permission, as: 'Permission', attributes: ['key'] }],
+    transaction,
   });
   const effective = new Set();
   for (const rp of rolePerms) {
@@ -32,6 +36,7 @@ async function getEffectivePermissions(user) {
   const customAssignments = await UserCustomRole.findAll({
     where: { userId: user.id },
     attributes: ['customRoleId'],
+    transaction,
   });
   if (customAssignments.length) {
     const customRoleIds = customAssignments.map((a) => a.customRoleId);
@@ -39,6 +44,7 @@ async function getEffectivePermissions(user) {
       where: { customRoleId: { [Op.in]: customRoleIds } },
       attributes: ['permissionId'],
       include: [{ model: Permission, as: 'Permission', attributes: ['key'] }],
+      transaction,
     });
     for (const cp of customPerms) {
       if (cp.Permission?.key) effective.add(cp.Permission.key);
@@ -50,6 +56,7 @@ async function getEffectivePermissions(user) {
     where: { userId: user.id },
     attributes: ['granted'],
     include: [{ model: Permission, as: 'Permission', attributes: ['key'] }],
+    transaction,
   });
   for (const uo of overrides) {
     const k = uo.Permission?.key;
@@ -58,6 +65,20 @@ async function getEffectivePermissions(user) {
     else effective.delete(k);
   }
   return effective;
+}
+
+/**
+ * Helper for admin endpoints — call inside a transaction after applying a
+ * change. Returns null if OK; otherwise returns a string error message to
+ * surface to the client. Caller is responsible for the rollback.
+ */
+async function checkAdminNotLockedOut(callerUser, transaction) {
+  const effective = await getEffectivePermissions(callerUser, { transaction });
+  if (!effective.has('admin.manage_roles')) {
+    return 'This change would remove your own ability to manage roles & permissions. Refused to prevent self-lockout. ' +
+      'Ask another admin to make the change, or grant yourself the permission first via a different path.';
+  }
+  return null;
 }
 
 /** Does this user have a specific permission key? */
@@ -116,4 +137,4 @@ function requireAnyPerm(...keys) {
   };
 }
 
-module.exports = { getEffectivePermissions, hasPermission, requirePerm, requireAnyPerm };
+module.exports = { getEffectivePermissions, hasPermission, requirePerm, requireAnyPerm, checkAdminNotLockedOut };

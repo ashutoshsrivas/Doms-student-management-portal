@@ -1,7 +1,9 @@
 // Admin-defined custom roles. All endpoints require admin.manage_roles.
 
 const { Op } = require('sequelize');
+const { sequelize } = require('../config/database');
 const { CustomRole, CustomRolePermission, UserCustomRole, Permission, User } = require('../models');
+const { checkAdminNotLockedOut } = require('../permissions/service');
 
 const includeAll = {
   model: CustomRolePermission,
@@ -98,49 +100,67 @@ exports.create = async (req, res) => {
 
 // PATCH /api/custom-roles/:id   { name?, description?, permissionKeys? (REPLACES the set) }
 exports.update = async (req, res) => {
+  const t = await sequelize.transaction();
   try {
-    const role = await CustomRole.findByPk(req.params.id);
-    if (!role) return res.status(404).json({ message: 'Not found' });
+    const role = await CustomRole.findByPk(req.params.id, { transaction: t });
+    if (!role) { await t.rollback(); return res.status(404).json({ message: 'Not found' }); }
     const patch = {};
     if (req.body?.name !== undefined) {
       const n = sanitiseName(req.body.name);
-      if (!n) return res.status(400).json({ message: 'Name cannot be empty' });
+      if (!n) { await t.rollback(); return res.status(400).json({ message: 'Name cannot be empty' }); }
       patch.name = n;
     }
     if (req.body?.description !== undefined) {
       patch.description = req.body.description ? String(req.body.description).slice(0, 500) : null;
     }
-    await role.update(patch);
+    await role.update(patch, { transaction: t });
 
-    // If permissionKeys is provided, REPLACE the permission set (most intuitive)
     if (Array.isArray(req.body?.permissionKeys)) {
       const desiredKeys = req.body.permissionKeys;
       const desiredPerms = await Permission.findAll({
         where: { key: { [Op.in]: desiredKeys } },
         attributes: ['id', 'key'],
+        transaction: t,
       });
       const desiredIds = new Set(desiredPerms.map((p) => p.id));
-      const current = await CustomRolePermission.findAll({ where: { customRoleId: role.id } });
+      const current = await CustomRolePermission.findAll({
+        where: { customRoleId: role.id },
+        transaction: t,
+      });
       const currentIds = new Set(current.map((c) => c.permissionId));
-      // Delete removed
       const toDelete = current.filter((c) => !desiredIds.has(c.permissionId));
       if (toDelete.length) {
         await CustomRolePermission.destroy({
-          where: { id: { [Op.in]: toDelete.map((t) => t.id) } },
+          where: { id: { [Op.in]: toDelete.map((x) => x.id) } },
+          transaction: t,
         });
       }
-      // Add new
       const toAdd = desiredPerms.filter((p) => !currentIds.has(p.id));
       if (toAdd.length) {
         await CustomRolePermission.bulkCreate(
           toAdd.map((p) => ({ customRoleId: role.id, permissionId: p.id })),
-          { ignoreDuplicates: true },
+          { ignoreDuplicates: true, transaction: t },
         );
       }
     }
+
+    // Lockout guard — relevant only if the caller is assigned this custom role
+    const callerAssigned = await UserCustomRole.findOne({
+      where: { userId: req.user.id, customRoleId: role.id },
+      transaction: t,
+    });
+    if (callerAssigned) {
+      const lockoutMsg = await checkAdminNotLockedOut(req.user, t);
+      if (lockoutMsg) {
+        await t.rollback();
+        return res.status(400).json({ message: lockoutMsg, code: 'WOULD_LOCK_OUT_SELF' });
+      }
+    }
+    await t.commit();
     const full = await CustomRole.findByPk(role.id, { include: [includeAll, includeCreator] });
     res.json({ customRole: full });
   } catch (err) {
+    await t.rollback();
     console.error('CustomRole update error:', err);
     res.status(500).json({ message: 'Failed' });
   }
@@ -148,12 +168,27 @@ exports.update = async (req, res) => {
 
 // DELETE /api/custom-roles/:id  → cascades to assignments + permissions
 exports.remove = async (req, res) => {
+  const t = await sequelize.transaction();
   try {
-    const role = await CustomRole.findByPk(req.params.id);
-    if (!role) return res.status(404).json({ message: 'Not found' });
-    await role.destroy();
+    const role = await CustomRole.findByPk(req.params.id, { transaction: t });
+    if (!role) { await t.rollback(); return res.status(404).json({ message: 'Not found' }); }
+    const callerAssigned = await UserCustomRole.findOne({
+      where: { userId: req.user.id, customRoleId: role.id },
+      transaction: t,
+    });
+    await role.destroy({ transaction: t });
+
+    if (callerAssigned) {
+      const lockoutMsg = await checkAdminNotLockedOut(req.user, t);
+      if (lockoutMsg) {
+        await t.rollback();
+        return res.status(400).json({ message: lockoutMsg, code: 'WOULD_LOCK_OUT_SELF' });
+      }
+    }
+    await t.commit();
     res.json({ message: 'Custom role deleted', id: req.params.id });
   } catch (err) {
+    await t.rollback();
     console.error('CustomRole delete error:', err);
     res.status(500).json({ message: 'Failed' });
   }
@@ -181,13 +216,25 @@ exports.assign = async (req, res) => {
 
 // DELETE /api/custom-roles/:id/assign/:userId
 exports.unassign = async (req, res) => {
+  const t = await sequelize.transaction();
   try {
     const removed = await UserCustomRole.destroy({
       where: { customRoleId: req.params.id, userId: req.params.userId },
+      transaction: t,
     });
-    if (!removed) return res.status(404).json({ message: 'Assignment not found' });
+    if (!removed) { await t.rollback(); return res.status(404).json({ message: 'Assignment not found' }); }
+
+    if (req.params.userId === req.user.id) {
+      const lockoutMsg = await checkAdminNotLockedOut(req.user, t);
+      if (lockoutMsg) {
+        await t.rollback();
+        return res.status(400).json({ message: lockoutMsg, code: 'WOULD_LOCK_OUT_SELF' });
+      }
+    }
+    await t.commit();
     res.json({ ok: true });
   } catch (err) {
+    await t.rollback();
     console.error('CustomRole unassign error:', err);
     res.status(500).json({ message: 'Failed' });
   }

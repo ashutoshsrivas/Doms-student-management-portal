@@ -10,9 +10,10 @@
 //   GET    /users                            → list of assignable users for the picker
 
 const { Op } = require('sequelize');
+const { sequelize } = require('../config/database');
 const { Permission, RolePermission, UserPermission, User } = require('../models');
 const { ALL_ROLES } = require('../permissions/catalog');
-const { getEffectivePermissions } = require('../permissions/service');
+const { getEffectivePermissions, checkAdminNotLockedOut } = require('../permissions/service');
 
 // GET /api/permissions
 // Response:
@@ -63,25 +64,40 @@ exports.listPermissions = async (req, res) => {
 // granted=true  → ensure row exists (idempotent)
 // granted=false → delete row
 exports.setRoleDefault = async (req, res) => {
+  const t = await sequelize.transaction();
   try {
     const { roleName, permissionKey } = req.params;
     const { granted } = req.body || {};
     if (!ALL_ROLES.includes(roleName)) {
+      await t.rollback();
       return res.status(400).json({ message: `Unknown role: ${roleName}` });
     }
-    const perm = await Permission.findOne({ where: { key: permissionKey } });
-    if (!perm) return res.status(404).json({ message: 'Permission not found' });
+    const perm = await Permission.findOne({ where: { key: permissionKey }, transaction: t });
+    if (!perm) { await t.rollback(); return res.status(404).json({ message: 'Permission not found' }); }
 
     if (granted) {
       await RolePermission.findOrCreate({
         where: { roleName, permissionId: perm.id },
         defaults: { roleName, permissionId: perm.id },
+        transaction: t,
       });
     } else {
-      await RolePermission.destroy({ where: { roleName, permissionId: perm.id } });
+      await RolePermission.destroy({
+        where: { roleName, permissionId: perm.id },
+        transaction: t,
+      });
     }
+
+    // Self-lockout guard
+    const lockoutMsg = await checkAdminNotLockedOut(req.user, t);
+    if (lockoutMsg) {
+      await t.rollback();
+      return res.status(400).json({ message: lockoutMsg, code: 'WOULD_LOCK_OUT_SELF' });
+    }
+    await t.commit();
     res.json({ ok: true, roleName, permissionKey, granted: !!granted });
   } catch (err) {
+    await t.rollback();
     console.error('setRoleDefault error:', err);
     res.status(500).json({ message: 'Failed to update' });
   }
@@ -126,30 +142,46 @@ exports.getUserPermissions = async (req, res) => {
 
 // PATCH /api/permissions/user/:userId/:permissionKey   { state: 'grant'|'revoke'|'reset' }
 exports.setUserOverride = async (req, res) => {
+  const t = await sequelize.transaction();
   try {
     const { userId, permissionKey } = req.params;
     const { state } = req.body || {};
     if (!['grant', 'revoke', 'reset'].includes(state)) {
+      await t.rollback();
       return res.status(400).json({ message: 'state must be grant|revoke|reset' });
     }
-    const user = await User.findByPk(userId);
-    if (!user) return res.status(404).json({ message: 'User not found' });
-    const perm = await Permission.findOne({ where: { key: permissionKey } });
-    if (!perm) return res.status(404).json({ message: 'Permission not found' });
+    const user = await User.findByPk(userId, { transaction: t });
+    if (!user) { await t.rollback(); return res.status(404).json({ message: 'User not found' }); }
+    const perm = await Permission.findOne({ where: { key: permissionKey }, transaction: t });
+    if (!perm) { await t.rollback(); return res.status(404).json({ message: 'Permission not found' }); }
 
     if (state === 'reset') {
-      await UserPermission.destroy({ where: { userId, permissionId: perm.id } });
+      await UserPermission.destroy({
+        where: { userId, permissionId: perm.id },
+        transaction: t,
+      });
     } else {
       const granted = state === 'grant';
-      // Upsert
       const [row, created] = await UserPermission.findOrCreate({
         where: { userId, permissionId: perm.id },
         defaults: { userId, permissionId: perm.id, granted },
+        transaction: t,
       });
-      if (!created && row.granted !== granted) await row.update({ granted });
+      if (!created && row.granted !== granted) await row.update({ granted }, { transaction: t });
     }
+
+    // Self-lockout guard — only relevant if the affected user IS the caller
+    if (userId === req.user.id) {
+      const lockoutMsg = await checkAdminNotLockedOut(req.user, t);
+      if (lockoutMsg) {
+        await t.rollback();
+        return res.status(400).json({ message: lockoutMsg, code: 'WOULD_LOCK_OUT_SELF' });
+      }
+    }
+    await t.commit();
     res.json({ ok: true, userId, permissionKey, state });
   } catch (err) {
+    await t.rollback();
     console.error('setUserOverride error:', err);
     res.status(500).json({ message: 'Failed to update override' });
   }
