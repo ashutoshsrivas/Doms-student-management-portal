@@ -73,6 +73,7 @@ app.use('/api/faculty-tasks', facultyTaskRoutes);
 app.use('/api/faculty-notes', facultyNoteRoutes);
 app.use('/api/faculty-groups', facultyGroupRoutes);
 app.use('/api/events', eventRoutes);
+app.use('/api/permissions', permissionRoutes);
 
 // Health check
 app.get('/health', (req, res) => {

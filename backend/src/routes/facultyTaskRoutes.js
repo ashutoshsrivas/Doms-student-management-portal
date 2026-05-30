@@ -1,50 +1,42 @@
 const express = require('express');
 const router = express.Router();
 const facultyTaskController = require('../controllers/facultyTaskController');
-const { authenticateToken, authorizeRole } = require('../middleware/auth');
+const { authenticateToken } = require('../middleware/auth');
+const { requirePerm } = require('../permissions/service');
 const { assessmentUpload } = require('../middleware/upload');
 
 router.use(authenticateToken);
 
-// --- Admin-only routes (specific paths first, before any :id catch) ------
-router.post('/', authorizeRole('ADMIN'), facultyTaskController.create);
-router.post('/bulk', authorizeRole('ADMIN'), facultyTaskController.bulkCreate);
-router.get('/summary', authorizeRole('ADMIN'), facultyTaskController.summary);
-router.get('/report', authorizeRole('ADMIN'), facultyTaskController.report);
-router.get('/pending-queue', authorizeRole('ADMIN'), facultyTaskController.pendingQueue);
-router.get('/performance-report', authorizeRole('ADMIN'), facultyTaskController.performanceReport);
+// --- Admin-permission-gated routes (specific paths first, before any :id) -----
+router.post('/',                requirePerm('tasks.assign'),                       facultyTaskController.create);
+router.post('/bulk',            requirePerm('tasks.bulk_assign'),                  facultyTaskController.bulkCreate);
+router.get('/summary',          requirePerm('tasks.view_all'),                     facultyTaskController.summary);
+router.get('/report',           requirePerm('tasks.view_all'),                     facultyTaskController.report);
+router.get('/pending-queue',    requirePerm('tasks.view_pending_queue'),           facultyTaskController.pendingQueue);
+router.get('/performance-report', requirePerm('tasks.download_performance_report'), facultyTaskController.performanceReport);
 
-// --- Authenticated user (gating inside the controller) -------------------
-// /accuracy must come before /:id, otherwise express matches "accuracy" as
-// an :id.
-router.get('/accuracy', facultyTaskController.accuracy);
-
-// Trail updates — author or admin can delete. Mounted with its own
-// path so it doesn't clash with task :id routes.
+// --- Authenticated user (gating inside the controller) -----------------------
+router.get('/accuracy',             facultyTaskController.accuracy);
 router.delete('/updates/:updateId', facultyTaskController.removeUpdate);
 
-router.get('/', facultyTaskController.list);
-router.get('/:id', facultyTaskController.get);
+router.get('/',     facultyTaskController.list);
+router.get('/:id',  facultyTaskController.get);
 
-router.get('/:id/updates', facultyTaskController.listUpdates);
+router.get('/:id/updates',  facultyTaskController.listUpdates);
 router.post('/:id/updates', facultyTaskController.postUpdate);
 
 // Extension flow
-router.post('/:id/extension', facultyTaskController.requestExtension);
-router.patch('/:id/extension', authorizeRole('ADMIN'), facultyTaskController.respondExtension);
-router.delete('/:id/extension', facultyTaskController.cancelExtension);
+router.post('/:id/extension',                                          facultyTaskController.requestExtension);
+router.patch('/:id/extension',  requirePerm('tasks.respond_extension'), facultyTaskController.respondExtension);
+router.delete('/:id/extension',                                         facultyTaskController.cancelExtension);
 
 // Mark-done (assignee or admin)
-router.patch(
-  '/:id/complete',
-  assessmentUpload.single('document'),
-  facultyTaskController.complete,
-);
+router.patch('/:id/complete', assessmentUpload.single('document'), facultyTaskController.complete);
 
-// Admin-only edits
-router.patch('/:id', authorizeRole('ADMIN'), facultyTaskController.update);
-router.patch('/:id/remark', authorizeRole('ADMIN'), facultyTaskController.setRemark);
-router.patch('/:id/reopen', authorizeRole('ADMIN'), facultyTaskController.reopen);
-router.delete('/:id', authorizeRole('ADMIN'), facultyTaskController.remove);
+// Admin-permission-gated edits
+router.patch('/:id',         requirePerm('tasks.edit_any'),    facultyTaskController.update);
+router.patch('/:id/remark',  requirePerm('tasks.remark'),      facultyTaskController.setRemark);
+router.patch('/:id/reopen',  requirePerm('tasks.edit_any'),    facultyTaskController.reopen);
+router.delete('/:id',        requirePerm('tasks.delete_any'),  facultyTaskController.remove);
 
 module.exports = router;

@@ -21,6 +21,7 @@ import {
   FiHardDrive,
   FiFileText,
   FiClipboard,
+  FiLock,
 } from 'react-icons/fi';
 import useAuthStore from '@/app/store/authStore';
 import apiClient from '@/app/lib/apiClient';
@@ -108,6 +109,7 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
         { name: 'File Management', href: '/admin/files', iconKey: 'hardDrive' },
         { name: 'Reports', href: '/admin/reports', iconKey: 'fileText' },
         { name: 'Faculty Tasks', href: '/admin/faculty-tasks', iconKey: 'clipboard', children: facultyTasksChildren },
+        { name: 'Roles & Permissions', href: '/admin/roles-permissions', iconKey: 'lock' },
         { name: 'Announcements', href: '/admin/announcements', iconKey: 'bell', children: adminAnnouncementsChildren },
       ],
       FACULTY: [
@@ -176,6 +178,7 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
       hardDrive:  <FiHardDrive className="w-4.5 h-4.5" />,
       fileText:   <FiFileText className="w-4.5 h-4.5" />,
       clipboard:  <FiClipboard className="w-4.5 h-4.5" />,
+      lock:       <FiLock className="w-4.5 h-4.5" />,
     };
     return iconMap[iconKey] || <FiBarChart2 className="w-4.5 h-4.5" />;
   };
