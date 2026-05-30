@@ -12,6 +12,7 @@ import { useRouter } from 'next/navigation';
 import {
   FiLock, FiArrowLeft, FiLoader, FiSearch, FiCheck, FiX,
   FiAlertCircle, FiUserCheck, FiUser, FiRefreshCw,
+  FiPlus, FiEdit2, FiTrash2, FiTag, FiSave, FiUserPlus, FiUserMinus,
 } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 import useAuthStore from '@/app/store/authStore';
@@ -58,7 +59,7 @@ export default function RolesPermissionsPage() {
   const router = useRouter();
   const { user } = useAuthStore();
 
-  const [tab, setTab] = useState<'roles' | 'users'>('roles');
+  const [tab, setTab] = useState<'roles' | 'users' | 'custom'>('roles');
   const [loading, setLoading] = useState(true);
   const [catalog, setCatalog] = useState<Catalog | null>(null);
   const [areaFilter, setAreaFilter] = useState<string>('ALL');
@@ -226,6 +227,12 @@ export default function RolesPermissionsPage() {
           >
             <FiUser /> User Overrides
           </button>
+          <button
+            onClick={() => setTab('custom')}
+            className={`px-4 py-2 -mb-px border-b-2 text-sm font-semibold flex items-center gap-2 ${tab === 'custom' ? 'border-blue-600 text-blue-700' : 'border-transparent text-gray-600 hover:text-gray-900'}`}
+          >
+            <FiTag /> Custom Roles
+          </button>
         </div>
 
         {tab === 'roles' && catalog && (
@@ -308,6 +315,10 @@ export default function RolesPermissionsPage() {
               </table>
             </div>
           </>
+        )}
+
+        {tab === 'custom' && (
+          <CustomRolesTab catalog={catalog} />
         )}
 
         {tab === 'users' && (
@@ -463,6 +474,451 @@ function UserOverrideEditor({ detail, catalog, savingKey, onChange }: {
             </ul>
           </section>
         ))}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// Custom Roles tab
+// ============================================================================
+
+interface CustomRoleSummary {
+  id: string;
+  name: string;
+  description: string | null;
+  permissionKeys: string[];
+  assigneeCount: number;
+  Creator?: { firstName: string; lastName: string | null; email: string };
+  createdAt: string;
+}
+interface CustomRoleDetail extends CustomRoleSummary {
+  assignees: { id: string; firstName: string; lastName: string | null; email: string; approvedRole: string; department?: string }[];
+}
+
+function CustomRolesTab({ catalog }: { catalog: Catalog | null }) {
+  const [roles, setRoles] = useState<CustomRoleSummary[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedId, setSelectedId] = useState<string>('');
+  const [detail, setDetail] = useState<CustomRoleDetail | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await apiClient.get('/custom-roles');
+      setRoles(res.data.customRoles || []);
+    } catch { toast.error('Failed to load custom roles'); }
+    finally { setLoading(false); }
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  const loadDetail = useCallback(async (id: string) => {
+    if (!id) { setDetail(null); return; }
+    try {
+      const res = await apiClient.get(`/custom-roles/${id}`);
+      setDetail(res.data.customRole);
+    } catch { toast.error('Failed to load detail'); }
+  }, []);
+  useEffect(() => { loadDetail(selectedId); }, [selectedId, loadDetail]);
+
+  const handleDelete = async (r: CustomRoleSummary) => {
+    if (!confirm(`Delete custom role "${r.name}"? This unassigns it from ${r.assigneeCount} user(s).`)) return;
+    try {
+      await apiClient.delete(`/custom-roles/${r.id}`);
+      toast.success('Deleted');
+      if (selectedId === r.id) setSelectedId('');
+      load();
+    } catch { toast.error('Failed to delete'); }
+  };
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <aside className="lg:col-span-1 bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
+        <div className="px-3 py-2 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
+          <span className="text-xs uppercase font-semibold text-gray-600">All custom roles ({roles.length})</span>
+          <button
+            onClick={() => setShowCreate(true)}
+            className="flex items-center gap-1 px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold"
+          >
+            <FiPlus /> New
+          </button>
+        </div>
+        {loading ? (
+          <p className="p-4 text-sm text-gray-500">Loading…</p>
+        ) : roles.length === 0 ? (
+          <p className="p-4 text-sm text-gray-500 italic">No custom roles yet.</p>
+        ) : (
+          <ul className="max-h-[70vh] overflow-y-auto divide-y divide-gray-100">
+            {roles.map((r) => {
+              const active = r.id === selectedId;
+              return (
+                <li key={r.id}>
+                  <button
+                    onClick={() => setSelectedId(r.id)}
+                    className={`w-full text-left px-3 py-2.5 transition ${active ? 'bg-blue-50 border-l-4 border-blue-600' : 'hover:bg-gray-50 border-l-4 border-transparent'}`}
+                  >
+                    <p className="text-sm font-semibold text-gray-900">{r.name}</p>
+                    <p className="text-[11px] text-gray-600 mt-0.5">
+                      {r.permissionKeys.length} perms · {r.assigneeCount} user{r.assigneeCount === 1 ? '' : 's'}
+                    </p>
+                    {r.description && <p className="text-[11px] text-gray-500 mt-0.5 line-clamp-2">{r.description}</p>}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </aside>
+
+      <main className="lg:col-span-2 bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
+        {!selectedId ? (
+          <div className="p-8 text-center text-gray-600">
+            <FiAlertCircle className="mx-auto text-gray-400 mb-2" size={28} />
+            Pick a custom role from the list, or create one.
+          </div>
+        ) : !detail ? (
+          <div className="p-8 text-center text-gray-500"><FiLoader className="animate-spin inline" size={20} /></div>
+        ) : (
+          <CustomRoleEditor
+            detail={detail}
+            catalog={catalog}
+            onChanged={() => { load(); loadDetail(detail.id); }}
+            onDelete={() => handleDelete(detail)}
+          />
+        )}
+      </main>
+
+      {showCreate && (
+        <CreateCustomRoleModal
+          catalog={catalog}
+          onClose={() => setShowCreate(false)}
+          onCreated={async (newId) => {
+            setShowCreate(false);
+            await load();
+            setSelectedId(newId);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ----------------------------------------------------------------------------
+function CustomRoleEditor({ detail, catalog, onChanged, onDelete }: {
+  detail: CustomRoleDetail;
+  catalog: Catalog | null;
+  onChanged: () => void;
+  onDelete: () => void;
+}) {
+  const [name, setName] = useState(detail.name);
+  const [description, setDescription] = useState(detail.description || '');
+  const [permSet, setPermSet] = useState<Set<string>>(() => new Set(detail.permissionKeys));
+  const [saving, setSaving] = useState(false);
+  const [assignUserId, setAssignUserId] = useState<string>('');
+  const [assignableUsers, setAssignableUsers] = useState<UserLite[]>([]);
+
+  useEffect(() => {
+    setName(detail.name);
+    setDescription(detail.description || '');
+    setPermSet(new Set(detail.permissionKeys));
+  }, [detail]);
+
+  useEffect(() => {
+    apiClient.get('/permissions/users').then((r) => setAssignableUsers(r.data.users || [])).catch(() => {});
+  }, []);
+
+  const dirty = name !== detail.name ||
+    (description || '') !== (detail.description || '') ||
+    permSet.size !== detail.permissionKeys.length ||
+    !detail.permissionKeys.every((k) => permSet.has(k));
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await apiClient.patch(`/custom-roles/${detail.id}`, {
+        name: name.trim(),
+        description: description.trim() || null,
+        permissionKeys: Array.from(permSet),
+      });
+      toast.success('Saved');
+      onChanged();
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string } } };
+      toast.error(err.response?.data?.message || 'Failed to save');
+    } finally { setSaving(false); }
+  };
+
+  const assign = async () => {
+    if (!assignUserId) return;
+    try {
+      await apiClient.post(`/custom-roles/${detail.id}/assign`, { userId: assignUserId });
+      toast.success('Assigned');
+      setAssignUserId('');
+      onChanged();
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string } } };
+      toast.error(err.response?.data?.message || 'Failed');
+    }
+  };
+  const unassign = async (userId: string) => {
+    try {
+      await apiClient.delete(`/custom-roles/${detail.id}/assign/${userId}`);
+      toast.success('Unassigned');
+      onChanged();
+    } catch { toast.error('Failed'); }
+  };
+
+  const notYetAssigned = assignableUsers.filter((u) => !detail.assignees.some((a) => a.id === u.id));
+
+  return (
+    <div>
+      <div className="px-4 py-3 border-b border-gray-200 bg-gray-50 flex items-center justify-between flex-wrap gap-2">
+        <div className="min-w-0 flex-1">
+          <h2 className="text-xl font-bold text-gray-900">{detail.name}</h2>
+          {detail.Creator && (
+            <p className="text-[11px] text-gray-500">Created by {detail.Creator.firstName} {detail.Creator.lastName || ''} · {new Date(detail.createdAt).toLocaleDateString()}</p>
+          )}
+        </div>
+        <div className="flex items-center gap-1">
+          <button onClick={onDelete} className="px-3 py-1.5 text-xs font-semibold rounded bg-red-50 hover:bg-red-100 text-red-700 inline-flex items-center gap-1">
+            <FiTrash2 /> Delete
+          </button>
+        </div>
+      </div>
+
+      <div className="max-h-[70vh] overflow-y-auto p-4 space-y-4">
+        {/* Name + description */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <label className="block text-[11px] uppercase font-semibold text-gray-700 mb-1">Name</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              maxLength={100}
+              className="w-full px-3 py-2 border-2 border-gray-300 rounded text-sm text-gray-900"
+            />
+          </div>
+          <div className="md:col-span-2">
+            <label className="block text-[11px] uppercase font-semibold text-gray-700 mb-1">Description</label>
+            <input
+              type="text"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              maxLength={500}
+              placeholder="e.g. Library staff, can manage files but not users"
+              className="w-full px-3 py-2 border-2 border-gray-300 rounded text-sm text-gray-900"
+            />
+          </div>
+        </div>
+
+        {/* Permissions */}
+        <div>
+          <p className="text-xs uppercase font-bold text-gray-700 mb-2">Permissions ({permSet.size})</p>
+          <PermissionPicker catalog={catalog} selected={permSet} onChange={setPermSet} />
+        </div>
+
+        <div className="flex items-center gap-2 sticky bottom-0 bg-white py-2 border-t border-gray-100">
+          <button
+            onClick={save}
+            disabled={saving || !dirty || !name.trim()}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white text-sm font-semibold rounded inline-flex items-center gap-1"
+          >
+            {saving ? <FiLoader className="animate-spin" /> : <FiSave />} {saving ? 'Saving…' : (dirty ? 'Save changes' : 'No changes')}
+          </button>
+          <p className="text-[11px] text-gray-500">
+            Replacing the permission set affects {detail.assignees.length} assigned user{detail.assignees.length === 1 ? '' : 's'} immediately.
+          </p>
+        </div>
+
+        {/* Assignees */}
+        <div>
+          <p className="text-xs uppercase font-bold text-gray-700 mb-2">Assigned users ({detail.assignees.length})</p>
+          <div className="border border-gray-200 rounded">
+            {detail.assignees.length === 0 ? (
+              <p className="p-3 text-sm text-gray-500 italic">No assignees yet.</p>
+            ) : (
+              <ul className="divide-y divide-gray-100 max-h-60 overflow-y-auto">
+                {detail.assignees.map((u) => (
+                  <li key={u.id} className="flex items-center justify-between px-3 py-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-900 truncate">{u.firstName} {u.lastName || ''}</p>
+                      <p className="text-[11px] text-gray-600 truncate">{u.email} · {u.approvedRole}{u.department ? ` · ${u.department}` : ''}</p>
+                    </div>
+                    <button
+                      onClick={() => unassign(u.id)}
+                      className="ml-3 inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded bg-red-50 hover:bg-red-100 text-red-700 shrink-0"
+                    >
+                      <FiUserMinus /> Remove
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="flex items-center gap-2 p-3 border-t border-gray-100">
+              <select
+                value={assignUserId}
+                onChange={(e) => setAssignUserId(e.target.value)}
+                className="flex-1 px-2 py-1.5 border border-gray-300 rounded text-sm text-gray-900 bg-white"
+              >
+                <option value="">— Pick a user to assign —</option>
+                {notYetAssigned.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.firstName} {u.lastName || ''} ({u.approvedRole}) — {u.email}
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={assign}
+                disabled={!assignUserId}
+                className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white"
+              >
+                <FiUserPlus /> Assign
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ----------------------------------------------------------------------------
+function PermissionPicker({ catalog, selected, onChange }: {
+  catalog: Catalog | null;
+  selected: Set<string>;
+  onChange: (s: Set<string>) => void;
+}) {
+  if (!catalog) return null;
+  const toggle = (key: string) => {
+    const next = new Set(selected);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    onChange(next);
+  };
+  return (
+    <div className="space-y-3">
+      {catalog.areas.map((area) => {
+        const areaKeys = area.permissions.map((p) => p.key);
+        const selInArea = areaKeys.filter((k) => selected.has(k)).length;
+        const allSelected = selInArea === areaKeys.length;
+        return (
+          <div key={area.name} className="border border-gray-200 rounded">
+            <div className="px-3 py-2 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+              <span className="text-xs font-bold uppercase text-blue-800">{area.name} ({selInArea}/{areaKeys.length})</span>
+              <button
+                onClick={() => {
+                  const next = new Set(selected);
+                  for (const k of areaKeys) { if (allSelected) next.delete(k); else next.add(k); }
+                  onChange(next);
+                }}
+                className="text-[11px] text-blue-700 hover:underline font-semibold"
+              >
+                {allSelected ? 'Clear all' : 'Select all'}
+              </button>
+            </div>
+            <ul className="divide-y divide-gray-100">
+              {area.permissions.map((perm) => {
+                const on = selected.has(perm.key);
+                return (
+                  <li key={perm.key}>
+                    <label className="flex items-start gap-2 px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={on}
+                        onChange={() => toggle(perm.key)}
+                        className="mt-1 w-4 h-4 accent-blue-600"
+                      />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-gray-900">{perm.label}</p>
+                        <p className="text-[11px] font-mono text-gray-500">{perm.key}</p>
+                      </div>
+                    </label>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ----------------------------------------------------------------------------
+function CreateCustomRoleModal({ catalog, onClose, onCreated }: {
+  catalog: Catalog | null;
+  onClose: () => void;
+  onCreated: (id: string) => void;
+}) {
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [permSet, setPermSet] = useState<Set<string>>(new Set());
+  const [creating, setCreating] = useState(false);
+
+  const create = async () => {
+    if (!name.trim()) { toast.error('Name required'); return; }
+    setCreating(true);
+    try {
+      const res = await apiClient.post('/custom-roles', {
+        name: name.trim(),
+        description: description.trim() || null,
+        permissionKeys: Array.from(permSet),
+      });
+      toast.success('Created');
+      onCreated(res.data.customRole.id);
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string } } };
+      toast.error(err.response?.data?.message || 'Failed to create');
+    } finally { setCreating(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden">
+        <div className="bg-blue-600 text-white px-5 py-3 flex items-center justify-between">
+          <h3 className="font-bold flex items-center gap-2"><FiTag /> New Custom Role</h3>
+          <button onClick={onClose} className="p-1 hover:bg-white/20 rounded"><FiX /></button>
+        </div>
+        <div className="p-5 space-y-4 overflow-y-auto flex-1">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div>
+              <label className="block text-[11px] uppercase font-semibold text-gray-700 mb-1">Name *</label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="e.g. Library Staff"
+                maxLength={100}
+                className="w-full px-3 py-2 border-2 border-gray-300 rounded text-sm text-gray-900"
+              />
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-[11px] uppercase font-semibold text-gray-700 mb-1">Description</label>
+              <input
+                type="text"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                maxLength={500}
+                className="w-full px-3 py-2 border-2 border-gray-300 rounded text-sm text-gray-900"
+              />
+            </div>
+          </div>
+          <div>
+            <p className="text-xs uppercase font-bold text-gray-700 mb-2">Pick permissions ({permSet.size} selected)</p>
+            <PermissionPicker catalog={catalog} selected={permSet} onChange={setPermSet} />
+          </div>
+        </div>
+        <div className="bg-gray-50 px-5 py-3 border-t border-gray-200 flex gap-2 justify-end">
+          <button onClick={onClose} className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded font-semibold">Cancel</button>
+          <button
+            onClick={create}
+            disabled={creating || !name.trim()}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded font-semibold flex items-center gap-2"
+          >
+            {creating ? <FiLoader className="animate-spin" /> : <FiPlus />} {creating ? 'Creating…' : 'Create role'}
+          </button>
+        </div>
       </div>
     </div>
   );

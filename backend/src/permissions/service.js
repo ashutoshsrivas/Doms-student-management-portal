@@ -5,7 +5,7 @@
 // in-process cache keyed by user id, but for now correctness > speed.
 
 const { Op } = require('sequelize');
-const { Permission, RolePermission, UserPermission } = require('../models');
+const { Permission, RolePermission, UserPermission, UserCustomRole, CustomRolePermission } = require('../models');
 
 /**
  * Compute the effective permission keys for a user.
@@ -16,7 +16,7 @@ const { Permission, RolePermission, UserPermission } = require('../models');
  */
 async function getEffectivePermissions(user) {
   if (!user || !user.role) return new Set();
-  // Role defaults: which perms does this base role have?
+  // 1) Base role defaults
   const rolePerms = await RolePermission.findAll({
     where: { roleName: user.role },
     attributes: ['permissionId'],
@@ -26,19 +26,36 @@ async function getEffectivePermissions(user) {
   for (const rp of rolePerms) {
     if (rp.Permission?.key) effective.add(rp.Permission.key);
   }
-  // User overrides
-  if (user.id) {
-    const overrides = await UserPermission.findAll({
-      where: { userId: user.id },
-      attributes: ['granted'],
+  if (!user.id) return effective;
+
+  // 2) Assigned custom roles — UNION their permissions in
+  const customAssignments = await UserCustomRole.findAll({
+    where: { userId: user.id },
+    attributes: ['customRoleId'],
+  });
+  if (customAssignments.length) {
+    const customRoleIds = customAssignments.map((a) => a.customRoleId);
+    const customPerms = await CustomRolePermission.findAll({
+      where: { customRoleId: { [Op.in]: customRoleIds } },
+      attributes: ['permissionId'],
       include: [{ model: Permission, as: 'Permission', attributes: ['key'] }],
     });
-    for (const uo of overrides) {
-      const k = uo.Permission?.key;
-      if (!k) continue;
-      if (uo.granted) effective.add(k);
-      else effective.delete(k);
+    for (const cp of customPerms) {
+      if (cp.Permission?.key) effective.add(cp.Permission.key);
     }
+  }
+
+  // 3) Per-user overrides — final say
+  const overrides = await UserPermission.findAll({
+    where: { userId: user.id },
+    attributes: ['granted'],
+    include: [{ model: Permission, as: 'Permission', attributes: ['key'] }],
+  });
+  for (const uo of overrides) {
+    const k = uo.Permission?.key;
+    if (!k) continue;
+    if (uo.granted) effective.add(k);
+    else effective.delete(k);
   }
   return effective;
 }

@@ -1867,6 +1867,68 @@ UserPermission.belongsTo(User, { foreignKey: 'userId', as: 'User', onDelete: 'CA
 UserPermission.belongsTo(Permission, { foreignKey: 'permissionId', as: 'Permission' });
 User.hasMany(UserPermission, { foreignKey: 'userId', as: 'PermissionOverrides', onDelete: 'CASCADE' });
 
+// ===== Custom (admin-defined) roles =====
+// A custom role is a named permission preset that can be assigned to users
+// on top of their base approvedRole. Effective permissions =
+//   role_permissions(base role)
+//   UNION custom_role_permissions(every assigned custom role)
+//   THEN apply user_permissions overrides (granted true|false).
+//
+// Removing a custom role assignment immediately drops its perms (no
+// orphaned overrides).
+const CustomRole = sequelize.define('CustomRole', {
+  id: {
+    type: DataTypes.UUID,
+    defaultValue: DataTypes.UUIDV4,
+    primaryKey: true,
+  },
+  name: { type: DataTypes.STRING, allowNull: false, unique: true },
+  description: { type: DataTypes.STRING(500), allowNull: true },
+  createdBy: { type: DataTypes.UUID, allowNull: false },
+}, {
+  tableName: 'custom_roles',
+  timestamps: true,
+  underscored: true,
+});
+CustomRole.belongsTo(User, { foreignKey: 'createdBy', as: 'Creator' });
+
+const CustomRolePermission = sequelize.define('CustomRolePermission', {
+  id: {
+    type: DataTypes.UUID,
+    defaultValue: DataTypes.UUIDV4,
+    primaryKey: true,
+  },
+  customRoleId: { type: DataTypes.UUID, allowNull: false },
+  permissionId: { type: DataTypes.UUID, allowNull: false },
+}, {
+  tableName: 'custom_role_permissions',
+  timestamps: true,
+  underscored: true,
+  indexes: [{ unique: true, fields: ['custom_role_id', 'permission_id'] }],
+});
+CustomRolePermission.belongsTo(CustomRole, { foreignKey: 'customRoleId', as: 'CustomRole', onDelete: 'CASCADE' });
+CustomRolePermission.belongsTo(Permission, { foreignKey: 'permissionId', as: 'Permission' });
+CustomRole.hasMany(CustomRolePermission, { foreignKey: 'customRoleId', as: 'Permissions', onDelete: 'CASCADE' });
+
+const UserCustomRole = sequelize.define('UserCustomRole', {
+  id: {
+    type: DataTypes.UUID,
+    defaultValue: DataTypes.UUIDV4,
+    primaryKey: true,
+  },
+  userId: { type: DataTypes.UUID, allowNull: false },
+  customRoleId: { type: DataTypes.UUID, allowNull: false },
+}, {
+  tableName: 'user_custom_roles',
+  timestamps: true,
+  underscored: true,
+  indexes: [{ unique: true, fields: ['user_id', 'custom_role_id'] }],
+});
+UserCustomRole.belongsTo(User, { foreignKey: 'userId', as: 'User', onDelete: 'CASCADE' });
+UserCustomRole.belongsTo(CustomRole, { foreignKey: 'customRoleId', as: 'CustomRole', onDelete: 'CASCADE' });
+User.hasMany(UserCustomRole, { foreignKey: 'userId', as: 'CustomRoleAssignments', onDelete: 'CASCADE' });
+CustomRole.hasMany(UserCustomRole, { foreignKey: 'customRoleId', as: 'Assignments', onDelete: 'CASCADE' });
+
 const FacultyNote = sequelize.define('FacultyNote', {
   id: {
     type: DataTypes.UUID,
@@ -1936,4 +1998,7 @@ module.exports = {
   Permission,
   RolePermission,
   UserPermission,
+  CustomRole,
+  CustomRolePermission,
+  UserCustomRole,
 };
