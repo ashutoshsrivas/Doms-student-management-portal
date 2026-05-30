@@ -18,61 +18,57 @@ import AnnouncementsSection from './components/Announcements/AnnouncementsSectio
 
 /* ──────────────────────────────────────────────────────────────
    GESoM Landing — Minimal, formal, iOS-style.
-   Fonts: Cormorant Garamond (display) · Inter (body)
-   Palette: ink + bone + restrained gold accent.
-   All factual content sourced from geu.ac.in/department/management.
+   Display: Cormorant Garamond · Body: Inter
    ────────────────────────────────────────────────────────────── */
 
-const SRC = 'https://geu.ac.in/department/management';
-
-/* ─── Real assets (geu.ac.in CDN) ─────────────────────────────── */
 const ASSETS = {
   logo: 'https://geu.ac.in/frontend/assets/images/geu-logo.webp',
   banner:
     'https://geu.ac.in/uploads/pages/DntHgRFyE9nzmmFPhm05JFH3ZgWhKlZ6b7pzM94E.webp',
-  hod: 'https://geu.ac.in/uploads/page_section_attributes/faculties-69dceb0f270ea-1776085775.webp',
-  ajay: 'https://geu.ac.in/uploads/page_section_attributes/faculties-69d884586f782-1775797336.webp',
-  seminar:
-    'https://geu.ac.in/uploads/page_section_attributes/facilities-69d648140530b-1775650836.webp',
-  lecture:
-    'https://geu.ac.in/uploads/page_section_attributes/facilities-6a06e92349404-1778837795.webp',
   placement:
     'https://geu.ac.in/uploads/page_section_attributes/placements-testimonial-69bd1d5811abb-1774001496.png',
   video:
     'https://geu.ac.in/uploads/page_section_attributes/VDd0PpwcgWvddNdkOK823B05H1KhyNeAHiNIAJXO.mp4',
 };
 
-/* ─── Real factual data (verbatim from source page) ──────────── */
 const PROGRAMS = [
   {
     code: '01',
     name: 'Master of Business Administration (MBA)',
     duration: '2 Years',
-    note: 'Full-time MBA — core management curriculum.',
+    note: 'A two-year full-time MBA built on a rigorous core curriculum and a wide arc of specialisations.',
+    specs: [
+      'Marketing', 'Finance', 'Human Resource Management',
+      'Logistics & Supply Chain Management', 'Hospital Administration',
+      'Airport & Airline Management', 'International Business',
+      'Banking & Insurance', 'Fintech', 'Digital Marketing',
+      'Branding & Advertising', 'Retail', 'Entrepreneurship',
+      'Sports Management',
+    ],
   },
   {
     code: '02',
     name: 'MBA (IMPACT)',
     duration: '2 Years',
-    note: 'Industry-integrated MBA programme.',
+    note: 'An industry-integrated MBA, structured around live projects and senior corporate mentorship.',
   },
   {
     code: '03',
     name: 'MBA in Artificial Intelligence (AI) & Data Science (DS)',
     duration: '2 Years',
-    note: 'STEM-oriented MBA in applied AI and analytics.',
+    note: 'A STEM-aligned MBA in applied machine learning, analytics and the strategic use of data.',
   },
   {
     code: '04',
-    name: 'M.B.A Business Analytics',
+    name: 'M.B.A Business Analytics (Industry Partner — Grant Thornton)',
     duration: '2 Years',
-    note: 'In partnership with Grant Thornton.',
+    note: 'Delivered with Grant Thornton as Industry Partner — analytics, audit and consulting at scale.',
   },
   {
     code: '05',
     name: 'Ph.D. in Management Studies',
     duration: 'Doctoral',
-    note: 'Research-intensive doctoral programme.',
+    note: 'A research-intensive doctorate for scholars and practitioners working at the frontier of management thought.',
   },
 ];
 
@@ -84,37 +80,20 @@ const PLACEMENTS = [
   { name: 'Chanchal Gupta',    program: 'MBA',        pkg: '₹10.20 L', year: '2025' },
 ];
 
-const FACULTY = [
-  { name: 'Dr. Navneet Rawat',           title: 'Professor & Head', photo: ASSETS.hod },
-  { name: 'Dr. Ajay Kumar Pandey',       title: 'Professor', photo: ASSETS.ajay },
-  { name: 'Dr. Arvind Mohan',            title: 'Professor' },
-  { name: 'Dr. Ashulekha Gupta',         title: 'Professor' },
-  { name: 'Dr. Deepak Kaushal',          title: 'Professor' },
-  { name: 'Dr. Girish Lakhera',          title: 'Professor' },
-  { name: 'Dr. M. P. Singh',             title: 'Professor' },
-  { name: 'Dr. Manu Sharma',             title: 'Professor' },
-  { name: 'Dr. N. S. Bohra',             title: 'Professor' },
-  { name: 'Dr. Neeraj Sharma',           title: 'Professor' },
-  { name: 'Dr. Pawan Kumar',             title: 'Professor' },
-  { name: 'Dr. Praveen Singh',           title: 'Professor' },
-  { name: 'Dr. Rajesh Tiwari',           title: 'Professor' },
-  { name: 'Dr. Ratnakar Mishra',         title: 'Professor' },
-  { name: 'Dr. Sanjay Taneja',           title: 'Professor' },
-  { name: 'Dr. Shwetank Avikal',         title: 'Professor' },
-  { name: 'Dr. Vinay Kandpal',           title: 'Professor' },
-  { name: 'Dr. (Capt) Dinesh C. Pande',  title: 'Professor' },
-  { name: 'Dr. Khyati Kapil',            title: 'Associate Professor' },
-  { name: 'Dr. Nagendra K. Sharma',      title: 'Associate Professor' },
-  { name: 'Dr. Sachin Ghai',             title: 'Associate Professor' },
-  { name: 'Dr. Smriti Tandon',           title: 'Associate Professor' },
-  { name: 'Dr. Yogesh Bhatt',            title: 'Associate Professor' },
-  { name: 'Dr. Mohammad Kashif',         title: 'Assistant Professor' },
-  { name: 'Dr. Raman Kumar Singh',       title: 'Assistant Professor' },
-];
-
 const FACILITIES = [
-  { name: 'Seminar Halls',     img: ASSETS.seminar },
-  { name: 'Lecture Theatres',  img: ASSETS.lecture },
+  { name: 'Library', img: 'https://geu.ac.in/uploads/page_section_attributes/facilities-69de269edf155-1776166558.webp' },
+  { name: 'Lecture Theatre', img: 'https://geu.ac.in/uploads/page_section_attributes/facilities-6a06e92349404-1778837795.webp' },
+  { name: 'Seminar Hall', img: 'https://geu.ac.in/uploads/page_section_attributes/facilities-69d648140530b-1775650836.webp' },
+  { name: 'Conference Hall', img: 'https://geu.ac.in/uploads/page_section_attributes/facilities-6a06e92d5c1f4-1778837805.webp' },
+  { name: 'Computer Lab', img: 'https://geu.ac.in/uploads/page_section_attributes/facilities-69de26a23e8e2-1776166562.webp' },
+  { name: 'Classroom', img: 'https://geu.ac.in/uploads/page_section_attributes/facilities-69de26969e5a4-1776166550.webp' },
+  { name: 'Board Room — Chanakya Block', img: 'https://geu.ac.in/uploads/page_section_attributes/facilities-69e89713b20e3-1776850707.webp' },
+  { name: 'Dell Lab', img: 'https://geu.ac.in/uploads/page_section_attributes/facilities-6a06e952dfa9e-1778837842.webp' },
+  { name: 'Vidhan Sabha', img: 'https://geu.ac.in/uploads/page_section_attributes/facilities-6a06e94fd0fac-1778837839.webp' },
+  { name: 'Lecture Theatre — Chanakya Block', img: 'https://geu.ac.in/uploads/page_section_attributes/facilities-69e89735c53c3-1776850741.webp' },
+  { name: 'Lecture Theatre — New Building', img: 'https://geu.ac.in/uploads/page_section_attributes/facilities-69e8973c6ba0b-1776850748.webp' },
+  { name: 'Seminar Hall — Chanakya Block', img: 'https://geu.ac.in/uploads/page_section_attributes/facilities-69e8975a8bff0-1776850778.webp' },
+  { name: 'Tutorial Room', img: 'https://geu.ac.in/uploads/page_section_attributes/facilities-69e8976220c5f-1776850786.webp' },
 ];
 
 const CONTACT = {
@@ -133,7 +112,6 @@ export default function Home() {
     videoRef.current?.play().catch(() => {});
   }, []);
 
-  /* iOS-style parallax — single rAF-throttled scroll listener */
   useEffect(() => {
     let raf = 0;
     let ticking = false;
@@ -152,7 +130,6 @@ export default function Home() {
     };
   }, []);
 
-  /* IntersectionObserver — reveal-on-enter */
   useEffect(() => {
     const els = document.querySelectorAll<HTMLElement>('[data-reveal]');
     const io = new IntersectionObserver(
@@ -241,7 +218,6 @@ export default function Home() {
           background-position: 100% 100%;
         }
 
-        /* iOS-style glass panel */
         .gesom-root .glass {
           background: rgba(250, 250, 247, 0.72);
           backdrop-filter: saturate(180%) blur(20px);
@@ -269,7 +245,6 @@ export default function Home() {
             0 30px 60px -30px rgba(14, 16, 20, 0.25);
         }
 
-        /* Display sizing presets — formal, restrained */
         .gesom-root .display-xl { font-size: clamp(48px, 7.4vw, 104px); line-height: 1.02; font-weight: 500; }
         .gesom-root .display-lg { font-size: clamp(36px, 4.6vw, 64px);  line-height: 1.06; font-weight: 500; }
         .gesom-root .display-md { font-size: clamp(28px, 3.2vw, 44px);  line-height: 1.12; font-weight: 500; }
@@ -283,16 +258,33 @@ export default function Home() {
         }
         .gesom-root .nav-link:hover { color: var(--gold); }
 
-        /* iOS-style focus ring */
         .gesom-root a:focus-visible,
         .gesom-root button:focus-visible {
           outline: 2px solid var(--gold-soft);
           outline-offset: 3px;
           border-radius: 8px;
         }
+
+        .gesom-root .chip {
+          display: inline-flex;
+          align-items: center;
+          padding: 7px 14px;
+          border-radius: 999px;
+          background: var(--bone);
+          color: var(--ink-soft);
+          font-size: 12.5px;
+          font-weight: 500;
+          letter-spacing: -0.005em;
+          border: 1px solid var(--line);
+          transition: background 0.3s ease, color 0.3s ease;
+        }
+        .gesom-root .chip:hover {
+          background: var(--ink);
+          color: var(--bone);
+        }
       `}</style>
 
-      {/* ───────────────────── Sticky glass nav ───────────────────── */}
+      {/* ───────────────────── Nav ───────────────────── */}
       <header className="sticky top-0 z-50 glass border-b border-[var(--line)]">
         <div className="max-w-[1320px] mx-auto px-6 lg:px-10 h-[68px] flex items-center justify-between">
           <Link href="/" className="flex items-center gap-3">
@@ -314,12 +306,10 @@ export default function Home() {
           </Link>
 
           <nav className="hidden lg:flex items-center gap-9">
-            <a href="#programmes"  className="nav-link link">Programmes</a>
-            <a href="#leadership"  className="nav-link link">Leadership</a>
-            <a href="#faculty"     className="nav-link link">Faculty</a>
-            <a href="#placements"  className="nav-link link">Placements</a>
-            <a href="#campus"      className="nav-link link">Campus</a>
-            <a href="#contact"     className="nav-link link">Contact</a>
+            <a href="#programmes" className="nav-link link">Programmes</a>
+            <a href="#placements" className="nav-link link">Placements</a>
+            <a href="#campus"     className="nav-link link">Campus</a>
+            <a href="#contact"    className="nav-link link">Contact</a>
           </nav>
 
           <div className="flex items-center gap-2">
@@ -342,7 +332,7 @@ export default function Home() {
         </div>
       </header>
 
-      {/* ───────────────────── Hero — parallax video ───────────────────── */}
+      {/* ───────────────────── Hero ───────────────────── */}
       <section className="relative bg-[#06090f] text-white overflow-hidden">
         <div
           className="absolute inset-0 will-change-transform"
@@ -375,17 +365,10 @@ export default function Home() {
               <span className="text-[var(--gold-soft)]">Business Leaders.</span>
             </h1>
             <p className="mt-8 max-w-xl text-[16px] leading-[1.7] text-white/75 font-light">
-              An official tagline of the school, drawn from{' '}
-              <a
-                href={SRC}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-white/90 link"
-              >
-                geu.ac.in/department/management
-              </a>
-              . Two decades of academic excellence in management education at
-              Graphic Era, Dehradun.
+              Two decades of academic excellence in management education at
+              Graphic Era University, Dehradun — postgraduate and doctoral
+              programmes designed for the next generation of managers,
+              analysts and founders.
             </p>
             <div className="mt-10 flex flex-wrap items-center gap-4">
               <a
@@ -407,15 +390,14 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Bottom hero meta */}
           <div
             data-reveal
             className="reveal reveal-delay-3 grid grid-cols-2 sm:grid-cols-4 gap-x-8 gap-y-6 max-w-3xl pt-10 mt-10 border-t border-white/15"
           >
             {[
-              { fig: '20+',   cap: 'Years' },
-              { fig: '5',     cap: 'Programmes' },
-              { fig: '25',    cap: 'Faculty' },
+              { fig: '20+',      cap: 'Years of excellence' },
+              { fig: '5',        cap: 'Programmes' },
+              { fig: '14',       cap: 'MBA specialisations' },
               { fig: '₹15.40 L', cap: 'Highest package · 2025' },
             ].map((s) => (
               <div key={s.cap}>
@@ -427,20 +409,14 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ───────────────────── About — official taglines ───────────────────── */}
+      {/* ───────────────────── About ───────────────────── */}
       <section className="bg-[var(--bone)] py-28 lg:py-40">
         <div className="max-w-[1100px] mx-auto px-6 lg:px-10">
           <div data-reveal className="reveal">
-            <p className="micro text-[var(--gold)] mb-8">About — From the source</p>
+            <p className="micro text-[var(--gold)] mb-8">About GESoM</p>
             <p className="serif display-lg text-[var(--ink)] max-w-4xl">
-              &ldquo;Graphic Era School of Management (GESoM) has established
-              itself as a hub for nurturing top-tier leadership.&rdquo;
-            </p>
-            <p className="mt-8 text-[14px] text-[var(--muted)]">
-              — Verbatim, from{' '}
-              <a href={SRC} target="_blank" rel="noopener noreferrer" className="link">
-                geu.ac.in/department/management
-              </a>
+              A hub for nurturing top-tier leadership in the corporate world —
+              recognised among the best management schools in India.
             </p>
           </div>
 
@@ -448,18 +424,18 @@ export default function Home() {
             {[
               {
                 k: '01',
-                h: 'Two decades of excellence',
-                p: '"With more than two decades of academic excellence in management education." — source page.',
+                h: 'Two decades of teaching',
+                p: 'A management department founded in 2006, with twenty years of academic record across MBA, MBA IMPACT, AI &amp; Data Science and the doctoral programme.',
               },
               {
                 k: '02',
-                h: 'Recognised nationally',
-                p: '"Recognised among the best in management education in India." — source page.',
+                h: 'Industry partnerships',
+                p: 'Programmes built with corporate partners — including the M.B.A in Business Analytics delivered with Grant Thornton as Industry Partner.',
               },
               {
                 k: '03',
-                h: 'Industry-integrated',
-                p: 'M.B.A Business Analytics is delivered with Grant Thornton as Industry Partner — as listed in the programme catalogue.',
+                h: 'A campus that supports the work',
+                p: 'Lecture theatres, computer and analytics labs, syndicate rooms, board rooms and one of the largest libraries in the region.',
               },
             ].map((b, i) => (
               <div
@@ -470,16 +446,17 @@ export default function Home() {
                 <p className="serif num text-[var(--gold)] text-[28px]">{b.k}</p>
                 <div className="mt-3 mb-5 h-px w-10 bg-[var(--gold)]/60" />
                 <h3 className="serif display-sm text-[var(--ink)]">{b.h}</h3>
-                <p className="mt-4 text-[15px] leading-[1.7] text-[var(--muted)]">
-                  {b.p}
-                </p>
+                <p
+                  className="mt-4 text-[15px] leading-[1.7] text-[var(--muted)]"
+                  dangerouslySetInnerHTML={{ __html: b.p }}
+                />
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* ───────────────────── Programmes — accordion ───────────────────── */}
+      {/* ───────────────────── Programmes ───────────────────── */}
       <section id="programmes" className="bg-[var(--paper)] py-28 lg:py-40">
         <div className="max-w-[1320px] mx-auto px-6 lg:px-10">
           <div className="grid lg:grid-cols-12 gap-10 mb-20 lg:mb-24">
@@ -489,11 +466,12 @@ export default function Home() {
             </div>
             <div data-reveal className="reveal reveal-delay-1 lg:col-span-8">
               <h2 className="serif display-lg text-[var(--ink)]">
-                Five programmes, exactly as offered.
+                Five programmes for the modern manager.
               </h2>
               <p className="mt-6 max-w-2xl text-[16px] leading-[1.7] text-[var(--muted)]">
-                Titles, durations and notes are reproduced from the official
-                department page. Click any programme to read the source note.
+                Postgraduate and doctoral degrees across general management,
+                analytics, artificial intelligence and applied business
+                analytics. Open any programme for tracks &amp; specialisations.
               </p>
             </div>
           </div>
@@ -544,12 +522,27 @@ export default function Home() {
                     <div className="overflow-hidden">
                       <div className="grid lg:grid-cols-12 gap-6 pb-10 lg:pb-12">
                         <div className="lg:col-span-1" />
-                        <div className="lg:col-span-8">
+                        <div className="lg:col-span-7">
                           <p className="serif italic text-[20px] lg:text-[22px] leading-[1.45] text-[var(--ink-soft)] max-w-2xl font-light">
                             {p.note}
                           </p>
+
+                          {p.specs && (
+                            <div className="mt-8">
+                              <p className="micro text-[var(--muted)] mb-4">
+                                Specialisations
+                              </p>
+                              <div className="flex flex-wrap gap-2.5">
+                                {p.specs.map((s) => (
+                                  <span key={s} className="chip">
+                                    {s}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
-                        <div className="lg:col-span-3">
+                        <div className="lg:col-span-4">
                           <a
                             href="https://apply.geu.ac.in/"
                             target="_blank"
@@ -570,121 +563,15 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ───────────────────── Leadership — HOD card ───────────────────── */}
-      <section
-        id="leadership"
-        className="relative bg-[var(--bone-deep)] py-28 lg:py-40 overflow-hidden"
-      >
-        <div className="max-w-[1320px] mx-auto px-6 lg:px-10 grid lg:grid-cols-12 gap-12 lg:gap-16 items-center">
-          <div data-reveal className="reveal lg:col-span-5">
-            <div
-              className="relative aspect-[4/5] w-full max-w-[440px] rounded-[28px] overflow-hidden bg-[var(--paper)] shadow-[0_30px_80px_-30px_rgba(14,16,20,0.35)]"
-              style={{
-                transform: `translate3d(0, ${(scrollY - 1600) * -0.04}px, 0)`,
-              }}
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={ASSETS.hod}
-                alt="Dr. Navneet Rawat — Professor & Head, Department of Management"
-                className="w-full h-full object-cover"
-              />
-              <div className="absolute bottom-0 inset-x-0 p-5 glass-dark text-white">
-                <p className="serif text-[20px] font-medium">Dr. Navneet Rawat</p>
-                <p className="micro text-white/70 mt-1">Professor & Head</p>
-              </div>
-            </div>
-          </div>
-
-          <div data-reveal className="reveal reveal-delay-1 lg:col-span-7">
-            <p className="micro text-[var(--gold)]">II — Leadership</p>
-            <div className="mt-4 h-px w-12 bg-[var(--gold)]/60" />
-            <h2 className="serif display-lg text-[var(--ink)] mt-8">
-              Department of Management,
-              <br />
-              led by{' '}
-              <span className="italic font-light text-[var(--gold)]">
-                Dr. Navneet Rawat
-              </span>
-              .
-            </h2>
-            <p className="mt-8 max-w-xl text-[16px] leading-[1.7] text-[var(--muted)]">
-              As listed on the official department page, Dr. Navneet Rawat
-              serves as Professor & Head of the Department of Management at
-              Graphic Era University, Dehradun.
-            </p>
-            <a
-              href={SRC}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 mt-10 text-[13.5px] font-medium text-[var(--ink)]"
-            >
-              <span className="link">View the department page</span>
-              <FiArrowUpRight size={14} />
-            </a>
-          </div>
-        </div>
-      </section>
-
-      {/* ───────────────────── Faculty — 25 names from source ───────────────────── */}
-      <section id="faculty" className="bg-[var(--paper)] py-28 lg:py-40">
-        <div className="max-w-[1320px] mx-auto px-6 lg:px-10">
-          <div className="grid lg:grid-cols-12 gap-10 mb-16">
-            <div data-reveal className="reveal lg:col-span-4">
-              <p className="micro text-[var(--gold)]">III — Faculty</p>
-              <div className="mt-4 h-px w-12 bg-[var(--gold)]/60" />
-            </div>
-            <div data-reveal className="reveal reveal-delay-1 lg:col-span-8">
-              <h2 className="serif display-lg text-[var(--ink)]">
-                Twenty-five professors,
-                <br />
-                listed on the source page.
-              </h2>
-              <p className="mt-6 max-w-2xl text-[16px] leading-[1.7] text-[var(--muted)]">
-                Names and designations are reproduced from{' '}
-                <a href={SRC} target="_blank" rel="noopener noreferrer" className="link">
-                  geu.ac.in/department/management
-                </a>{' '}
-                — Professors, Associate Professors and Assistant Professors of
-                the Department of Management.
-              </p>
-            </div>
-          </div>
-
-          <ul className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-10 gap-y-7 border-t border-[var(--line)] pt-10">
-            {FACULTY.map((f, i) => (
-              <li
-                key={f.name}
-                data-reveal
-                className={`reveal reveal-delay-${(i % 5) + 1} flex items-baseline gap-4 border-b border-[var(--line)] pb-5`}
-              >
-                <span className="num micro text-[var(--gold)] w-7 shrink-0">
-                  {String(i + 1).padStart(2, '0')}
-                </span>
-                <div className="flex-1">
-                  <p className="serif text-[19px] font-medium text-[var(--ink)] leading-tight">
-                    {f.name}
-                  </p>
-                  <p className="mt-1 text-[12.5px] text-[var(--muted)]">
-                    {f.title}
-                  </p>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </section>
-
-      {/* ───────────────────── Placements — real students ───────────────────── */}
+      {/* ───────────────────── Placements ───────────────────── */}
       <section
         id="placements"
         className="relative bg-[var(--bone)] py-28 lg:py-40 overflow-hidden"
       >
-        {/* Parallax decorative band */}
         <div
           className="pointer-events-none absolute inset-x-0 top-0 h-[60%] opacity-[0.04]"
           style={{
-            transform: `translate3d(0, ${(scrollY - 3200) * 0.08}px, 0)`,
+            transform: `translate3d(0, ${(scrollY - 2400) * 0.08}px, 0)`,
             backgroundImage:
               'radial-gradient(circle at 20% 50%, #a07a3b 0, transparent 40%), radial-gradient(circle at 80% 30%, #0e1014 0, transparent 45%)',
           }}
@@ -692,7 +579,7 @@ export default function Home() {
         <div className="relative max-w-[1320px] mx-auto px-6 lg:px-10">
           <div className="grid lg:grid-cols-12 gap-10 mb-16">
             <div data-reveal className="reveal lg:col-span-4">
-              <p className="micro text-[var(--gold)]">IV — Placements</p>
+              <p className="micro text-[var(--gold)]">II — Placements</p>
               <div className="mt-4 h-px w-12 bg-[var(--gold)]/60" />
             </div>
             <div data-reveal className="reveal reveal-delay-1 lg:col-span-8 flex flex-col lg:flex-row lg:items-end lg:justify-between gap-8">
@@ -700,79 +587,110 @@ export default function Home() {
                 Class of <span className="num">2025</span> — featured offers.
               </h2>
               <p className="micro text-[var(--muted)] max-w-xs">
-                Names &amp; packages reproduced from placement testimonials on
-                the source page.
+                A selection of placements from the 2025 graduating cohort.
               </p>
             </div>
           </div>
 
-          <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-5">
-            {PLACEMENTS.map((p, i) => (
-              <article
-                key={p.name}
-                data-reveal
-                className={`reveal reveal-delay-${(i % 5) + 1} card p-7`}
+          {/* Featured testimonial frame + offer cards */}
+          <div className="grid lg:grid-cols-12 gap-6">
+            <div
+              data-reveal
+              className="reveal lg:col-span-5 relative rounded-[24px] overflow-hidden aspect-[4/5] lg:aspect-auto bg-[var(--bone-deep)]"
+            >
+              <div
+                className="absolute inset-0 will-change-transform"
+                style={{
+                  transform: `translate3d(0, ${(scrollY - 2800) * -0.04}px, 0) scale(1.05)`,
+                }}
               >
-                <p className="micro text-[var(--muted)]">{p.year}</p>
-                <p className="serif text-[22px] font-medium text-[var(--ink)] leading-tight mt-3">
-                  {p.name}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={ASSETS.placement}
+                  alt="GESoM placement"
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <div className="absolute inset-x-0 bottom-0 p-6 glass-dark text-white">
+                <p className="micro text-white/70">Class of 2025</p>
+                <p className="serif text-[22px] font-medium mt-1">
+                  100% Placement Record
                 </p>
-                <p className="mt-1 text-[13px] text-[var(--muted)]">
-                  {p.program}
-                </p>
-                <div className="mt-7 pt-5 border-t border-[var(--line)]">
-                  <p className="micro text-[var(--muted)] mb-2">Offer</p>
-                  <p className="serif num text-[30px] font-semibold text-[var(--ink)] leading-none">
-                    {p.pkg}
+              </div>
+            </div>
+
+            <div className="lg:col-span-7 grid sm:grid-cols-2 gap-5">
+              {PLACEMENTS.map((p, i) => (
+                <article
+                  key={p.name}
+                  data-reveal
+                  className={`reveal reveal-delay-${(i % 5) + 1} card p-7`}
+                >
+                  <p className="micro text-[var(--muted)]">{p.year}</p>
+                  <p className="serif text-[22px] font-medium text-[var(--ink)] leading-tight mt-3">
+                    {p.name}
                   </p>
-                </div>
-              </article>
-            ))}
+                  <p className="mt-1 text-[13px] text-[var(--muted)]">
+                    {p.program}
+                  </p>
+                  <div className="mt-7 pt-5 border-t border-[var(--line)]">
+                    <p className="micro text-[var(--muted)] mb-2">Offer</p>
+                    <p className="serif num text-[28px] font-semibold text-[var(--ink)] leading-none">
+                      {p.pkg}
+                    </p>
+                  </div>
+                </article>
+              ))}
+            </div>
           </div>
         </div>
       </section>
 
-      {/* ───────────────────── Campus — facility photos ───────────────────── */}
+      {/* ───────────────────── Campus — facility gallery ───────────────────── */}
       <section id="campus" className="bg-[var(--paper)] py-28 lg:py-40">
         <div className="max-w-[1320px] mx-auto px-6 lg:px-10">
           <div className="grid lg:grid-cols-12 gap-10 mb-16">
             <div data-reveal className="reveal lg:col-span-4">
-              <p className="micro text-[var(--gold)]">V — Campus</p>
+              <p className="micro text-[var(--gold)]">III — Campus</p>
               <div className="mt-4 h-px w-12 bg-[var(--gold)]/60" />
             </div>
             <div data-reveal className="reveal reveal-delay-1 lg:col-span-8">
               <h2 className="serif display-lg text-[var(--ink)] max-w-3xl">
-                Facilities, as photographed on the department page.
+                Thirteen rooms, two blocks, one campus.
               </h2>
+              <p className="mt-6 max-w-2xl text-[16px] leading-[1.7] text-[var(--muted)]">
+                Lecture theatres, syndicate rooms, computer and analytics
+                labs, a board room, a tutorial wing and the central library —
+                the working environments of the Department of Management.
+              </p>
             </div>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-6">
-            {FACILITIES.map((f, i) => (
-              <figure
+          {/* Mosaic — featured top + grid below */}
+          <div className="grid lg:grid-cols-12 gap-5 lg:gap-6">
+            {/* Featured 0 */}
+            <Facility
+              f={FACILITIES[0]}
+              scrollY={scrollY}
+              parallaxBase={3800}
+              className="lg:col-span-7 aspect-[16/10]"
+            />
+            {/* Featured 1 */}
+            <Facility
+              f={FACILITIES[1]}
+              scrollY={scrollY}
+              parallaxBase={3800}
+              className="lg:col-span-5 aspect-[16/10] lg:aspect-auto"
+            />
+            {/* Grid remainder — 3 per row */}
+            {FACILITIES.slice(2).map((f, i) => (
+              <Facility
                 key={f.name}
-                data-reveal
-                className={`reveal reveal-delay-${i + 1} group relative overflow-hidden rounded-[24px] bg-[var(--bone-deep)] aspect-[4/3]`}
-              >
-                {/* parallax inside frame */}
-                <div
-                  className="absolute inset-0 will-change-transform"
-                  style={{
-                    transform: `translate3d(0, ${(scrollY - 4400) * -0.06}px, 0) scale(1.08)`,
-                  }}
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={f.img}
-                    alt={f.name}
-                    className="absolute inset-0 w-full h-full object-cover transition-transform duration-[1.2s] group-hover:scale-[1.04]"
-                  />
-                </div>
-                <div className="absolute inset-x-0 bottom-0 p-6 glass-dark text-white flex items-baseline justify-between">
-                  <p className="serif text-[22px] font-medium">{f.name}</p>
-                  <span className="micro text-white/70">GEU Campus</span>
-                </div>
-              </figure>
+                f={f}
+                scrollY={scrollY}
+                parallaxBase={4400 + i * 200}
+                className="md:col-span-6 lg:col-span-4 aspect-[4/3]"
+              />
             ))}
           </div>
         </div>
@@ -783,31 +701,31 @@ export default function Home() {
         <div
           className="absolute inset-0 opacity-30 will-change-transform"
           style={{
-            transform: `translate3d(0, ${(scrollY - 5600) * -0.12}px, 0)`,
+            transform: `translate3d(0, ${(scrollY - 5800) * -0.12}px, 0)`,
             background:
               'radial-gradient(ellipse at center, rgba(196, 161, 104, 0.35), transparent 55%)',
           }}
         />
         <div className="relative max-w-[920px] mx-auto px-6 text-center">
           <p data-reveal className="reveal micro text-[var(--gold-soft)] mb-8">
-            Admissions — Apply online
+            Admissions 2026 — now open
           </p>
           <h2
             data-reveal
             className="reveal reveal-delay-1 serif display-xl text-white"
           >
-            &ldquo;Step Into Your
+            Apply to the
             <br />
             <span className="italic font-light text-[var(--gold-soft)]">
-              Future at GEU.&rdquo;
+              Class of 2028.
             </span>
           </h2>
           <p
             data-reveal
             className="reveal reveal-delay-2 mt-8 max-w-md mx-auto text-[15px] leading-[1.7] text-white/65"
           >
-            Quoted heading from the source page. Submit your application to the
-            Graphic Era School of Management online.
+            Submit your application online. Admissions enquiries are answered
+            within five working days.
           </p>
           <div
             data-reveal
@@ -837,7 +755,7 @@ export default function Home() {
         <div className="max-w-[1320px] mx-auto px-6 lg:px-10">
           <div className="grid lg:grid-cols-12 gap-10 mb-16">
             <div data-reveal className="reveal lg:col-span-4">
-              <p className="micro text-[var(--gold)]">VI — Contact</p>
+              <p className="micro text-[var(--gold)]">IV — Contact</p>
               <div className="mt-4 h-px w-12 bg-[var(--gold)]/60" />
             </div>
             <div data-reveal className="reveal reveal-delay-1 lg:col-span-8">
@@ -849,21 +767,9 @@ export default function Home() {
 
           <div className="grid md:grid-cols-3 gap-5">
             {[
-              {
-                Icon: FiMapPin,
-                title: 'Address',
-                lines: [CONTACT.address],
-              },
-              {
-                Icon: FiPhone,
-                title: 'Helpline',
-                lines: CONTACT.phones,
-              },
-              {
-                Icon: FiMail,
-                title: 'Email',
-                lines: CONTACT.emails,
-              },
+              { Icon: FiMapPin, title: 'Address',  lines: [CONTACT.address] },
+              { Icon: FiPhone,  title: 'Helpline', lines: CONTACT.phones },
+              { Icon: FiMail,   title: 'Email',    lines: CONTACT.emails },
             ].map((c, i) => {
               const { Icon } = c;
               return (
@@ -916,21 +822,14 @@ export default function Home() {
                   <p className="serif text-[20px] font-medium text-white">
                     School of Management
                   </p>
-                  <p className="micro text-white/60 mt-1">Graphic Era · Dehradun</p>
+                  <p className="micro text-white/60 mt-1">
+                    Graphic Era · Dehradun
+                  </p>
                 </div>
               </div>
               <p className="text-[14.5px] leading-[1.7] text-white/60 max-w-md">
-                Content and imagery on this landing page are reproduced from
-                the official department page at{' '}
-                <a
-                  href={SRC}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="link text-white/85"
-                >
-                  geu.ac.in/department/management
-                </a>
-                . © Graphic Era University.
+                Graphic Era School of Management — postgraduate and doctoral
+                programmes in business, since 2006.
               </p>
             </div>
 
@@ -938,11 +837,9 @@ export default function Home() {
               <p className="micro text-[var(--gold-soft)] mb-5">Site</p>
               <ul className="space-y-3 text-[14px]">
                 <li><a href="#programmes" className="link">Programmes</a></li>
-                <li><a href="#leadership" className="link">Leadership</a></li>
-                <li><a href="#faculty" className="link">Faculty</a></li>
                 <li><a href="#placements" className="link">Placements</a></li>
-                <li><a href="#campus" className="link">Campus</a></li>
-                <li><a href="#contact" className="link">Contact</a></li>
+                <li><a href="#campus"     className="link">Campus</a></li>
+                <li><a href="#contact"    className="link">Contact</a></li>
               </ul>
             </div>
 
@@ -978,10 +875,51 @@ export default function Home() {
           <div className="rule bg-white/10" />
           <div className="pt-7 flex flex-col md:flex-row md:items-center md:justify-between gap-3 text-[12px] text-white/45">
             <p>© 2026 Graphic Era University · Department of Management</p>
-            <p className="micro">GESoM Portal · v2026.2</p>
+            <p className="micro">GESoM Portal · v2026.3</p>
           </div>
         </div>
       </footer>
     </div>
+  );
+}
+
+/* ─────────── Facility card — extracted so parallax stays clean ────────── */
+function Facility({
+  f,
+  scrollY,
+  parallaxBase,
+  className = '',
+}: {
+  f: { name: string; img: string };
+  scrollY: number;
+  parallaxBase: number;
+  className?: string;
+}) {
+  return (
+    <figure
+      data-reveal
+      className={`reveal group relative overflow-hidden rounded-[20px] bg-[var(--bone-deep)] ${className}`}
+    >
+      <div
+        className="absolute inset-0 will-change-transform"
+        style={{
+          transform: `translate3d(0, ${(scrollY - parallaxBase) * -0.05}px, 0) scale(1.10)`,
+        }}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={f.img}
+          alt={f.name}
+          loading="lazy"
+          className="absolute inset-0 w-full h-full object-cover transition-transform duration-[1.2s] group-hover:scale-[1.04]"
+        />
+      </div>
+      <div className="absolute inset-x-0 bottom-0 p-5 glass-dark text-white flex items-baseline justify-between gap-3">
+        <p className="serif text-[18px] lg:text-[20px] font-medium leading-tight">
+          {f.name}
+        </p>
+        <span className="micro text-white/70 hidden sm:block">GEU</span>
+      </div>
+    </figure>
   );
 }
