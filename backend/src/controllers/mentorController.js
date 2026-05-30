@@ -33,12 +33,11 @@ module.exports = {
       // Verify faculty exists and has FACULTY role
       console.log('[createMentorTeam] Step 4: Finding faculty:', facultyId);
       const faculty = await User.findByPk(facultyId);
-      // Allow FACULTY, CHAIR_HEAD, or MENTOR to be assigned as the team's
-      // faculty/mentor. (CHAIR_HEAD wants to assign themselves.)
-      const allowedFacultyRoles = ['FACULTY', 'CHAIR_HEAD', 'MENTOR'];
-      if (!faculty || !allowedFacultyRoles.includes(faculty.approvedRole)) {
+      // Allow any active staff role (i.e. anyone except STUDENT) to be
+      // assigned as the team's faculty/mentor.
+      if (!faculty || faculty.approvedRole === 'STUDENT' || !faculty.approvedRole) {
         console.log('[createMentorTeam] Faculty not found or invalid role:', faculty?.approvedRole);
-        return res.status(404).json({ message: 'Faculty not found or invalid role' });
+        return res.status(404).json({ message: 'Selected user cannot be assigned as Faculty Member' });
       }
       console.log('[createMentorTeam] Step 5: Faculty found:', faculty.firstName);
 
@@ -209,12 +208,11 @@ module.exports = {
         return res.status(404).json({ message: 'Mentor team not found' });
       }
 
-      // Verify faculty exists and has a valid mentor role if being changed
+      // Verify faculty exists and is any non-STUDENT user if being changed
       if (facultyId && facultyId !== team.facultyId) {
         const faculty = await User.findByPk(facultyId);
-        const allowedFacultyRoles = ['FACULTY', 'CHAIR_HEAD', 'MENTOR'];
-        if (!faculty || !allowedFacultyRoles.includes(faculty.approvedRole)) {
-          return res.status(404).json({ message: 'Faculty not found or invalid role' });
+        if (!faculty || faculty.approvedRole === 'STUDENT' || !faculty.approvedRole) {
+          return res.status(404).json({ message: 'Selected user cannot be assigned as Faculty Member' });
         }
       }
 

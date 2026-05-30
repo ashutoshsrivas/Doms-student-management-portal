@@ -25,6 +25,7 @@ interface Faculty {
   firstName: string;
   lastName: string;
   email: string;
+  approvedRole?: string;
 }
 
 interface StudentSession {
@@ -76,17 +77,18 @@ export default function MentorTeamManagement() {
 
   const fetchFaculties = async () => {
     try {
-      // Faculty + chair-head are both valid as a team's assigned mentor.
-      const [facRes, chairRes] = await Promise.all([
-        apiClient.get('/users', { params: { role: 'FACULTY' } }),
-        apiClient.get('/users', { params: { role: 'CHAIR_HEAD' } }).catch(() => ({ data: { users: [] } })),
-      ]);
-      const merged = [...(facRes.data.users || []), ...(chairRes.data.users || [])];
-      // Dedupe by id just in case
-      const seen = new Set<string>();
-      setFaculties(merged.filter((u) => (seen.has(u.id) ? false : seen.add(u.id))));
+      // Faculty Member picker = every non-STUDENT user. The backend allows
+      // any active staff (admin / HOD / faculty / chair-head / coordinator
+      // / PC / trainer / mentor) to be assigned as a team's mentor.
+      const res = await apiClient.get('/users');
+      const all = (res.data.users || []) as Faculty[];
+      const eligible = all
+        .filter((u) => u.approvedRole && u.approvedRole !== 'STUDENT')
+        .sort((a, b) => (`${a.firstName} ${a.lastName}`).localeCompare(`${b.firstName} ${b.lastName}`));
+      setFaculties(eligible);
     } catch (error) {
       console.error('Failed to fetch faculties:', error);
+      toast.error('Failed to load user list — check your permissions');
     }
   };
 
@@ -414,7 +416,7 @@ export default function MentorTeamManagement() {
                       <option value="">Select a faculty</option>
                       {faculties.map(faculty => (
                         <option key={faculty.id} value={faculty.id}>
-                          {faculty.firstName} {faculty.lastName} ({faculty.email})
+                          {faculty.firstName} {faculty.lastName}{faculty.approvedRole ? ` — ${faculty.approvedRole}` : ''} ({faculty.email})
                         </option>
                       ))}
                     </select>
@@ -554,7 +556,7 @@ export default function MentorTeamManagement() {
                       <option value="">Select a faculty</option>
                       {faculties.map(faculty => (
                         <option key={faculty.id} value={faculty.id}>
-                          {faculty.firstName} {faculty.lastName} ({faculty.email})
+                          {faculty.firstName} {faculty.lastName}{faculty.approvedRole ? ` — ${faculty.approvedRole}` : ''} ({faculty.email})
                         </option>
                       ))}
                     </select>
