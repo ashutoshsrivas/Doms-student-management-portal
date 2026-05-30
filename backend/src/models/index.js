@@ -964,6 +964,14 @@ const MentorTeam = sequelize.define('MentorTeam', {
     type: DataTypes.ENUM('ACTIVE', 'INACTIVE', 'ARCHIVED'),
     defaultValue: 'ACTIVE',
   },
+  // Set on create — lets us scope monitoring to "teams this CHAIR_HEAD
+  // created" while leaving admin/HOD able to see everything. Nullable
+  // because rows that existed before this column was added won't have a
+  // value; CHAIR_HEAD just won't see those legacy rows.
+  createdBy: {
+    type: DataTypes.UUID,
+    allowNull: true,
+  },
 }, {
   tableName: 'mentor_teams',
   timestamps: true,

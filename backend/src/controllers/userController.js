@@ -120,6 +120,7 @@ const userController = {
         'ADMIN',
         'HOD',
         'FACULTY',
+        'CHAIR_HEAD',
         'COORDINATOR',
         'PLACEMENT_COORDINATOR',
         'TRAINER',
@@ -245,6 +246,7 @@ const userController = {
         'ADMIN',
         'HOD',
         'FACULTY',
+        'CHAIR_HEAD',
         'COORDINATOR',
         'PLACEMENT_COORDINATOR',
         'TRAINER',
@@ -320,6 +322,7 @@ const userController = {
           'ADMIN',
           'HOD',
           'FACULTY',
+          'CHAIR_HEAD',
           'COORDINATOR',
           'PLACEMENT_COORDINATOR',
           'TRAINER',
@@ -509,7 +512,7 @@ const userController = {
       const pendingUsers = await User.count({ where: { status: 'PENDING' } });
 
       const roleStats = {};
-      const roles = ['ADMIN', 'HOD', 'FACULTY', 'COORDINATOR', 'PLACEMENT_COORDINATOR', 'TRAINER', 'STUDENT', 'MENTOR'];
+      const roles = ['ADMIN', 'HOD', 'FACULTY', 'CHAIR_HEAD', 'COORDINATOR', 'PLACEMENT_COORDINATOR', 'TRAINER', 'STUDENT', 'MENTOR'];
       
       for (const role of roles) {
         roleStats[role] = await User.count({ where: { approvedRole: role } });

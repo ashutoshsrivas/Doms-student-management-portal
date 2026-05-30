@@ -263,6 +263,19 @@ async function start() {
       }
     }
 
+    // Add created_by column to mentor_teams if missing — used to scope
+    // CHAIR_HEAD monitoring to teams they personally created.
+    try {
+      await sequelize.query('ALTER TABLE mentor_teams ADD COLUMN created_by CHAR(36) NULL');
+      console.log('Added created_by column to mentor_teams');
+    } catch (error) {
+      if (error.message && error.message.includes('Duplicate column')) {
+        console.log('created_by column already exists on mentor_teams');
+      } else {
+        console.error('Error adding created_by to mentor_teams:', error.message);
+      }
+    }
+
     // Add CHAIR_HEAD to the users.requested_role and users.approved_role
     // ENUMs if it isn't already a member. Safe to re-run: MySQL silently
     // succeeds when the new ENUM list already contains every existing value.

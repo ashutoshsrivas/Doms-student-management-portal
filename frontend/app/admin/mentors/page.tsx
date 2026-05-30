@@ -76,8 +76,15 @@ export default function MentorTeamManagement() {
 
   const fetchFaculties = async () => {
     try {
-      const response = await apiClient.get('/users', { params: { role: 'FACULTY' } });
-      setFaculties(response.data.users || []);
+      // Faculty + chair-head are both valid as a team's assigned mentor.
+      const [facRes, chairRes] = await Promise.all([
+        apiClient.get('/users', { params: { role: 'FACULTY' } }),
+        apiClient.get('/users', { params: { role: 'CHAIR_HEAD' } }).catch(() => ({ data: { users: [] } })),
+      ]);
+      const merged = [...(facRes.data.users || []), ...(chairRes.data.users || [])];
+      // Dedupe by id just in case
+      const seen = new Set<string>();
+      setFaculties(merged.filter((u) => (seen.has(u.id) ? false : seen.add(u.id))));
     } catch (error) {
       console.error('Failed to fetch faculties:', error);
     }

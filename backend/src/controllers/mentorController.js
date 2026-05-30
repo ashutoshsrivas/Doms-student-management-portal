@@ -33,13 +33,17 @@ module.exports = {
       // Verify faculty exists and has FACULTY role
       console.log('[createMentorTeam] Step 4: Finding faculty:', facultyId);
       const faculty = await User.findByPk(facultyId);
-      if (!faculty || faculty.approvedRole !== 'FACULTY') {
+      // Allow FACULTY, CHAIR_HEAD, or MENTOR to be assigned as the team's
+      // faculty/mentor. (CHAIR_HEAD wants to assign themselves.)
+      const allowedFacultyRoles = ['FACULTY', 'CHAIR_HEAD', 'MENTOR'];
+      if (!faculty || !allowedFacultyRoles.includes(faculty.approvedRole)) {
         console.log('[createMentorTeam] Faculty not found or invalid role:', faculty?.approvedRole);
         return res.status(404).json({ message: 'Faculty not found or invalid role' });
       }
       console.log('[createMentorTeam] Step 5: Faculty found:', faculty.firstName);
 
-      // Create the mentor team
+      // Create the mentor team — stamp createdBy so CHAIR_HEAD monitoring
+      // can later filter to teams this user created.
       console.log('[createMentorTeam] Step 6: Creating MentorTeam object');
       const team = await MentorTeam.create({
         sessionId,
@@ -47,6 +51,7 @@ module.exports = {
         teamName,
         description,
         status: 'ACTIVE',
+        createdBy: req.user?.id || null,
       });
       console.log('[createMentorTeam] Step 7: Team created with id:', team.id);
 
@@ -92,9 +97,12 @@ module.exports = {
       if (sessionId) where.sessionId = sessionId;
       if (facultyId) where.facultyId = facultyId;
 
-      // Non-admin faculty can only see their own teams
+      // Non-admin faculty can only see their own teams (where they're the
+      // assigned mentor). CHAIR_HEAD can see teams they created.
       if (userRole === 'FACULTY' && !facultyId) {
         where.facultyId = userId;
+      } else if (userRole === 'CHAIR_HEAD' && !facultyId) {
+        where.createdBy = userId;
       }
 
       const teams = await MentorTeam.findAll({
@@ -844,6 +852,11 @@ module.exports = {
 
       const teamWhere = {};
       if (sessionId) teamWhere.sessionId = sessionId;
+      // CHAIR_HEAD can only see teams they themselves created. ADMIN and
+      // HOD see everything.
+      if (req.user.role === 'CHAIR_HEAD') {
+        teamWhere.createdBy = req.user.id;
+      }
 
       const teams = await MentorTeam.findAll({
         where: teamWhere,
