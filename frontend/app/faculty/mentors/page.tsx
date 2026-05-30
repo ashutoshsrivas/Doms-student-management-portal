@@ -65,7 +65,7 @@ export default function FacultyMentorDashboard() {
 
   // Redirect if not faculty
   useEffect(() => {
-    if (user?.role !== 'FACULTY') {
+    if (!['FACULTY', 'CHAIR_HEAD', 'MENTOR'].includes(user?.role || '')) {
       router.push('/dashboard');
     }
   }, [user?.role, router]);
@@ -143,7 +143,7 @@ export default function FacultyMentorDashboard() {
     }
   };
 
-  if (!user || user.role !== 'FACULTY') {
+  if (!user || !['FACULTY', 'CHAIR_HEAD', 'MENTOR'].includes(user.role)) {
     return null;
   }
 

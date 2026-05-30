@@ -209,10 +209,11 @@ module.exports = {
         return res.status(404).json({ message: 'Mentor team not found' });
       }
 
-      // Verify faculty exists and has FACULTY role if being changed
+      // Verify faculty exists and has a valid mentor role if being changed
       if (facultyId && facultyId !== team.facultyId) {
         const faculty = await User.findByPk(facultyId);
-        if (!faculty || faculty.approvedRole !== 'FACULTY') {
+        const allowedFacultyRoles = ['FACULTY', 'CHAIR_HEAD', 'MENTOR'];
+        if (!faculty || !allowedFacultyRoles.includes(faculty.approvedRole)) {
           return res.status(404).json({ message: 'Faculty not found or invalid role' });
         }
       }

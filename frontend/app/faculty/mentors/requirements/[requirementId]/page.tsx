@@ -48,7 +48,7 @@ export default function ViewResponsesPage() {
 
   // Redirect if not faculty
   useEffect(() => {
-    if (user?.role !== 'FACULTY') {
+    if (!['FACULTY', 'CHAIR_HEAD', 'MENTOR'].includes(user?.role || '')) {
       router.push('/dashboard');
     }
   }, [user?.role, router]);

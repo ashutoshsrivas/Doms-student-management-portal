@@ -11,11 +11,14 @@ export default function FacultyDashboardPage() {
   const router = useRouter();
   const { user } = useAuthStore();
 
+  // Faculty-style dashboard — FACULTY, CHAIR_HEAD, and MENTOR all share
+  // the same role-style navigation.
+  const FACULTY_LIKE = ['FACULTY', 'CHAIR_HEAD', 'MENTOR'];
   useEffect(() => {
-    if (user && user.role !== 'FACULTY') router.push('/unauthorized');
+    if (user && !FACULTY_LIKE.includes(user.role)) router.push('/unauthorized');
   }, [user, router]);
 
-  if (!user || user.role !== 'FACULTY') return null;
+  if (!user || !FACULTY_LIKE.includes(user.role)) return null;
 
   const cards = [
     {

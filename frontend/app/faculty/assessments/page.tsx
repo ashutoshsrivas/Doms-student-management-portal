@@ -15,7 +15,7 @@ export default function FacultyAssessmentsPage() {
     }
 
     // Verify user is FACULTY
-    if (user.role !== 'FACULTY') {
+    if (!['FACULTY', 'CHAIR_HEAD', 'MENTOR'].includes(user.role)) {
       router.push('/unauthorized');
       return;
     }

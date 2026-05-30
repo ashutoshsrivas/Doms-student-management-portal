@@ -104,7 +104,7 @@ export default function MyTasksPage() {
   // Only people who can be assignees should reach this page
   useEffect(() => {
     if (!user) return;
-    const ok = ['HOD', 'FACULTY', 'COORDINATOR', 'PLACEMENT_COORDINATOR', 'TRAINER', 'MENTOR', 'ADMIN'].includes(user.role);
+    const ok = ['HOD', 'FACULTY', 'CHAIR_HEAD', 'COORDINATOR', 'PLACEMENT_COORDINATOR', 'TRAINER', 'MENTOR', 'ADMIN'].includes(user.role);
     if (!ok) router.push('/dashboard');
   }, [user, router]);
 
