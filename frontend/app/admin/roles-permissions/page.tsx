@@ -16,6 +16,7 @@ import {
 } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 import useAuthStore from '@/app/store/authStore';
+import usePermissions, { refreshPermissions } from '@/app/lib/usePermissions';
 import apiClient from '@/app/lib/apiClient';
 import DashboardLayout from '@/app/components/DashboardLayout';
 
@@ -58,6 +59,7 @@ const ROLE_SHORT_LABEL: Record<string, string> = {
 export default function RolesPermissionsPage() {
   const router = useRouter();
   const { user } = useAuthStore();
+  const { loaded: permsLoaded, hasPerm } = usePermissions();
 
   const [tab, setTab] = useState<'roles' | 'users' | 'custom'>('roles');
   const [loading, setLoading] = useState(true);
@@ -74,8 +76,13 @@ export default function RolesPermissionsPage() {
   const [savingOverrideKey, setSavingOverrideKey] = useState<string | null>(null);
 
   useEffect(() => {
-    if (user && user.role !== 'ADMIN') router.push('/dashboard');
-  }, [user, router]);
+    // Allow access if user is ADMIN OR has admin.manage_roles via override
+    // or custom role. Wait for permissions to load before redirecting.
+    if (!user) return;
+    if (user.role === 'ADMIN') return;
+    if (!permsLoaded) return;
+    if (!hasPerm('admin.manage_roles')) router.push('/dashboard');
+  }, [user, permsLoaded, hasPerm, router]);
 
   const loadCatalog = useCallback(async () => {
     setLoading(true);
@@ -129,7 +136,8 @@ export default function RolesPermissionsPage() {
     }));
     try {
       await apiClient.patch(`/permissions/role/${roleName}/${perm.key}`, { granted: !currentlyHas });
-      // No toast on every cell — that'd be noisy
+      // If admin just edited their OWN role, their sidebar should reflect it
+      if (roleName === user?.role) refreshPermissions();
     } catch (e: unknown) {
       const err = e as { response?: { data?: { message?: string } } };
       toast.error(err.response?.data?.message || 'Failed to save');
@@ -147,6 +155,7 @@ export default function RolesPermissionsPage() {
     try {
       await apiClient.patch(`/permissions/user/${selectedUserId}/${permKey}`, { state });
       toast.success(state === 'reset' ? 'Override removed (back to role default)' : state === 'grant' ? 'Granted' : 'Revoked');
+      if (selectedUserId === user?.id) refreshPermissions();
       loadUserDetail(selectedUserId);
     } catch (e: unknown) {
       const err = e as { response?: { data?: { message?: string } } };

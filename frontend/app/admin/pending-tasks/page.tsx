@@ -13,6 +13,7 @@ import {
 } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 import useAuthStore from '@/app/store/authStore';
+import usePermissions from '@/app/lib/usePermissions';
 import apiClient from '@/app/lib/apiClient';
 import DashboardLayout from '@/app/components/DashboardLayout';
 
@@ -59,9 +60,13 @@ export default function AdminPendingTasksPage() {
   const [loading, setLoading] = useState(true);
   const [priorityFilter, setPriorityFilter] = useState<'ALL' | Priority>('ALL');
 
+  const { loaded: permsLoaded, hasPerm } = usePermissions();
   useEffect(() => {
-    if (user && user.role !== 'ADMIN') router.push('/dashboard');
-  }, [user, router]);
+    if (!user) return;
+    if (user.role === 'ADMIN') return;
+    if (!permsLoaded) return;
+    if (!hasPerm('tasks.view_pending_queue')) router.push('/dashboard');
+  }, [user, permsLoaded, hasPerm, router]);
 
   const load = useCallback(async () => {
     setLoading(true);
