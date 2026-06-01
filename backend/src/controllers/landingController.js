@@ -174,6 +174,28 @@ const DEFAULT_PAYLOAD = {
  * Returns the stored payload, or DEFAULT_PAYLOAD if the row hasn't
  * been created yet. We never throw — the landing page must always render.
  */
+/**
+ * Coerce a stored payload to an object. Some MySQL builds report the
+ * JSON column as TEXT and Sequelize hands it back as a string — in
+ * that case we parse it here so callers always get a real object.
+ */
+function asObject(value) {
+  if (value && typeof value === 'object') return value;
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      // Guard against double-stringified values
+      if (typeof parsed === 'string') {
+        try { return JSON.parse(parsed); } catch { return null; }
+      }
+      return parsed;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
 async function getLandingContent(req, res) {
   // Never cache the landing payload — admin edits must show up on the
   // next page reload, with no stale window.
@@ -186,8 +208,14 @@ async function getLandingContent(req, res) {
     if (!row) {
       return res.json({ payload: DEFAULT_PAYLOAD, isDefault: true });
     }
-    // Sequelize JSON column returns a parsed object directly.
-    return res.json({ payload: row.payload, isDefault: false, updatedAt: row.updatedAt });
+    const obj = asObject(row.payload);
+    if (!obj) {
+      // Stored value is unreadable — serve defaults rather than crashing the
+      // public site. Admin can resave from /admin/landing to repair it.
+      console.error('[landing] stored payload is unreadable, serving defaults');
+      return res.json({ payload: DEFAULT_PAYLOAD, isDefault: true });
+    }
+    return res.json({ payload: obj, isDefault: false, updatedAt: row.updatedAt });
   } catch (err) {
     console.error('[landing] GET failed, serving defaults:', err.message);
     return res.json({ payload: DEFAULT_PAYLOAD, isDefault: true });
@@ -200,9 +228,11 @@ async function getLandingContent(req, res) {
  */
 async function updateLandingContent(req, res) {
   try {
-    const { payload } = req.body || {};
-    if (!payload || typeof payload !== 'object') {
-      return res.status(400).json({ message: 'payload must be an object' });
+    // Accept either { payload: { ... } } or a raw object body.
+    let payload = req.body?.payload ?? req.body;
+    payload = asObject(payload);
+    if (!payload) {
+      return res.status(400).json({ message: 'payload must be a JSON object' });
     }
 
     const [row, created] = await LandingContent.findOrCreate({
@@ -216,9 +246,10 @@ async function updateLandingContent(req, res) {
       await row.save();
     }
 
+    // Echo back as a real object so the editor never has to re-parse.
     return res.json({
       message: 'Landing content saved',
-      payload: row.payload,
+      payload: asObject(row.payload),
       updatedAt: row.updatedAt,
     });
   } catch (err) {

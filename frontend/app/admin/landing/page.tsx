@@ -167,7 +167,15 @@ function LandingEditor() {
           headers: { 'Cache-Control': 'no-cache' },
         });
         const data = await r.json();
-        const merged = mergeDeep(SKELETON, data?.payload || {}) as Payload;
+        // Defensive: payload might come back stringified from old rows.
+        let raw: unknown = data?.payload;
+        if (typeof raw === 'string') {
+          try { raw = JSON.parse(raw); } catch { raw = null; }
+        }
+        if (typeof raw === 'string') {
+          try { raw = JSON.parse(raw); } catch { raw = null; }
+        }
+        const merged = mergeDeep(SKELETON, raw && typeof raw === 'object' ? raw : {}) as Payload;
         setPayload(normalize(merged));
       } catch (e) {
         console.error(e);

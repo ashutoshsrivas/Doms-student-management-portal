@@ -199,10 +199,21 @@ export default function Home() {
         if (!r.ok) return;
         const data = await r.json();
         if (cancelled || !data?.payload) return;
+        // Backend should send a JSON object, but some MySQL builds return
+        // the JSON column as a string. Handle either shape.
+        let raw: unknown = data.payload;
+        if (typeof raw === 'string') {
+          try { raw = JSON.parse(raw); } catch { raw = null; }
+        }
+        if (typeof raw === 'string') {
+          // double-stringified — try one more parse
+          try { raw = JSON.parse(raw); } catch { raw = null; }
+        }
+        if (!raw || typeof raw !== 'object') return;
         // DEEP merge — preserves every nested key from FALLBACK if the
         // saved payload is partial. A shallow spread previously made
         // missing keys (e.g. placements.items) crash the render.
-        setContent(mergeDeep(FALLBACK, data.payload) as LandingPayload);
+        setContent(mergeDeep(FALLBACK, raw) as LandingPayload);
       } catch {
         /* keep FALLBACK */
       }
