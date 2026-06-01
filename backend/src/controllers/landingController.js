@@ -175,6 +175,12 @@ const DEFAULT_PAYLOAD = {
  * been created yet. We never throw — the landing page must always render.
  */
 async function getLandingContent(req, res) {
+  // Never cache the landing payload — admin edits must show up on the
+  // next page reload, with no stale window.
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+
   try {
     const row = await LandingContent.findOne({ where: { contentKey: KEY } });
     if (!row) {

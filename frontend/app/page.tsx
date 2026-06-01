@@ -153,6 +153,30 @@ export type LandingPayload = {
   };
 };
 
+/* Deep merge: overlay wins on primitives + arrays; objects merge recursively.
+   Keeps every nested default from FALLBACK if the saved payload is partial. */
+function mergeDeep<T>(base: T, overlay: unknown): T {
+  if (overlay === undefined || overlay === null) return base;
+  if (Array.isArray(overlay)) return overlay as unknown as T;
+  if (
+    typeof overlay === 'object' &&
+    overlay !== null &&
+    typeof base === 'object' &&
+    base !== null &&
+    !Array.isArray(base)
+  ) {
+    const out: Record<string, unknown> = { ...(base as Record<string, unknown>) };
+    for (const key of Object.keys(overlay as Record<string, unknown>)) {
+      out[key] = mergeDeep(
+        (base as Record<string, unknown>)[key],
+        (overlay as Record<string, unknown>)[key],
+      );
+    }
+    return out as T;
+  }
+  return overlay as T;
+}
+
 export default function Home() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [openProgram, setOpenProgram] = useState<number | null>(0);
@@ -161,16 +185,24 @@ export default function Home() {
   const [hoverPlacementIdx, setHoverPlacementIdx] = useState<number | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  /* Live content fetch ─ falls back silently if API is unreachable */
+  /* Live content fetch ─ falls back silently if API is unreachable. */
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const r = await fetch(`${API_BASE}/landing`, { cache: 'no-store' });
+        // Cache-busting timestamp so neither browser nor CDN can serve
+        // a stale copy after admin edits.
+        const r = await fetch(`${API_BASE}/landing?_=${Date.now()}`, {
+          cache: 'no-store',
+          headers: { 'Cache-Control': 'no-cache' },
+        });
         if (!r.ok) return;
         const data = await r.json();
         if (cancelled || !data?.payload) return;
-        setContent({ ...FALLBACK, ...data.payload });
+        // DEEP merge — preserves every nested key from FALLBACK if the
+        // saved payload is partial. A shallow spread previously made
+        // missing keys (e.g. placements.items) crash the render.
+        setContent(mergeDeep(FALLBACK, data.payload) as LandingPayload);
       } catch {
         /* keep FALLBACK */
       }
@@ -221,18 +253,30 @@ export default function Home() {
     return () => io.disconnect();
   }, [content]);
 
-  const hero = content.hero ?? FALLBACK.hero;
-  const about = content.about ?? FALLBACK.about;
-  const programmesSec = content.programmes ?? FALLBACK.programmes;
-  const placementsSec = content.placements ?? FALLBACK.placements;
-  const campus = content.campus ?? FALLBACK.campus;
-  const cta = content.cta ?? FALLBACK.cta;
-  const contact = content.contact ?? FALLBACK.contact;
+  // Per-section guards: if a stored section is null/missing, fall back to
+  // the full default for that section. Then guard every array with `|| []`
+  // so the page renders even if the admin saved a partial blob.
+  const hero          = { ...FALLBACK.hero,       ...(content.hero       || {}) };
+  const about         = { ...FALLBACK.about,      ...(content.about      || {}) };
+  const programmesSec = { ...FALLBACK.programmes, ...(content.programmes || {}) };
+  const placementsSec = { ...FALLBACK.placements, ...(content.placements || {}) };
+  const campus        = { ...FALLBACK.campus,     ...(content.campus     || {}) };
+  const cta           = { ...FALLBACK.cta,        ...(content.cta        || {}) };
+  const contact       = { ...FALLBACK.contact,    ...(content.contact    || {}) };
 
-  /* Featured testimonial image — swaps on hover */
-  const featuredImg =
-    (hoverPlacementIdx !== null && placementsSec.items[hoverPlacementIdx]?.photo) ||
-    placementsSec.featuredImage;
+  hero.stats          = Array.isArray(hero.stats)          ? hero.stats          : [];
+  about.cards         = Array.isArray(about.cards)         ? about.cards         : [];
+  programmesSec.items = Array.isArray(programmesSec.items) ? programmesSec.items : [];
+  placementsSec.items = Array.isArray(placementsSec.items) ? placementsSec.items : [];
+  campus.items        = Array.isArray(campus.items)        ? campus.items        : [];
+  contact.phones      = Array.isArray(contact.phones)      ? contact.phones      : [];
+  contact.emails      = Array.isArray(contact.emails)      ? contact.emails      : [];
+
+  // Featured testimonial image — swaps on hover. Bounds-checked so an
+  // out-of-range hover index never throws.
+  const hovered =
+    hoverPlacementIdx !== null ? placementsSec.items[hoverPlacementIdx] : null;
+  const featuredImg = hovered?.photo || placementsSec.featuredImage;
 
   return (
     <div className="gesom-root">
@@ -749,14 +793,10 @@ export default function Home() {
               </div>
               <div className="absolute inset-x-0 bottom-0 p-5 sm:p-6 glass-dark text-white">
                 <p className="micro text-white/70">
-                  {hoverPlacementIdx !== null
-                    ? placementsSec.items[hoverPlacementIdx]?.program
-                    : 'Class of 2025'}
+                  {hovered?.program || 'Class of 2025'}
                 </p>
                 <p className="serif text-[19px] sm:text-[22px] font-medium mt-1">
-                  {hoverPlacementIdx !== null
-                    ? placementsSec.items[hoverPlacementIdx]?.name
-                    : placementsSec.featuredLabel}
+                  {hovered?.name || placementsSec.featuredLabel}
                 </p>
               </div>
             </div>
