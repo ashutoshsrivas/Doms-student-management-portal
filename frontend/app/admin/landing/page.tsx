@@ -18,6 +18,91 @@ import useAuthStore from '@/app/store/authStore';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
 
+/* ─── Safety-net defaults (mirror backend's DEFAULT_PAYLOAD) ──────
+   The editor deep-merges fetched content against this skeleton so that
+   missing nested keys never crash the form. */
+const SKELETON: Payload = {
+  hero: {
+    eyebrow: '', title1: '', title2: '', paragraph: '',
+    primaryCta: { label: '', href: '' },
+    secondaryCta: { label: '', href: '' },
+    stats: [],
+  },
+  about: { eyebrow: '', heading: '', cards: [] },
+  programmes: { eyebrow: '', heading: '', sub: '', items: [] },
+  placements: {
+    eyebrow: '', heading: '', sub: '',
+    featuredImage: '', featuredLabel: '', items: [],
+  },
+  campus: { eyebrow: '', heading: '', sub: '', items: [] },
+  cta: { eyebrow: '', title1: '', title2: '', paragraph: '' },
+  contact: {
+    eyebrow: '', heading: '', address: '',
+    phones: [], emails: [],
+  },
+};
+
+/* Deep merge — overlay wins for primitives and arrays; objects recurse.
+   Guarantees every nested field exists, even if backend payload is partial. */
+function mergeDeep<T>(base: T, overlay: unknown): T {
+  if (overlay === undefined || overlay === null) return base;
+  if (Array.isArray(overlay)) return overlay as unknown as T;
+  if (
+    typeof overlay === 'object' &&
+    overlay !== null &&
+    typeof base === 'object' &&
+    base !== null &&
+    !Array.isArray(base)
+  ) {
+    const out: Record<string, unknown> = { ...(base as Record<string, unknown>) };
+    for (const k of Object.keys(overlay as Record<string, unknown>)) {
+      out[k] = mergeDeep(
+        (base as Record<string, unknown>)[k],
+        (overlay as Record<string, unknown>)[k],
+      );
+    }
+    return out as T;
+  }
+  return overlay as T;
+}
+
+/* Coerce arrays defensively after merge (in case stored value is null). */
+function normalize(p: Payload): Payload {
+  return {
+    ...p,
+    hero: {
+      ...p.hero,
+      stats: Array.isArray(p.hero?.stats) ? p.hero.stats : [],
+    },
+    about: {
+      ...p.about,
+      cards: Array.isArray(p.about?.cards) ? p.about.cards : [],
+    },
+    programmes: {
+      ...p.programmes,
+      items: Array.isArray(p.programmes?.items)
+        ? p.programmes.items.map((it) => ({
+            ...it,
+            specs: Array.isArray(it.specs) ? it.specs : [],
+          }))
+        : [],
+    },
+    placements: {
+      ...p.placements,
+      items: Array.isArray(p.placements?.items) ? p.placements.items : [],
+    },
+    campus: {
+      ...p.campus,
+      items: Array.isArray(p.campus?.items) ? p.campus.items : [],
+    },
+    contact: {
+      ...p.contact,
+      phones: Array.isArray(p.contact?.phones) ? p.contact.phones : [],
+      emails: Array.isArray(p.contact?.emails) ? p.contact.emails : [],
+    },
+  };
+}
+
 /* ─── Types (mirror /api/landing payload) ────────────────────── */
 type Cta = { label: string; href: string };
 type Stat = { fig: string; cap: string };
@@ -70,18 +155,25 @@ function LandingEditor() {
     if (!authLoading && !user) router.push('/auth/login');
   }, [user, authLoading, router]);
 
-  /* fetch */
+  /* fetch — always normalised against SKELETON so the form never crashes
+     on a missing nested key. */
   useEffect(() => {
     if (!token) return;
     (async () => {
       try {
         setLoading(true);
-        const r = await fetch(`${API_BASE}/landing`, { cache: 'no-store' });
+        const r = await fetch(`${API_BASE}/landing?_=${Date.now()}`, {
+          cache: 'no-store',
+          headers: { 'Cache-Control': 'no-cache' },
+        });
         const data = await r.json();
-        setPayload(data.payload);
+        const merged = mergeDeep(SKELETON, data?.payload || {}) as Payload;
+        setPayload(normalize(merged));
       } catch (e) {
         console.error(e);
         toast.error('Failed to load landing content');
+        // Fall back to a blank-but-fully-shaped form so the editor still loads
+        setPayload(normalize(SKELETON));
       } finally {
         setLoading(false);
       }
