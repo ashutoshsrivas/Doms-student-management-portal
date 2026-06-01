@@ -13,105 +13,178 @@ import {
   FiFacebook,
   FiInstagram,
   FiYoutube,
+  FiMenu,
+  FiX,
 } from 'react-icons/fi';
 import AnnouncementsSection from './components/Announcements/AnnouncementsSection';
 
 /* ──────────────────────────────────────────────────────────────
-   GESoM Landing — Minimal, formal, iOS-style.
+   GESoM Landing — Minimal, formal, iOS-style. Content from API.
    Display: Cormorant Garamond · Body: Inter
    ────────────────────────────────────────────────────────────── */
+
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
 
 const ASSETS = {
   logo: 'https://geu.ac.in/frontend/assets/images/geu-logo.webp',
   banner:
     'https://geu.ac.in/uploads/pages/DntHgRFyE9nzmmFPhm05JFH3ZgWhKlZ6b7pzM94E.webp',
-  placement:
-    'https://geu.ac.in/uploads/page_section_attributes/placements-testimonial-69bd1d5811abb-1774001496.png',
   video:
     'https://geu.ac.in/uploads/page_section_attributes/VDd0PpwcgWvddNdkOK823B05H1KhyNeAHiNIAJXO.mp4',
 };
 
-const PROGRAMS = [
-  {
-    code: '01',
-    name: 'Master of Business Administration (MBA)',
-    duration: '2 Years',
-    note: 'A two-year full-time MBA built on a rigorous core curriculum and a wide arc of specialisations.',
-    specs: [
-      'Marketing', 'Finance', 'Human Resource Management',
-      'Logistics & Supply Chain Management', 'Hospital Administration',
-      'Airport & Airline Management', 'International Business',
-      'Banking & Insurance', 'Fintech', 'Digital Marketing',
-      'Branding & Advertising', 'Retail', 'Entrepreneurship',
-      'Sports Management',
+/* ─── Fallback content (mirrors backend defaults) ─────────────── */
+const FALLBACK: LandingPayload = {
+  hero: {
+    eyebrow: 'Graphic Era School of Management',
+    title1: 'Shaping Future',
+    title2: 'Business Leaders.',
+    paragraph:
+      'Two decades of academic excellence in management education at Graphic Era University, Dehradun — postgraduate and doctoral programmes designed for the next generation of managers, analysts and founders.',
+    primaryCta: { label: 'Begin application', href: 'https://apply.geu.ac.in/' },
+    secondaryCta: { label: 'View programmes', href: '#programmes' },
+    stats: [
+      { fig: '20+',      cap: 'Years of excellence' },
+      { fig: '5',        cap: 'Programmes' },
+      { fig: '14',       cap: 'MBA specialisations' },
+      { fig: '₹15.40 L', cap: 'Highest package · 2025' },
     ],
   },
-  {
-    code: '02',
-    name: 'MBA (IMPACT)',
-    duration: '2 Years',
-    note: 'An industry-integrated MBA, structured around live projects and senior corporate mentorship.',
+  about: {
+    eyebrow: 'About GESoM',
+    heading:
+      'A hub for nurturing top-tier leadership in the corporate world — recognised among the best management schools in India.',
+    cards: [
+      { k: '01', h: 'Two decades of teaching', p: 'A management department founded in 2006, with twenty years of academic record across MBA, MBA IMPACT, AI & Data Science and the doctoral programme.' },
+      { k: '02', h: 'Industry partnerships', p: 'Programmes built with corporate partners — including the M.B.A in Business Analytics delivered with Grant Thornton as Industry Partner.' },
+      { k: '03', h: 'A campus that supports the work', p: 'Lecture theatres, computer and analytics labs, syndicate rooms, board rooms and one of the largest libraries in the region.' },
+    ],
   },
-  {
-    code: '03',
-    name: 'MBA in Artificial Intelligence (AI) & Data Science (DS)',
-    duration: '2 Years',
-    note: 'A STEM-aligned MBA in applied machine learning, analytics and the strategic use of data.',
+  programmes: {
+    eyebrow: 'I — Programmes',
+    heading: 'Five programmes for the modern manager.',
+    sub: 'Postgraduate and doctoral degrees across general management, analytics, artificial intelligence and applied business analytics. Open any programme for tracks & specialisations.',
+    items: [],
   },
-  {
-    code: '04',
-    name: 'M.B.A Business Analytics (Industry Partner — Grant Thornton)',
-    duration: '2 Years',
-    note: 'Delivered with Grant Thornton as Industry Partner — analytics, audit and consulting at scale.',
+  placements: {
+    eyebrow: 'II — Placements',
+    heading: 'Class of 2025 — featured offers.',
+    sub: 'A selection of placements from the 2025 graduating cohort.',
+    featuredImage:
+      'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=1200&q=80',
+    featuredLabel: '100% Placement Record',
+    items: [],
   },
-  {
-    code: '05',
-    name: 'Ph.D. in Management Studies',
-    duration: 'Doctoral',
-    note: 'A research-intensive doctorate for scholars and practitioners working at the frontier of management thought.',
+  campus: {
+    eyebrow: 'III — Campus',
+    heading: 'Thirteen rooms, two blocks, one campus.',
+    sub: 'Lecture theatres, syndicate rooms, computer and analytics labs, a board room, a tutorial wing and the central library — the working environments of the Department of Management.',
+    items: [],
   },
-];
+  cta: {
+    eyebrow: 'Admissions 2026 — now open',
+    title1: 'Apply to the',
+    title2: 'Class of 2028.',
+    paragraph: 'Submit your application online. Admissions enquiries are answered within five working days.',
+  },
+  contact: {
+    eyebrow: 'IV — Contact',
+    heading: 'Reach the admissions office.',
+    address: '566/6, Bell Road, Society Area, Clement Town, Dehradun, Uttarakhand — 248002',
+    phones: ['1800 270 1280', '1800 890 6027'],
+    emails: ['admissions@geu.ac.in', 'enquiry@geu.ac.in'],
+  },
+};
 
-const PLACEMENTS = [
-  { name: 'Dikshant Sharma',   program: 'MBA',        pkg: '₹15.40 L', year: '2025' },
-  { name: 'Shreyansh Rohilla', program: 'MBA-Impact', pkg: '₹10.20 L', year: '2025' },
-  { name: 'Vanshika Kakkar',   program: 'MBA',        pkg: '₹10.20 L', year: '2025' },
-  { name: 'Shreya Raj',        program: 'MBA',        pkg: '₹10.20 L', year: '2025' },
-  { name: 'Chanchal Gupta',    program: 'MBA',        pkg: '₹10.20 L', year: '2025' },
-];
+/* ─── Types ──────────────────────────────────────────────────── */
+type Cta = { label: string; href: string };
+type Stat = { fig: string; cap: string };
+type AboutCard = { k: string; h: string; p: string };
+type Programme = {
+  code: string;
+  name: string;
+  duration: string;
+  note: string;
+  specs?: string[];
+};
+type Placement = {
+  name: string;
+  program: string;
+  pkg: string;
+  year: string;
+  photo?: string;
+};
+type Facility = { name: string; img: string };
 
-const FACILITIES = [
-  { name: 'Library', img: 'https://geu.ac.in/uploads/page_section_attributes/facilities-69de269edf155-1776166558.webp' },
-  { name: 'Lecture Theatre', img: 'https://geu.ac.in/uploads/page_section_attributes/facilities-6a06e92349404-1778837795.webp' },
-  { name: 'Seminar Hall', img: 'https://geu.ac.in/uploads/page_section_attributes/facilities-69d648140530b-1775650836.webp' },
-  { name: 'Conference Hall', img: 'https://geu.ac.in/uploads/page_section_attributes/facilities-6a06e92d5c1f4-1778837805.webp' },
-  { name: 'Computer Lab', img: 'https://geu.ac.in/uploads/page_section_attributes/facilities-69de26a23e8e2-1776166562.webp' },
-  { name: 'Classroom', img: 'https://geu.ac.in/uploads/page_section_attributes/facilities-69de26969e5a4-1776166550.webp' },
-  { name: 'Board Room — Chanakya Block', img: 'https://geu.ac.in/uploads/page_section_attributes/facilities-69e89713b20e3-1776850707.webp' },
-  { name: 'Dell Lab', img: 'https://geu.ac.in/uploads/page_section_attributes/facilities-6a06e952dfa9e-1778837842.webp' },
-  { name: 'Vidhan Sabha', img: 'https://geu.ac.in/uploads/page_section_attributes/facilities-6a06e94fd0fac-1778837839.webp' },
-  { name: 'Lecture Theatre — Chanakya Block', img: 'https://geu.ac.in/uploads/page_section_attributes/facilities-69e89735c53c3-1776850741.webp' },
-  { name: 'Lecture Theatre — New Building', img: 'https://geu.ac.in/uploads/page_section_attributes/facilities-69e8973c6ba0b-1776850748.webp' },
-  { name: 'Seminar Hall — Chanakya Block', img: 'https://geu.ac.in/uploads/page_section_attributes/facilities-69e8975a8bff0-1776850778.webp' },
-  { name: 'Tutorial Room', img: 'https://geu.ac.in/uploads/page_section_attributes/facilities-69e8976220c5f-1776850786.webp' },
-];
-
-const CONTACT = {
-  address:
-    '566/6, Bell Road, Society Area, Clement Town, Dehradun, Uttarakhand — 248002',
-  phones: ['1800 270 1280', '1800 890 6027'],
-  emails: ['admissions@geu.ac.in', 'enquiry@geu.ac.in'],
+export type LandingPayload = {
+  hero: {
+    eyebrow: string;
+    title1: string;
+    title2: string;
+    paragraph: string;
+    primaryCta: Cta;
+    secondaryCta: Cta;
+    stats: Stat[];
+  };
+  about: { eyebrow: string; heading: string; cards: AboutCard[] };
+  programmes: {
+    eyebrow: string;
+    heading: string;
+    sub: string;
+    items: Programme[];
+  };
+  placements: {
+    eyebrow: string;
+    heading: string;
+    sub: string;
+    featuredImage: string;
+    featuredLabel: string;
+    items: Placement[];
+  };
+  campus: { eyebrow: string; heading: string; sub: string; items: Facility[] };
+  cta: { eyebrow: string; title1: string; title2: string; paragraph: string };
+  contact: {
+    eyebrow: string;
+    heading: string;
+    address: string;
+    phones: string[];
+    emails: string[];
+  };
 };
 
 export default function Home() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [openProgram, setOpenProgram] = useState<number | null>(0);
   const [scrollY, setScrollY] = useState(0);
+  const [content, setContent] = useState<LandingPayload>(FALLBACK);
+  const [hoverPlacementIdx, setHoverPlacementIdx] = useState<number | null>(null);
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  /* Live content fetch ─ falls back silently if API is unreachable */
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch(`${API_BASE}/landing`, { cache: 'no-store' });
+        if (!r.ok) return;
+        const data = await r.json();
+        if (cancelled || !data?.payload) return;
+        setContent({ ...FALLBACK, ...data.payload });
+      } catch {
+        /* keep FALLBACK */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     videoRef.current?.play().catch(() => {});
   }, []);
 
+  /* iOS-style parallax — single rAF-throttled scroll listener */
   useEffect(() => {
     let raf = 0;
     let ticking = false;
@@ -130,6 +203,7 @@ export default function Home() {
     };
   }, []);
 
+  /* IntersectionObserver — reveal-on-enter */
   useEffect(() => {
     const els = document.querySelectorAll<HTMLElement>('[data-reveal]');
     const io = new IntersectionObserver(
@@ -145,7 +219,20 @@ export default function Home() {
     );
     els.forEach((el) => io.observe(el));
     return () => io.disconnect();
-  }, []);
+  }, [content]);
+
+  const hero = content.hero ?? FALLBACK.hero;
+  const about = content.about ?? FALLBACK.about;
+  const programmesSec = content.programmes ?? FALLBACK.programmes;
+  const placementsSec = content.placements ?? FALLBACK.placements;
+  const campus = content.campus ?? FALLBACK.campus;
+  const cta = content.cta ?? FALLBACK.cta;
+  const contact = content.contact ?? FALLBACK.contact;
+
+  /* Featured testimonial image — swaps on hover */
+  const featuredImg =
+    (hoverPlacementIdx !== null && placementsSec.items[hoverPlacementIdx]?.photo) ||
+    placementsSec.featuredImage;
 
   return (
     <div className="gesom-root">
@@ -182,23 +269,15 @@ export default function Home() {
           text-transform: uppercase;
           font-weight: 500;
         }
-        .gesom-root .num {
-          font-variant-numeric: tabular-nums lining-nums;
-        }
-        .gesom-root .rule {
-          height: 1px;
-          background: var(--line);
-        }
+        .gesom-root .num { font-variant-numeric: tabular-nums lining-nums; }
+        .gesom-root .rule { height: 1px; background: var(--line); }
         .gesom-root .reveal {
           opacity: 0;
           transform: translateY(18px);
           transition: opacity 0.9s cubic-bezier(0.2, 0.7, 0.2, 1),
             transform 0.9s cubic-bezier(0.2, 0.7, 0.2, 1);
         }
-        .gesom-root .is-in {
-          opacity: 1;
-          transform: none;
-        }
+        .gesom-root .is-in { opacity: 1; transform: none; }
         .gesom-root .reveal-delay-1 { transition-delay: 0.08s; }
         .gesom-root .reveal-delay-2 { transition-delay: 0.16s; }
         .gesom-root .reveal-delay-3 { transition-delay: 0.24s; }
@@ -219,7 +298,7 @@ export default function Home() {
         }
 
         .gesom-root .glass {
-          background: rgba(250, 250, 247, 0.72);
+          background: rgba(250, 250, 247, 0.78);
           backdrop-filter: saturate(180%) blur(20px);
           -webkit-backdrop-filter: saturate(180%) blur(20px);
         }
@@ -245,10 +324,10 @@ export default function Home() {
             0 30px 60px -30px rgba(14, 16, 20, 0.25);
         }
 
-        .gesom-root .display-xl { font-size: clamp(48px, 7.4vw, 104px); line-height: 1.02; font-weight: 500; }
-        .gesom-root .display-lg { font-size: clamp(36px, 4.6vw, 64px);  line-height: 1.06; font-weight: 500; }
-        .gesom-root .display-md { font-size: clamp(28px, 3.2vw, 44px);  line-height: 1.12; font-weight: 500; }
-        .gesom-root .display-sm { font-size: clamp(22px, 2.2vw, 30px);  line-height: 1.20; font-weight: 500; }
+        .gesom-root .display-xl { font-size: clamp(40px, 8vw, 104px); line-height: 1.02; font-weight: 500; }
+        .gesom-root .display-lg { font-size: clamp(30px, 5vw, 64px);  line-height: 1.08; font-weight: 500; }
+        .gesom-root .display-md { font-size: clamp(22px, 3.4vw, 44px); line-height: 1.14; font-weight: 500; }
+        .gesom-root .display-sm { font-size: clamp(20px, 2.4vw, 30px); line-height: 1.20; font-weight: 500; }
 
         .gesom-root .nav-link {
           color: var(--ink);
@@ -278,28 +357,51 @@ export default function Home() {
           border: 1px solid var(--line);
           transition: background 0.3s ease, color 0.3s ease;
         }
-        .gesom-root .chip:hover {
-          background: var(--ink);
-          color: var(--bone);
+        .gesom-root .chip:hover { background: var(--ink); color: var(--bone); }
+
+        /* Mobile drawer */
+        .gesom-root .drawer {
+          position: fixed;
+          top: 0; right: 0; bottom: 0;
+          width: 88%;
+          max-width: 360px;
+          background: var(--paper);
+          z-index: 60;
+          transform: translateX(100%);
+          transition: transform 0.45s cubic-bezier(0.2, 0.7, 0.2, 1);
+          box-shadow: -30px 0 60px -30px rgba(0,0,0,0.25);
+        }
+        .gesom-root .drawer.open { transform: translateX(0); }
+        .gesom-root .drawer-scrim {
+          position: fixed; inset: 0; background: rgba(14, 16, 20, 0.45);
+          z-index: 55; opacity: 0; pointer-events: none;
+          transition: opacity 0.4s ease;
+        }
+        .gesom-root .drawer-scrim.open { opacity: 1; pointer-events: auto; }
+
+        /* Mobile compact tweaks */
+        @media (max-width: 640px) {
+          .gesom-root section { padding-left: 0 !important; padding-right: 0 !important; }
+          .gesom-root .pad-mobile { padding-left: 20px !important; padding-right: 20px !important; }
         }
       `}</style>
 
       {/* ───────────────────── Nav ───────────────────── */}
       <header className="sticky top-0 z-50 glass border-b border-[var(--line)]">
-        <div className="max-w-[1320px] mx-auto px-6 lg:px-10 h-[68px] flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-3">
+        <div className="max-w-[1320px] mx-auto px-5 sm:px-6 lg:px-10 h-[64px] sm:h-[68px] flex items-center justify-between gap-2">
+          <Link href="/" className="flex items-center gap-2.5 sm:gap-3 min-w-0">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={ASSETS.logo}
-              alt="Graphic Era University"
-              className="h-9 w-auto object-contain"
+              alt="GEU"
+              className="h-8 sm:h-9 w-auto object-contain shrink-0"
               loading="eager"
             />
-            <span className="hidden sm:flex flex-col leading-none">
-              <span className="serif text-[18px] font-medium text-[var(--ink)]">
+            <span className="hidden xs:flex sm:flex flex-col leading-none min-w-0">
+              <span className="serif text-[15px] sm:text-[18px] font-medium text-[var(--ink)] truncate">
                 School of Management
               </span>
-              <span className="micro text-[var(--muted)] mt-1">
+              <span className="micro text-[var(--muted)] mt-1 hidden sm:block">
                 Graphic Era · Dehradun
               </span>
             </span>
@@ -312,25 +414,87 @@ export default function Home() {
             <a href="#contact"    className="nav-link link">Contact</a>
           </nav>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             <Link
               href="/auth/login"
-              className="hidden sm:inline-flex items-center text-[13.5px] font-medium text-[var(--ink-soft)] link px-2 py-2"
+              className="inline-flex items-center text-[12.5px] sm:text-[13.5px] font-medium text-[var(--ink-soft)] hover:text-[var(--ink)] px-2.5 sm:px-3 py-2 rounded-full"
             >
               Sign in
             </Link>
             <a
-              href="https://apply.geu.ac.in/"
+              href={hero.primaryCta.href}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 px-4 py-2 bg-[var(--ink)] text-[var(--bone)] text-[13px] font-medium rounded-full hover:bg-black transition"
+              className="inline-flex items-center gap-1.5 px-3.5 sm:px-4 py-2 bg-[var(--ink)] text-[var(--bone)] text-[12.5px] sm:text-[13px] font-medium rounded-full hover:bg-black transition"
             >
               Apply
-              <FiArrowUpRight size={14} />
+              <FiArrowUpRight size={13} />
             </a>
+            {/* Mobile menu trigger — only on small screens for nav links */}
+            <button
+              onClick={() => setMobileOpen(true)}
+              aria-label="Open menu"
+              className="lg:hidden w-9 h-9 -mr-1 rounded-full flex items-center justify-center text-[var(--ink)]"
+            >
+              <FiMenu size={19} />
+            </button>
           </div>
         </div>
       </header>
+
+      {/* Mobile drawer */}
+      <div
+        className={`drawer-scrim ${mobileOpen ? 'open' : ''}`}
+        onClick={() => setMobileOpen(false)}
+      />
+      <aside className={`drawer ${mobileOpen ? 'open' : ''}`}>
+        <div className="p-6 flex items-center justify-between border-b border-[var(--line)]">
+          <span className="serif text-[20px] font-medium text-[var(--ink)]">
+            Menu
+          </span>
+          <button
+            onClick={() => setMobileOpen(false)}
+            className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-[var(--bone)] text-[var(--ink)]"
+            aria-label="Close menu"
+          >
+            <FiX size={20} />
+          </button>
+        </div>
+        <nav className="p-6 flex flex-col gap-5">
+          {[
+            { l: 'Programmes', h: '#programmes' },
+            { l: 'Placements', h: '#placements' },
+            { l: 'Campus',     h: '#campus' },
+            { l: 'Contact',    h: '#contact' },
+          ].map((i) => (
+            <a
+              key={i.h}
+              href={i.h}
+              onClick={() => setMobileOpen(false)}
+              className="serif text-[24px] text-[var(--ink)] font-medium link"
+            >
+              {i.l}
+            </a>
+          ))}
+          <div className="rule my-4" />
+          <Link
+            href="/auth/login"
+            onClick={() => setMobileOpen(false)}
+            className="serif text-[20px] text-[var(--ink-soft)] link"
+          >
+            Sign in
+          </Link>
+          <a
+            href={hero.primaryCta.href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-4 inline-flex items-center gap-2 px-5 py-3 bg-[var(--ink)] text-[var(--bone)] text-[14px] font-medium rounded-full justify-center"
+          >
+            {hero.primaryCta.label}
+            <FiArrowUpRight size={14} />
+          </a>
+        </nav>
+      </aside>
 
       {/* ───────────────────── Hero ───────────────────── */}
       <section className="relative bg-[#06090f] text-white overflow-hidden">
@@ -350,41 +514,38 @@ export default function Home() {
             <source src={ASSETS.video} type="video/mp4" />
             <source src="/video.mp4" type="video/mp4" />
           </video>
-          <div className="absolute inset-0 bg-gradient-to-b from-[#06090f]/55 via-[#06090f]/35 to-[#06090f]/85" />
+          <div className="absolute inset-0 bg-gradient-to-b from-[#06090f]/60 via-[#06090f]/35 to-[#06090f]/90" />
         </div>
 
-        <div className="relative max-w-[1320px] mx-auto px-6 lg:px-10 min-h-[92vh] flex flex-col justify-between pt-32 pb-14">
+        <div className="relative max-w-[1320px] mx-auto pad-mobile px-6 lg:px-10 min-h-[88vh] sm:min-h-[92vh] flex flex-col justify-between pt-28 sm:pt-32 pb-12 sm:pb-14">
           <div data-reveal className="reveal max-w-3xl">
-            <p className="micro text-[var(--gold-soft)] mb-7 flex items-center gap-3">
+            <p className="micro text-[var(--gold-soft)] mb-6 sm:mb-7 flex items-center gap-3">
               <span className="w-8 h-px bg-[var(--gold-soft)]/70" />
-              Graphic Era School of Management
+              {hero.eyebrow}
             </p>
             <h1 className="serif display-xl text-white">
-              Shaping Future
+              {hero.title1}
               <br />
-              <span className="text-[var(--gold-soft)]">Business Leaders.</span>
+              <span className="text-[var(--gold-soft)]">{hero.title2}</span>
             </h1>
-            <p className="mt-8 max-w-xl text-[16px] leading-[1.7] text-white/75 font-light">
-              Two decades of academic excellence in management education at
-              Graphic Era University, Dehradun — postgraduate and doctoral
-              programmes designed for the next generation of managers,
-              analysts and founders.
+            <p className="mt-6 sm:mt-8 max-w-xl text-[15px] sm:text-[16px] leading-[1.7] text-white/75 font-light">
+              {hero.paragraph}
             </p>
-            <div className="mt-10 flex flex-wrap items-center gap-4">
+            <div className="mt-8 sm:mt-10 flex flex-wrap items-center gap-3 sm:gap-4">
               <a
-                href="https://apply.geu.ac.in/"
+                href={hero.primaryCta.href}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-2.5 px-7 py-3.5 bg-white text-[var(--ink)] rounded-full text-[14px] font-medium hover:bg-[var(--bone)] transition"
+                className="inline-flex items-center gap-2.5 px-6 sm:px-7 py-3 sm:py-3.5 bg-white text-[var(--ink)] rounded-full text-[13.5px] sm:text-[14px] font-medium hover:bg-[var(--bone)] transition"
               >
-                Begin application
+                {hero.primaryCta.label}
                 <FiArrowUpRight size={15} />
               </a>
               <a
-                href="#programmes"
-                className="inline-flex items-center gap-2.5 px-7 py-3.5 border border-white/25 text-white rounded-full text-[14px] font-medium hover:bg-white/5 transition"
+                href={hero.secondaryCta.href}
+                className="inline-flex items-center gap-2.5 px-6 sm:px-7 py-3 sm:py-3.5 border border-white/25 text-white rounded-full text-[13.5px] sm:text-[14px] font-medium hover:bg-white/5 transition"
               >
-                View programmes
+                {hero.secondaryCta.label}
                 <FiArrowRight size={15} />
               </a>
             </div>
@@ -392,14 +553,9 @@ export default function Home() {
 
           <div
             data-reveal
-            className="reveal reveal-delay-3 grid grid-cols-2 sm:grid-cols-4 gap-x-8 gap-y-6 max-w-3xl pt-10 mt-10 border-t border-white/15"
+            className="reveal reveal-delay-3 grid grid-cols-2 sm:grid-cols-4 gap-x-6 sm:gap-x-8 gap-y-6 max-w-3xl pt-8 sm:pt-10 mt-8 sm:mt-10 border-t border-white/15"
           >
-            {[
-              { fig: '20+',      cap: 'Years of excellence' },
-              { fig: '5',        cap: 'Programmes' },
-              { fig: '14',       cap: 'MBA specialisations' },
-              { fig: '₹15.40 L', cap: 'Highest package · 2025' },
-            ].map((s) => (
+            {hero.stats.map((s) => (
               <div key={s.cap}>
                 <p className="serif num display-sm text-white">{s.fig}</p>
                 <p className="mt-2 micro text-white/55">{s.cap}</p>
@@ -410,46 +566,28 @@ export default function Home() {
       </section>
 
       {/* ───────────────────── About ───────────────────── */}
-      <section className="bg-[var(--bone)] py-28 lg:py-40">
-        <div className="max-w-[1100px] mx-auto px-6 lg:px-10">
+      <section className="bg-[var(--bone)] py-20 sm:py-28 lg:py-40">
+        <div className="max-w-[1100px] mx-auto pad-mobile px-6 lg:px-10">
           <div data-reveal className="reveal">
-            <p className="micro text-[var(--gold)] mb-8">About GESoM</p>
+            <p className="micro text-[var(--gold)] mb-6 sm:mb-8">{about.eyebrow}</p>
             <p className="serif display-lg text-[var(--ink)] max-w-4xl">
-              A hub for nurturing top-tier leadership in the corporate world —
-              recognised among the best management schools in India.
+              {about.heading}
             </p>
           </div>
 
-          <div className="mt-16 lg:mt-20 grid md:grid-cols-3 gap-10 lg:gap-16">
-            {[
-              {
-                k: '01',
-                h: 'Two decades of teaching',
-                p: 'A management department founded in 2006, with twenty years of academic record across MBA, MBA IMPACT, AI &amp; Data Science and the doctoral programme.',
-              },
-              {
-                k: '02',
-                h: 'Industry partnerships',
-                p: 'Programmes built with corporate partners — including the M.B.A in Business Analytics delivered with Grant Thornton as Industry Partner.',
-              },
-              {
-                k: '03',
-                h: 'A campus that supports the work',
-                p: 'Lecture theatres, computer and analytics labs, syndicate rooms, board rooms and one of the largest libraries in the region.',
-              },
-            ].map((b, i) => (
+          <div className="mt-12 sm:mt-16 lg:mt-20 grid md:grid-cols-3 gap-10 lg:gap-16">
+            {about.cards.map((b, i) => (
               <div
-                key={b.k}
+                key={`${b.k}-${i}`}
                 data-reveal
                 className={`reveal reveal-delay-${i + 1}`}
               >
-                <p className="serif num text-[var(--gold)] text-[28px]">{b.k}</p>
+                <p className="serif num text-[var(--gold)] text-[26px] sm:text-[28px]">{b.k}</p>
                 <div className="mt-3 mb-5 h-px w-10 bg-[var(--gold)]/60" />
                 <h3 className="serif display-sm text-[var(--ink)]">{b.h}</h3>
-                <p
-                  className="mt-4 text-[15px] leading-[1.7] text-[var(--muted)]"
-                  dangerouslySetInnerHTML={{ __html: b.p }}
-                />
+                <p className="mt-4 text-[15px] leading-[1.7] text-[var(--muted)]">
+                  {b.p}
+                </p>
               </div>
             ))}
           </div>
@@ -457,55 +595,53 @@ export default function Home() {
       </section>
 
       {/* ───────────────────── Programmes ───────────────────── */}
-      <section id="programmes" className="bg-[var(--paper)] py-28 lg:py-40">
-        <div className="max-w-[1320px] mx-auto px-6 lg:px-10">
-          <div className="grid lg:grid-cols-12 gap-10 mb-20 lg:mb-24">
+      <section id="programmes" className="bg-[var(--paper)] py-20 sm:py-28 lg:py-40">
+        <div className="max-w-[1320px] mx-auto pad-mobile px-6 lg:px-10">
+          <div className="grid lg:grid-cols-12 gap-8 sm:gap-10 mb-14 sm:mb-20 lg:mb-24">
             <div data-reveal className="reveal lg:col-span-4">
-              <p className="micro text-[var(--gold)]">I — Programmes</p>
+              <p className="micro text-[var(--gold)]">{programmesSec.eyebrow}</p>
               <div className="mt-4 h-px w-12 bg-[var(--gold)]/60" />
             </div>
             <div data-reveal className="reveal reveal-delay-1 lg:col-span-8">
               <h2 className="serif display-lg text-[var(--ink)]">
-                Five programmes for the modern manager.
+                {programmesSec.heading}
               </h2>
-              <p className="mt-6 max-w-2xl text-[16px] leading-[1.7] text-[var(--muted)]">
-                Postgraduate and doctoral degrees across general management,
-                analytics, artificial intelligence and applied business
-                analytics. Open any programme for tracks &amp; specialisations.
+              <p className="mt-5 sm:mt-6 max-w-2xl text-[15px] sm:text-[16px] leading-[1.7] text-[var(--muted)]">
+                {programmesSec.sub}
               </p>
             </div>
           </div>
 
           <div className="border-t border-[var(--line)]">
-            {PROGRAMS.map((p, i) => {
+            {programmesSec.items.map((p, i) => {
               const open = openProgram === i;
               return (
                 <div
-                  key={p.code}
+                  key={`${p.code}-${i}`}
                   data-reveal
                   className={`reveal reveal-delay-${Math.min(i, 4)} border-b border-[var(--line)]`}
                 >
                   <button
                     onClick={() => setOpenProgram(open ? null : i)}
-                    className="w-full grid lg:grid-cols-12 gap-6 py-8 lg:py-10 text-left items-baseline group transition px-1 -mx-1 rounded-2xl hover:bg-[var(--bone)]"
+                    className="w-full grid lg:grid-cols-12 gap-4 lg:gap-6 py-6 sm:py-8 lg:py-10 text-left items-baseline group transition px-1 -mx-1 rounded-2xl hover:bg-[var(--bone)]"
                   >
                     <div className="lg:col-span-1 num micro text-[var(--gold)]">
                       {p.code}
                     </div>
-                    <div className="lg:col-span-8">
+                    <div className="lg:col-span-7">
                       <h3 className="serif display-md text-[var(--ink)]">
                         {p.name}
                       </h3>
                     </div>
-                    <div className="lg:col-span-2 flex flex-col">
+                    <div className="lg:col-span-3 flex lg:flex-col gap-2 lg:gap-0 items-baseline lg:items-stretch">
                       <span className="micro text-[var(--muted)]">Duration</span>
-                      <span className="mt-1 text-[14px] text-[var(--ink-soft)] font-medium">
+                      <span className="lg:mt-1 text-[13.5px] sm:text-[14px] text-[var(--ink-soft)] font-medium">
                         {p.duration}
                       </span>
                     </div>
                     <div className="lg:col-span-1 flex lg:justify-end">
                       <span
-                        className={`w-10 h-10 rounded-full border border-[var(--line)] flex items-center justify-center transition-transform duration-500 ${
+                        className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full border border-[var(--line)] flex items-center justify-center transition-transform duration-500 ${
                           open
                             ? 'bg-[var(--ink)] text-white rotate-45 border-[var(--ink)]'
                             : 'text-[var(--ink-soft)]'
@@ -520,23 +656,21 @@ export default function Home() {
                     style={{ gridTemplateRows: open ? '1fr' : '0fr' }}
                   >
                     <div className="overflow-hidden">
-                      <div className="grid lg:grid-cols-12 gap-6 pb-10 lg:pb-12">
+                      <div className="grid lg:grid-cols-12 gap-6 pb-8 sm:pb-10 lg:pb-12">
                         <div className="lg:col-span-1" />
                         <div className="lg:col-span-7">
-                          <p className="serif italic text-[20px] lg:text-[22px] leading-[1.45] text-[var(--ink-soft)] max-w-2xl font-light">
+                          <p className="serif italic text-[18px] sm:text-[20px] lg:text-[22px] leading-[1.45] text-[var(--ink-soft)] max-w-2xl font-light">
                             {p.note}
                           </p>
 
-                          {p.specs && (
-                            <div className="mt-8">
+                          {p.specs && p.specs.length > 0 && (
+                            <div className="mt-7 sm:mt-8">
                               <p className="micro text-[var(--muted)] mb-4">
                                 Specialisations
                               </p>
-                              <div className="flex flex-wrap gap-2.5">
+                              <div className="flex flex-wrap gap-2 sm:gap-2.5">
                                 {p.specs.map((s) => (
-                                  <span key={s} className="chip">
-                                    {s}
-                                  </span>
+                                  <span key={s} className="chip">{s}</span>
                                 ))}
                               </div>
                             </div>
@@ -544,10 +678,10 @@ export default function Home() {
                         </div>
                         <div className="lg:col-span-4">
                           <a
-                            href="https://apply.geu.ac.in/"
+                            href={hero.primaryCta.href}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-2 text-[13.5px] font-medium text-[var(--ink)]"
+                            className="inline-flex items-center gap-2 text-[13px] sm:text-[13.5px] font-medium text-[var(--ink)]"
                           >
                             <span className="link">Apply to this programme</span>
                             <FiArrowUpRight size={14} />
@@ -566,7 +700,7 @@ export default function Home() {
       {/* ───────────────────── Placements ───────────────────── */}
       <section
         id="placements"
-        className="relative bg-[var(--bone)] py-28 lg:py-40 overflow-hidden"
+        className="relative bg-[var(--bone)] py-20 sm:py-28 lg:py-40 overflow-hidden"
       >
         <div
           className="pointer-events-none absolute inset-x-0 top-0 h-[60%] opacity-[0.04]"
@@ -576,66 +710,77 @@ export default function Home() {
               'radial-gradient(circle at 20% 50%, #a07a3b 0, transparent 40%), radial-gradient(circle at 80% 30%, #0e1014 0, transparent 45%)',
           }}
         />
-        <div className="relative max-w-[1320px] mx-auto px-6 lg:px-10">
-          <div className="grid lg:grid-cols-12 gap-10 mb-16">
+        <div className="relative max-w-[1320px] mx-auto pad-mobile px-6 lg:px-10">
+          <div className="grid lg:grid-cols-12 gap-8 sm:gap-10 mb-12 sm:mb-16">
             <div data-reveal className="reveal lg:col-span-4">
-              <p className="micro text-[var(--gold)]">II — Placements</p>
+              <p className="micro text-[var(--gold)]">{placementsSec.eyebrow}</p>
               <div className="mt-4 h-px w-12 bg-[var(--gold)]/60" />
             </div>
-            <div data-reveal className="reveal reveal-delay-1 lg:col-span-8 flex flex-col lg:flex-row lg:items-end lg:justify-between gap-8">
+            <div data-reveal className="reveal reveal-delay-1 lg:col-span-8 flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6 lg:gap-8">
               <h2 className="serif display-lg text-[var(--ink)] max-w-3xl">
-                Class of <span className="num">2025</span> — featured offers.
+                {placementsSec.heading}
               </h2>
               <p className="micro text-[var(--muted)] max-w-xs">
-                A selection of placements from the 2025 graduating cohort.
+                {placementsSec.sub}
               </p>
             </div>
           </div>
 
-          {/* Featured testimonial frame + offer cards */}
-          <div className="grid lg:grid-cols-12 gap-6">
+          <div className="grid lg:grid-cols-12 gap-5 lg:gap-6">
+            {/* Featured testimonial image — swaps on student hover */}
             <div
               data-reveal
-              className="reveal lg:col-span-5 relative rounded-[24px] overflow-hidden aspect-[4/5] lg:aspect-auto bg-[var(--bone-deep)]"
+              className="reveal lg:col-span-5 relative rounded-[20px] sm:rounded-[24px] overflow-hidden aspect-[4/5] lg:aspect-auto bg-[var(--bone-deep)]"
             >
               <div
-                className="absolute inset-0 will-change-transform"
+                className="absolute inset-0 will-change-transform transition-opacity duration-500"
                 style={{
                   transform: `translate3d(0, ${(scrollY - 2800) * -0.04}px, 0) scale(1.05)`,
                 }}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={ASSETS.placement}
+                  key={featuredImg}
+                  src={featuredImg}
                   alt="GESoM placement"
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-cover transition-opacity duration-500 animate-[fadeIn_0.5s_ease]"
+                  style={{ animation: 'fadeIn 0.5s ease' }}
                 />
               </div>
-              <div className="absolute inset-x-0 bottom-0 p-6 glass-dark text-white">
-                <p className="micro text-white/70">Class of 2025</p>
-                <p className="serif text-[22px] font-medium mt-1">
-                  100% Placement Record
+              <div className="absolute inset-x-0 bottom-0 p-5 sm:p-6 glass-dark text-white">
+                <p className="micro text-white/70">
+                  {hoverPlacementIdx !== null
+                    ? placementsSec.items[hoverPlacementIdx]?.program
+                    : 'Class of 2025'}
+                </p>
+                <p className="serif text-[19px] sm:text-[22px] font-medium mt-1">
+                  {hoverPlacementIdx !== null
+                    ? placementsSec.items[hoverPlacementIdx]?.name
+                    : placementsSec.featuredLabel}
                 </p>
               </div>
             </div>
 
-            <div className="lg:col-span-7 grid sm:grid-cols-2 gap-5">
-              {PLACEMENTS.map((p, i) => (
+            {/* Offer cards — hover to swap featured image */}
+            <div className="lg:col-span-7 grid sm:grid-cols-2 gap-4 sm:gap-5">
+              {placementsSec.items.map((p, i) => (
                 <article
-                  key={p.name}
+                  key={`${p.name}-${i}`}
                   data-reveal
-                  className={`reveal reveal-delay-${(i % 5) + 1} card p-7`}
+                  onMouseEnter={() => setHoverPlacementIdx(i)}
+                  onMouseLeave={() => setHoverPlacementIdx(null)}
+                  className={`reveal reveal-delay-${(i % 5) + 1} card p-6 sm:p-7 cursor-default`}
                 >
                   <p className="micro text-[var(--muted)]">{p.year}</p>
-                  <p className="serif text-[22px] font-medium text-[var(--ink)] leading-tight mt-3">
+                  <p className="serif text-[20px] sm:text-[22px] font-medium text-[var(--ink)] leading-tight mt-3">
                     {p.name}
                   </p>
-                  <p className="mt-1 text-[13px] text-[var(--muted)]">
+                  <p className="mt-1 text-[12.5px] sm:text-[13px] text-[var(--muted)]">
                     {p.program}
                   </p>
-                  <div className="mt-7 pt-5 border-t border-[var(--line)]">
+                  <div className="mt-6 sm:mt-7 pt-4 sm:pt-5 border-t border-[var(--line)]">
                     <p className="micro text-[var(--muted)] mb-2">Offer</p>
-                    <p className="serif num text-[28px] font-semibold text-[var(--ink)] leading-none">
+                    <p className="serif num text-[26px] sm:text-[28px] font-semibold text-[var(--ink)] leading-none">
                       {p.pkg}
                     </p>
                   </div>
@@ -646,46 +791,44 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ───────────────────── Campus — facility gallery ───────────────────── */}
-      <section id="campus" className="bg-[var(--paper)] py-28 lg:py-40">
-        <div className="max-w-[1320px] mx-auto px-6 lg:px-10">
-          <div className="grid lg:grid-cols-12 gap-10 mb-16">
+      {/* ───────────────────── Campus ───────────────────── */}
+      <section id="campus" className="bg-[var(--paper)] py-20 sm:py-28 lg:py-40">
+        <div className="max-w-[1320px] mx-auto pad-mobile px-6 lg:px-10">
+          <div className="grid lg:grid-cols-12 gap-8 sm:gap-10 mb-12 sm:mb-16">
             <div data-reveal className="reveal lg:col-span-4">
-              <p className="micro text-[var(--gold)]">III — Campus</p>
+              <p className="micro text-[var(--gold)]">{campus.eyebrow}</p>
               <div className="mt-4 h-px w-12 bg-[var(--gold)]/60" />
             </div>
             <div data-reveal className="reveal reveal-delay-1 lg:col-span-8">
               <h2 className="serif display-lg text-[var(--ink)] max-w-3xl">
-                Thirteen rooms, two blocks, one campus.
+                {campus.heading}
               </h2>
-              <p className="mt-6 max-w-2xl text-[16px] leading-[1.7] text-[var(--muted)]">
-                Lecture theatres, syndicate rooms, computer and analytics
-                labs, a board room, a tutorial wing and the central library —
-                the working environments of the Department of Management.
+              <p className="mt-5 sm:mt-6 max-w-2xl text-[15px] sm:text-[16px] leading-[1.7] text-[var(--muted)]">
+                {campus.sub}
               </p>
             </div>
           </div>
 
-          {/* Mosaic — featured top + grid below */}
-          <div className="grid lg:grid-cols-12 gap-5 lg:gap-6">
-            {/* Featured 0 */}
-            <Facility
-              f={FACILITIES[0]}
-              scrollY={scrollY}
-              parallaxBase={3800}
-              className="lg:col-span-7 aspect-[16/10]"
-            />
-            {/* Featured 1 */}
-            <Facility
-              f={FACILITIES[1]}
-              scrollY={scrollY}
-              parallaxBase={3800}
-              className="lg:col-span-5 aspect-[16/10] lg:aspect-auto"
-            />
-            {/* Grid remainder — 3 per row */}
-            {FACILITIES.slice(2).map((f, i) => (
-              <Facility
-                key={f.name}
+          <div className="grid lg:grid-cols-12 gap-4 sm:gap-5 lg:gap-6">
+            {campus.items.length > 0 && (
+              <FacilityCard
+                f={campus.items[0]}
+                scrollY={scrollY}
+                parallaxBase={3800}
+                className="lg:col-span-7 aspect-[16/10]"
+              />
+            )}
+            {campus.items.length > 1 && (
+              <FacilityCard
+                f={campus.items[1]}
+                scrollY={scrollY}
+                parallaxBase={3800}
+                className="lg:col-span-5 aspect-[16/10] lg:aspect-auto"
+              />
+            )}
+            {campus.items.slice(2).map((f, i) => (
+              <FacilityCard
+                key={`${f.name}-${i}`}
                 f={f}
                 scrollY={scrollY}
                 parallaxBase={4400 + i * 200}
@@ -697,7 +840,7 @@ export default function Home() {
       </section>
 
       {/* ───────────────────── CTA ───────────────────── */}
-      <section className="relative bg-[var(--ink)] text-white py-28 lg:py-36 overflow-hidden">
+      <section className="relative bg-[var(--ink)] text-white py-20 sm:py-28 lg:py-36 overflow-hidden">
         <div
           className="absolute inset-0 opacity-30 will-change-transform"
           style={{
@@ -706,43 +849,42 @@ export default function Home() {
               'radial-gradient(ellipse at center, rgba(196, 161, 104, 0.35), transparent 55%)',
           }}
         />
-        <div className="relative max-w-[920px] mx-auto px-6 text-center">
-          <p data-reveal className="reveal micro text-[var(--gold-soft)] mb-8">
-            Admissions 2026 — now open
+        <div className="relative max-w-[920px] mx-auto pad-mobile px-6 text-center">
+          <p data-reveal className="reveal micro text-[var(--gold-soft)] mb-7 sm:mb-8">
+            {cta.eyebrow}
           </p>
           <h2
             data-reveal
             className="reveal reveal-delay-1 serif display-xl text-white"
           >
-            Apply to the
+            {cta.title1}
             <br />
             <span className="italic font-light text-[var(--gold-soft)]">
-              Class of 2028.
+              {cta.title2}
             </span>
           </h2>
           <p
             data-reveal
-            className="reveal reveal-delay-2 mt-8 max-w-md mx-auto text-[15px] leading-[1.7] text-white/65"
+            className="reveal reveal-delay-2 mt-7 sm:mt-8 max-w-md mx-auto text-[14.5px] sm:text-[15px] leading-[1.7] text-white/65"
           >
-            Submit your application online. Admissions enquiries are answered
-            within five working days.
+            {cta.paragraph}
           </p>
           <div
             data-reveal
-            className="reveal reveal-delay-3 mt-12 flex items-center justify-center gap-4 flex-wrap"
+            className="reveal reveal-delay-3 mt-10 sm:mt-12 flex items-center justify-center gap-3 sm:gap-4 flex-wrap"
           >
             <a
-              href="https://apply.geu.ac.in/"
+              href={hero.primaryCta.href}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2.5 px-8 py-4 bg-white text-[var(--ink)] rounded-full text-[14px] font-medium hover:bg-[var(--bone)] transition"
+              className="inline-flex items-center gap-2.5 px-7 sm:px-8 py-3.5 sm:py-4 bg-white text-[var(--ink)] rounded-full text-[13.5px] sm:text-[14px] font-medium hover:bg-[var(--bone)] transition"
             >
-              Begin application
+              {hero.primaryCta.label}
               <FiArrowUpRight size={15} />
             </a>
             <a
               href="#contact"
-              className="inline-flex items-center gap-2.5 px-8 py-4 border border-white/25 text-white rounded-full text-[14px] font-medium hover:bg-white/5 transition"
+              className="inline-flex items-center gap-2.5 px-7 sm:px-8 py-3.5 sm:py-4 border border-white/25 text-white rounded-full text-[13.5px] sm:text-[14px] font-medium hover:bg-white/5 transition"
             >
               Talk to admissions
             </a>
@@ -751,34 +893,32 @@ export default function Home() {
       </section>
 
       {/* ───────────────────── Contact ───────────────────── */}
-      <section id="contact" className="bg-[var(--bone)] py-28 lg:py-36">
-        <div className="max-w-[1320px] mx-auto px-6 lg:px-10">
-          <div className="grid lg:grid-cols-12 gap-10 mb-16">
+      <section id="contact" className="bg-[var(--bone)] py-20 sm:py-28 lg:py-36">
+        <div className="max-w-[1320px] mx-auto pad-mobile px-6 lg:px-10">
+          <div className="grid lg:grid-cols-12 gap-8 sm:gap-10 mb-12 sm:mb-16">
             <div data-reveal className="reveal lg:col-span-4">
-              <p className="micro text-[var(--gold)]">IV — Contact</p>
+              <p className="micro text-[var(--gold)]">{contact.eyebrow}</p>
               <div className="mt-4 h-px w-12 bg-[var(--gold)]/60" />
             </div>
             <div data-reveal className="reveal reveal-delay-1 lg:col-span-8">
-              <h2 className="serif display-lg text-[var(--ink)]">
-                Reach the admissions office.
-              </h2>
+              <h2 className="serif display-lg text-[var(--ink)]">{contact.heading}</h2>
             </div>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-5">
+          <div className="grid md:grid-cols-3 gap-4 sm:gap-5">
             {[
-              { Icon: FiMapPin, title: 'Address',  lines: [CONTACT.address] },
-              { Icon: FiPhone,  title: 'Helpline', lines: CONTACT.phones },
-              { Icon: FiMail,   title: 'Email',    lines: CONTACT.emails },
+              { Icon: FiMapPin, title: 'Address',  lines: [contact.address] },
+              { Icon: FiPhone,  title: 'Helpline', lines: contact.phones },
+              { Icon: FiMail,   title: 'Email',    lines: contact.emails },
             ].map((c, i) => {
               const { Icon } = c;
               return (
                 <div
                   key={c.title}
                   data-reveal
-                  className={`reveal reveal-delay-${i + 1} card p-8`}
+                  className={`reveal reveal-delay-${i + 1} card p-7 sm:p-8`}
                 >
-                  <div className="flex items-center justify-between mb-7">
+                  <div className="flex items-center justify-between mb-6 sm:mb-7">
                     <span className="w-10 h-10 rounded-full bg-[var(--bone-deep)] text-[var(--ink)] flex items-center justify-center">
                       <Icon size={16} />
                     </span>
@@ -788,7 +928,7 @@ export default function Home() {
                     {c.lines.map((l) => (
                       <p
                         key={l}
-                        className="serif text-[18px] leading-[1.4] text-[var(--ink)] font-medium"
+                        className="serif text-[17px] sm:text-[18px] leading-[1.4] text-[var(--ink)] font-medium break-words"
                       >
                         {l}
                       </p>
@@ -808,10 +948,10 @@ export default function Home() {
 
       {/* ───────────────────── Footer ───────────────────── */}
       <footer className="bg-[var(--ink)] text-white/80">
-        <div className="max-w-[1320px] mx-auto px-6 lg:px-10 pt-20 pb-10">
-          <div className="grid lg:grid-cols-12 gap-12 mb-14">
+        <div className="max-w-[1320px] mx-auto pad-mobile px-6 lg:px-10 pt-16 sm:pt-20 pb-10">
+          <div className="grid lg:grid-cols-12 gap-10 sm:gap-12 mb-12 sm:mb-14">
             <div className="lg:col-span-5">
-              <div className="flex items-center gap-3 mb-6">
+              <div className="flex items-center gap-3 mb-5 sm:mb-6">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={ASSETS.logo}
@@ -819,7 +959,7 @@ export default function Home() {
                   className="h-10 w-auto object-contain bg-white/95 rounded-md p-1"
                 />
                 <div>
-                  <p className="serif text-[20px] font-medium text-white">
+                  <p className="serif text-[18px] sm:text-[20px] font-medium text-white">
                     School of Management
                   </p>
                   <p className="micro text-white/60 mt-1">
@@ -827,14 +967,14 @@ export default function Home() {
                   </p>
                 </div>
               </div>
-              <p className="text-[14.5px] leading-[1.7] text-white/60 max-w-md">
+              <p className="text-[14px] sm:text-[14.5px] leading-[1.7] text-white/60 max-w-md">
                 Graphic Era School of Management — postgraduate and doctoral
                 programmes in business, since 2006.
               </p>
             </div>
 
             <div className="lg:col-span-3">
-              <p className="micro text-[var(--gold-soft)] mb-5">Site</p>
+              <p className="micro text-[var(--gold-soft)] mb-4 sm:mb-5">Site</p>
               <ul className="space-y-3 text-[14px]">
                 <li><a href="#programmes" className="link">Programmes</a></li>
                 <li><a href="#placements" className="link">Placements</a></li>
@@ -844,14 +984,14 @@ export default function Home() {
             </div>
 
             <div className="lg:col-span-4">
-              <p className="micro text-[var(--gold-soft)] mb-5">Contact</p>
-              {CONTACT.emails.map((e) => (
-                <p key={e} className="serif text-[18px] text-white mb-1">{e}</p>
+              <p className="micro text-[var(--gold-soft)] mb-4 sm:mb-5">Contact</p>
+              {contact.emails.map((e) => (
+                <p key={e} className="serif text-[17px] sm:text-[18px] text-white mb-1 break-words">{e}</p>
               ))}
-              {CONTACT.phones.map((p) => (
-                <p key={p} className="serif num text-[18px] text-white">{p}</p>
+              {contact.phones.map((p) => (
+                <p key={p} className="serif num text-[17px] sm:text-[18px] text-white">{p}</p>
               ))}
-              <div className="flex gap-2.5 mt-7">
+              <div className="flex gap-2.5 mt-6 sm:mt-7">
                 {[
                   { Icon: FiLinkedin,  href: 'https://www.linkedin.com/school/graphic-era-official' },
                   { Icon: FiFacebook,  href: 'https://www.facebook.com/geuofficial/' },
@@ -873,9 +1013,9 @@ export default function Home() {
           </div>
 
           <div className="rule bg-white/10" />
-          <div className="pt-7 flex flex-col md:flex-row md:items-center md:justify-between gap-3 text-[12px] text-white/45">
+          <div className="pt-6 sm:pt-7 flex flex-col md:flex-row md:items-center md:justify-between gap-3 text-[11.5px] sm:text-[12px] text-white/45">
             <p>© 2026 Graphic Era University · Department of Management</p>
-            <p className="micro">GESoM Portal · v2026.3</p>
+            <p className="micro">GESoM Portal · v2026.4</p>
           </div>
         </div>
       </footer>
@@ -883,14 +1023,14 @@ export default function Home() {
   );
 }
 
-/* ─────────── Facility card — extracted so parallax stays clean ────────── */
-function Facility({
+/* ─────────── Facility card ────────── */
+function FacilityCard({
   f,
   scrollY,
   parallaxBase,
   className = '',
 }: {
-  f: { name: string; img: string };
+  f: Facility;
   scrollY: number;
   parallaxBase: number;
   className?: string;
@@ -898,7 +1038,7 @@ function Facility({
   return (
     <figure
       data-reveal
-      className={`reveal group relative overflow-hidden rounded-[20px] bg-[var(--bone-deep)] ${className}`}
+      className={`reveal group relative overflow-hidden rounded-[18px] sm:rounded-[20px] bg-[var(--bone-deep)] ${className}`}
     >
       <div
         className="absolute inset-0 will-change-transform"
@@ -914,8 +1054,8 @@ function Facility({
           className="absolute inset-0 w-full h-full object-cover transition-transform duration-[1.2s] group-hover:scale-[1.04]"
         />
       </div>
-      <div className="absolute inset-x-0 bottom-0 p-5 glass-dark text-white flex items-baseline justify-between gap-3">
-        <p className="serif text-[18px] lg:text-[20px] font-medium leading-tight">
+      <div className="absolute inset-x-0 bottom-0 p-4 sm:p-5 glass-dark text-white flex items-baseline justify-between gap-3">
+        <p className="serif text-[16px] sm:text-[18px] lg:text-[20px] font-medium leading-tight">
           {f.name}
         </p>
         <span className="micro text-white/70 hidden sm:block">GEU</span>

@@ -1846,6 +1846,33 @@ const FacultyNote = sequelize.define('FacultyNote', {
 FacultyNote.belongsTo(User, { foreignKey: 'facultyId', as: 'Faculty' });
 FacultyNote.belongsTo(User, { foreignKey: 'createdBy', as: 'Creator' });
 
+// Landing page CMS — single-row key/value store. ADMIN/HOD edit the JSON
+// payload that the public landing page reads on mount.
+const LandingContent = sequelize.define('LandingContent', {
+  id: {
+    type: DataTypes.UUID,
+    defaultValue: DataTypes.UUIDV4,
+    primaryKey: true,
+  },
+  contentKey: {
+    type: DataTypes.STRING(64),
+    allowNull: false,
+    unique: true,
+  },
+  payload: {
+    type: DataTypes.JSON,
+    allowNull: false,
+  },
+  updatedBy: {
+    type: DataTypes.UUID,
+    allowNull: true,
+  },
+}, {
+  tableName: 'landing_content',
+  timestamps: true,
+  underscored: true,
+});
+
 // Messaging Models
 
 
@@ -1885,4 +1912,5 @@ module.exports = {
   FacultyTaskUpdate,
   Event,
   BlockedDate,
+  LandingContent,
 };

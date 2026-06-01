@@ -110,6 +110,7 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
         { name: 'Reports', href: '/admin/reports', iconKey: 'fileText' },
         { name: 'Faculty Tasks', href: '/admin/faculty-tasks', iconKey: 'clipboard', children: facultyTasksChildren },
         { name: 'Announcements', href: '/admin/announcements', iconKey: 'bell', children: adminAnnouncementsChildren },
+        { name: 'Landing Page', href: '/admin/landing', iconKey: 'fileText' },
       ],
       FACULTY: [
         { name: 'Dashboard', href: '/faculty/dashboard', iconKey: 'chart' },
@@ -143,6 +144,7 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
         { name: 'Faculty Tasks', href: '/admin/faculty-tasks', iconKey: 'clipboard', children: facultyTasksChildren },
         { name: 'My Tasks', href: '/faculty/tasks', iconKey: 'clipboard' },
         { name: 'Announcements', href: '/admin/announcements', iconKey: 'bell', children: adminAnnouncementsChildren },
+        { name: 'Landing Page', href: '/admin/landing', iconKey: 'fileText' },
       ],
       PLACEMENT_COORDINATOR: [
         { name: 'Dashboard', href: '/coordinator/dashboard', iconKey: 'chart' },
