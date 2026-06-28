@@ -1,4 +1,13 @@
-const { SIP, SIPWeeklyUpdate, StudentSession, AcademicSession, User } = require('../models');
+const {
+  SIP,
+  SIPWeeklyUpdate,
+  StudentSession,
+  AcademicSession,
+  User,
+  MentorTeam,
+  MentorTeamMember,
+} = require('../models');
+const { Op } = require('sequelize');
 const { uploadToS3, deleteFromS3 } = require('../utils/s3Upload');
 const { v4: uuidv4 } = require('uuid');
 
@@ -391,6 +400,111 @@ const sipController = {
     } catch (error) {
       console.error('Error uploading feedback:', error);
       res.status(500).json({ message: 'Failed to upload feedback', error: error.message });
+    }
+  },
+
+  // Faculty/CHAIR_HEAD/MENTOR/HOD/ADMIN — list every mentee assigned to
+  // the caller's mentor teams together with each mentee's SIP form and
+  // weekly updates. One bundled response so the page renders in one
+  // round-trip.
+  getMyMenteesSIPs: async (req, res) => {
+    try {
+      const userId = req.user.id;
+      const userRole = req.user.role;
+      const isAdmin = ['ADMIN', 'HOD'].includes(userRole);
+
+      const teamWhere = isAdmin ? {} : { facultyId: userId };
+
+      const teams = await MentorTeam.findAll({
+        where: teamWhere,
+        include: [
+          { model: AcademicSession, attributes: ['id', 'name', 'sipEnabled'] },
+          { model: User, as: 'Faculty', attributes: ['id', 'firstName', 'lastName', 'email'] },
+          {
+            model: MentorTeamMember,
+            include: [
+              {
+                model: StudentSession,
+                include: [
+                  { model: User, as: 'Student', attributes: ['id', 'firstName', 'lastName', 'email'] },
+                ],
+              },
+            ],
+          },
+        ],
+        order: [['createdAt', 'DESC']],
+      });
+
+      // Collect every studentSessionId so we can fetch SIPs in one query.
+      const studentSessionIds = [];
+      teams.forEach((t) => {
+        (t.MentorTeamMembers || []).forEach((m) => {
+          if (m.StudentSession?.id) studentSessionIds.push(m.StudentSession.id);
+        });
+      });
+
+      const sips = studentSessionIds.length
+        ? await SIP.findAll({ where: { studentSessionId: { [Op.in]: studentSessionIds } } })
+        : [];
+      const sipByStudentSession = new Map(sips.map((s) => [s.studentSessionId, s]));
+
+      const sipIds = sips.map((s) => s.id);
+      const updates = sipIds.length
+        ? await SIPWeeklyUpdate.findAll({
+            where: { sipId: { [Op.in]: sipIds } },
+            order: [['weekStartDate', 'ASC']],
+          })
+        : [];
+      const updatesBySipId = new Map();
+      updates.forEach((u) => {
+        const list = updatesBySipId.get(u.sipId) || [];
+        list.push(u);
+        updatesBySipId.set(u.sipId, list);
+      });
+
+      const out = teams.map((t) => {
+        const mentees = (t.MentorTeamMembers || [])
+          .filter((m) => m.StudentSession)
+          .map((m) => {
+            const ss = m.StudentSession;
+            const sip = sipByStudentSession.get(ss.id) || null;
+            const weeklyUpdates = sip ? (updatesBySipId.get(sip.id) || []) : [];
+            return {
+              studentSessionId: ss.id,
+              student: ss.Student
+                ? {
+                    id: ss.Student.id,
+                    firstName: ss.Student.firstName,
+                    lastName: ss.Student.lastName,
+                    email: ss.Student.email,
+                  }
+                : null,
+              sip,
+              weeklyUpdates,
+            };
+          });
+        return {
+          teamId: t.id,
+          teamName: t.teamName,
+          status: t.status,
+          session: t.AcademicSession
+            ? { id: t.AcademicSession.id, name: t.AcademicSession.name, sipEnabled: t.AcademicSession.sipEnabled }
+            : null,
+          faculty: t.Faculty
+            ? {
+                id: t.Faculty.id,
+                name: `${t.Faculty.firstName || ''} ${t.Faculty.lastName || ''}`.trim(),
+                email: t.Faculty.email,
+              }
+            : null,
+          mentees,
+        };
+      });
+
+      res.json({ teams: out });
+    } catch (error) {
+      console.error('Error fetching mentees SIPs:', error);
+      res.status(500).json({ message: 'Failed to fetch mentees SIPs', error: error.message });
     }
   },
 

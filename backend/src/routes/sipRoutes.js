@@ -1,11 +1,20 @@
 const express = require('express');
 const router = express.Router();
 const sipController = require('../controllers/sipController');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticateToken, authorizeRole } = require('../middleware/auth');
 const { resumeUpload } = require('../middleware/upload');
 
 // SIP CRUD Routes - more specific routes first
 router.get('/session/:sessionId', authenticateToken, sipController.getSIPsBySession);
+// Faculty/mentor view of their mentees' SIPs + weekly updates. Must be
+// defined BEFORE the /:sipId route, otherwise Express matches "my-mentees"
+// as a sipId param.
+router.get(
+  '/my-mentees',
+  authenticateToken,
+  authorizeRole('FACULTY', 'CHAIR_HEAD', 'MENTOR', 'HOD', 'ADMIN'),
+  sipController.getMyMenteesSIPs
+);
 router.post('/', authenticateToken, sipController.createSIP);
 router.get('/:sipId', authenticateToken, sipController.getSIPDetails);
 router.put('/:sipId', authenticateToken, sipController.updateSIP);
