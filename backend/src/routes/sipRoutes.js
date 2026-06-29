@@ -15,6 +15,14 @@ router.get(
   authorizeRole('FACULTY', 'CHAIR_HEAD', 'MENTOR', 'HOD', 'ADMIN'),
   sipController.getMyMenteesSIPs
 );
+// SIP-wide statistics + per-student compliance report. Must be defined
+// before /:sipId. Used by /admin/sip-monitor (admin/HOD/coordinator).
+router.get(
+  '/monitor',
+  authenticateToken,
+  authorizeRole('ADMIN', 'HOD', 'PLACEMENT_COORDINATOR'),
+  sipController.getMonitor
+);
 router.post('/', authenticateToken, sipController.createSIP);
 router.get('/:sipId', authenticateToken, sipController.getSIPDetails);
 router.put('/:sipId', authenticateToken, sipController.updateSIP);

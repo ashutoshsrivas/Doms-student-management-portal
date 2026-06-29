@@ -403,6 +403,153 @@ const sipController = {
     }
   },
 
+  // ADMIN/HOD/PLACEMENT_COORDINATOR — SIP-wide statistics plus a
+  // per-student compliance report (are weekly updates up to date?).
+  // Returns stats, list of SIP-enabled sessions, and one row per
+  // student-with-SIP. Drill-down to a specific SIP uses the existing
+  // /sip/:sipId and /sip/:sipId/weekly-updates endpoints.
+  getMonitor: async (req, res) => {
+    try {
+      const { sessionId } = req.query;
+
+      const sessions = await AcademicSession.findAll({
+        where: { sipEnabled: true },
+        attributes: ['id', 'name', 'sipEnabled'],
+        order: [['startDate', 'DESC']],
+      });
+
+      const studentSessionWhere = {};
+      if (sessionId) studentSessionWhere.academicSessionId = sessionId;
+
+      const sips = await SIP.findAll({
+        include: [
+          {
+            model: StudentSession,
+            where: Object.keys(studentSessionWhere).length ? studentSessionWhere : undefined,
+            required: true,
+            include: [
+              { model: AcademicSession, attributes: ['id', 'name'] },
+              { model: User, as: 'Student', attributes: ['id', 'firstName', 'lastName', 'email'] },
+            ],
+          },
+        ],
+      });
+
+      const sipIds = sips.map((s) => s.id);
+      const allUpdates = sipIds.length
+        ? await SIPWeeklyUpdate.findAll({ where: { sipId: { [Op.in]: sipIds } } })
+        : [];
+      const updatesBySip = new Map();
+      allUpdates.forEach((u) => {
+        const list = updatesBySip.get(u.sipId) || [];
+        list.push(u);
+        updatesBySip.set(u.sipId, list);
+      });
+
+      const now = new Date();
+      const currentWeek = calculateWeekStartEnd(now);
+      const MS_PER_WEEK = 7 * 24 * 60 * 60 * 1000;
+
+      const rows = sips.map((sip) => {
+        const updates = updatesBySip.get(sip.id) || [];
+        const submittedUpdates = updates.filter((u) => u.submitted);
+        const updatesSubmitted = submittedUpdates.length;
+
+        const joinDate = sip.joinDate ? new Date(sip.joinDate) : null;
+        const isCompleted = sip.status === 'COMPLETED';
+        const endRef = isCompleted && sip.completionDate ? new Date(sip.completionDate) : now;
+
+        let weeksElapsed = 0;
+        if (joinDate && !Number.isNaN(joinDate.getTime())) {
+          weeksElapsed = Math.max(0, Math.floor((endRef - joinDate) / MS_PER_WEEK));
+        }
+        const duration = sip.durationWeeks ? Number(sip.durationWeeks) : null;
+        const expectedUpdates = duration ? Math.min(weeksElapsed, duration) : weeksElapsed;
+        const behindBy = Math.max(0, expectedUpdates - updatesSubmitted);
+
+        const currentWeekSubmitted = submittedUpdates.some((u) => {
+          const ws = new Date(u.weekStartDate);
+          return ws.toDateString() === currentWeek.weekStartDate.toDateString();
+        });
+
+        let lastUpdateAt = null;
+        submittedUpdates.forEach((u) => {
+          const t = u.submittedAt ? new Date(u.submittedAt) : null;
+          if (t && (!lastUpdateAt || t > lastUpdateAt)) lastUpdateAt = t;
+        });
+
+        const ss = sip.StudentSession;
+        const student = ss?.Student;
+        return {
+          sipId: sip.id,
+          studentSessionId: ss?.id || null,
+          student: student
+            ? {
+                id: student.id,
+                firstName: student.firstName,
+                lastName: student.lastName,
+                email: student.email,
+              }
+            : null,
+          session: ss?.AcademicSession
+            ? { id: ss.AcademicSession.id, name: ss.AcademicSession.name }
+            : null,
+          enrollmentNo: sip.enrollmentNo,
+          specialization: sip.specialization,
+          companyName: sip.companyName,
+          jobRole: sip.jobRole,
+          sipLocation: sip.sipLocation,
+          stipend: sip.stipend,
+          joinDate: sip.joinDate,
+          completionDate: sip.completionDate,
+          durationWeeks: sip.durationWeeks,
+          status: sip.status,
+          weeksElapsed,
+          expectedUpdates,
+          updatesSubmitted,
+          behindBy,
+          currentWeekSubmitted,
+          lastUpdateAt,
+          ppOffered: sip.ppOffered,
+          certificateIssued: sip.certificateIssued,
+        };
+      });
+
+      const totalSIPs = rows.length;
+      const completed = rows.filter((r) => r.status === 'COMPLETED').length;
+      const inProgress = totalSIPs - completed;
+      const noUpdatesYet = rows.filter((r) => r.updatesSubmitted === 0).length;
+      const currentWeekSubmissions = rows.filter((r) => r.currentWeekSubmitted).length;
+      const behindCount = rows.filter((r) => r.status !== 'COMPLETED' && r.behindBy > 0).length;
+      const totalWeeklyUpdates = rows.reduce((s, r) => s + r.updatesSubmitted, 0);
+      const ppoCount = rows.filter((r) => r.ppOffered === true).length;
+
+      res.json({
+        sessions,
+        selectedSessionId: sessionId || null,
+        stats: {
+          totalSIPs,
+          inProgress,
+          completed,
+          noUpdatesYet,
+          currentWeekSubmissions,
+          currentWeekMissing: Math.max(0, inProgress - currentWeekSubmissions),
+          behindCount,
+          totalWeeklyUpdates,
+          ppoCount,
+        },
+        currentWeek: {
+          weekStartDate: currentWeek.weekStartDate,
+          weekEndDate: currentWeek.weekEndDate,
+        },
+        rows,
+      });
+    } catch (error) {
+      console.error('Error building SIP monitor:', error);
+      res.status(500).json({ message: 'Failed to build SIP monitor', error: error.message });
+    }
+  },
+
   // Faculty/CHAIR_HEAD/MENTOR/HOD/ADMIN — list every mentee assigned to
   // the caller's mentor teams together with each mentee's SIP form and
   // weekly updates. One bundled response so the page renders in one

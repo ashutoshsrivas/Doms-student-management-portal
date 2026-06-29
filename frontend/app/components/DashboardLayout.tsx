@@ -79,6 +79,7 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
     ];
 
     const sipChildren = [
+      { name: 'SIP Monitor', href: '/admin/sip-monitor', iconKey: 'list' },
       { name: 'SIP Questions', href: '/admin/sip-questions', iconKey: 'helpCircle' },
     ];
     const studentSipChildren = [
