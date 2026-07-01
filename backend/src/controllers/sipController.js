@@ -410,7 +410,7 @@ const sipController = {
   // /sip/:sipId and /sip/:sipId/weekly-updates endpoints.
   getMonitor: async (req, res) => {
     try {
-      const { sessionId } = req.query;
+      const { sessionId, chairHeadId } = req.query;
 
       const sessions = await AcademicSession.findAll({
         where: { sipEnabled: true },
@@ -418,8 +418,47 @@ const sipController = {
         order: [['startDate', 'DESC']],
       });
 
+      // Chair Heads that have created at least one mentor team. We keep the
+      // dropdown short by only listing chairs with real teams under them.
+      const chairRows = await MentorTeam.findAll({
+        where: { createdBy: { [Op.ne]: null } },
+        attributes: ['createdBy'],
+        group: ['createdBy'],
+        raw: true,
+      });
+      const chairIds = chairRows.map((r) => r.createdBy).filter(Boolean);
+      const chairHeads = chairIds.length
+        ? await User.findAll({
+            where: { id: { [Op.in]: chairIds } },
+            attributes: ['id', 'firstName', 'lastName', 'email'],
+            order: [['firstName', 'ASC'], ['lastName', 'ASC']],
+          })
+        : [];
+
       const studentSessionWhere = {};
       if (sessionId) studentSessionWhere.academicSessionId = sessionId;
+
+      // When a Chair Head is selected, restrict to student sessions that
+      // appear in teams they created. Empty match → empty result set.
+      if (chairHeadId) {
+        const teams = await MentorTeam.findAll({
+          where: { createdBy: chairHeadId },
+          attributes: ['id'],
+          raw: true,
+        });
+        const teamIds = teams.map((t) => t.id);
+        const members = teamIds.length
+          ? await MentorTeamMember.findAll({
+              where: { mentorTeamId: { [Op.in]: teamIds } },
+              attributes: ['studentSessionId'],
+              raw: true,
+            })
+          : [];
+        const studentSessionIds = [...new Set(members.map((m) => m.studentSessionId).filter(Boolean))];
+        studentSessionWhere.id = studentSessionIds.length
+          ? { [Op.in]: studentSessionIds }
+          : { [Op.in]: ['__none__'] };
+      }
 
       const sips = await SIP.findAll({
         include: [
@@ -526,7 +565,9 @@ const sipController = {
 
       res.json({
         sessions,
+        chairHeads,
         selectedSessionId: sessionId || null,
+        selectedChairHeadId: chairHeadId || null,
         stats: {
           totalSIPs,
           inProgress,

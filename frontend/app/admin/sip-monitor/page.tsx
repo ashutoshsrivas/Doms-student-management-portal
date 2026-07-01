@@ -59,13 +59,20 @@ type Stats = {
   ppoCount: number;
 };
 
+type ChairHead = { id: string; firstName: string | null; lastName: string | null; email: string };
+
 type MonitorResponse = {
   sessions: Session[];
+  chairHeads: ChairHead[];
   selectedSessionId: string | null;
+  selectedChairHeadId: string | null;
   stats: Stats;
   currentWeek: { weekStartDate: string; weekEndDate: string };
   rows: Row[];
 };
+
+const chairLabel = (c: ChairHead) =>
+  `${c.firstName || ''} ${c.lastName || ''}`.trim() || c.email;
 
 type WeeklyUpdate = {
   id: string;
@@ -389,6 +396,7 @@ function Content() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string>('');
+  const [chairHeadId, setChairHeadId] = useState<string>('');
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<ComplianceFilter>('all');
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -399,9 +407,10 @@ function Content() {
       try {
         setLoading(true);
         setError(null);
-        const { data } = await apiClient.get('/sip/monitor', {
-          params: sessionId ? { sessionId } : {},
-        });
+        const params: Record<string, string> = {};
+        if (sessionId) params.sessionId = sessionId;
+        if (chairHeadId) params.chairHeadId = chairHeadId;
+        const { data } = await apiClient.get('/sip/monitor', { params });
         if (!cancelled) setData(data);
       } catch (err: any) {
         if (!cancelled) setError(err?.response?.data?.message || 'Failed to load SIP monitor');
@@ -412,7 +421,7 @@ function Content() {
     return () => {
       cancelled = true;
     };
-  }, [sessionId]);
+  }, [sessionId, chairHeadId]);
 
   const filtered = useMemo(() => {
     if (!data) return [];
@@ -451,6 +460,18 @@ function Content() {
             {(data?.sessions || []).map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name}
+              </option>
+            ))}
+          </select>
+          <select
+            value={chairHeadId}
+            onChange={(e) => setChairHeadId(e.target.value)}
+            className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+          >
+            <option value="">All Chair Heads</option>
+            {(data?.chairHeads || []).map((c) => (
+              <option key={c.id} value={c.id}>
+                {chairLabel(c)}
               </option>
             ))}
           </select>
