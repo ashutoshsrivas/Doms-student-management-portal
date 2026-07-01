@@ -599,11 +599,14 @@ const sipController = {
     try {
       const userId = req.user.id;
       const userRole = req.user.role;
-      // Org-wide roles see every mentor team. Faculty/mentor/chair-head
-      // see only their own.
+      // Org-wide roles see every mentor team by default. Faculty/mentor/
+      // chair-head see only their own. Any role can request ?scope=mine
+      // to force the "only my teams" view (drives the toggle on the UI
+      // for PC/HOD/admin).
       const orgWide = ['ADMIN', 'HOD', 'PLACEMENT_COORDINATOR'].includes(userRole);
+      const forceMine = req.query.scope === 'mine';
 
-      const teamWhere = orgWide ? {} : { facultyId: userId };
+      const teamWhere = orgWide && !forceMine ? {} : { facultyId: userId };
 
       const teams = await MentorTeam.findAll({
         where: teamWhere,
@@ -691,7 +694,11 @@ const sipController = {
         };
       });
 
-      res.json({ teams: out });
+      res.json({
+        teams: out,
+        viewerIsOrgWide: orgWide,
+        scope: orgWide && !forceMine ? 'all' : 'mine',
+      });
     } catch (error) {
       console.error('Error fetching mentees SIPs:', error);
       res.status(500).json({ message: 'Failed to fetch mentees SIPs', error: error.message });

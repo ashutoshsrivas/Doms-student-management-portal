@@ -34,6 +34,9 @@ export default function AdminSIPContent() {
   const [togglingSession, setTogglingSession] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [companyFilter, setCompanyFilter] = useState<string>('');
+  const [roleFilter, setRoleFilter] = useState<string>('');
+  const [locationFilter, setLocationFilter] = useState<string>('');
 
   useEffect(() => {
     const fetchData = async () => {
@@ -63,6 +66,12 @@ export default function AdminSIPContent() {
   const handleSessionChange = async (sessionId: string) => {
     try {
       setSelectedSessionId(sessionId);
+      // Reset column filters so a stale selection from the previous
+      // session doesn't hide all rows in the new one.
+      setStatusFilter('all');
+      setCompanyFilter('');
+      setRoleFilter('');
+      setLocationFilter('');
       const sipsResponse = await apiClient.get(`/sip/session/${sessionId}`);
       setSips(sipsResponse.data);
     } catch (error) {
@@ -96,10 +105,25 @@ export default function AdminSIPContent() {
   };
 
   // Hooks must run on every render — keep useMemo above any early return.
+  const uniqueValues = (key: keyof SIPRow) => {
+    const set = new Set<string>();
+    sips.forEach((s) => {
+      const v = (s[key] as string | undefined)?.trim();
+      if (v) set.add(v);
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  };
+  const companyOptions = useMemo(() => uniqueValues('companyName'), [sips]);
+  const roleOptions = useMemo(() => uniqueValues('jobRole'), [sips]);
+  const locationOptions = useMemo(() => uniqueValues('sipLocation'), [sips]);
+
   const filteredSips = useMemo(() => {
     const q = search.trim().toLowerCase();
     return sips.filter((s) => {
       if (statusFilter !== 'all' && s.status !== statusFilter) return false;
+      if (companyFilter && (s.companyName || '') !== companyFilter) return false;
+      if (roleFilter && (s.jobRole || '') !== roleFilter) return false;
+      if (locationFilter && (s.sipLocation || '') !== locationFilter) return false;
       if (!q) return true;
       const name = (s.studentName || '').toLowerCase();
       const enrol = (s.enrollmentNo || '').toLowerCase();
@@ -108,7 +132,7 @@ export default function AdminSIPContent() {
       const loc = (s.sipLocation || '').toLowerCase();
       return name.includes(q) || enrol.includes(q) || company.includes(q) || role.includes(q) || loc.includes(q);
     });
-  }, [sips, search, statusFilter]);
+  }, [sips, search, statusFilter, companyFilter, roleFilter, locationFilter]);
 
   if (loading) return <div className="text-center py-8 text-gray-900 font-bold">Loading...</div>;
 
@@ -232,14 +256,82 @@ export default function AdminSIPContent() {
                       <table className="min-w-[860px] w-full text-sm">
                         <thead className="bg-gray-100">
                           <tr>
-                            <th className="px-4 py-3 text-left font-bold text-gray-900 border-b-2 border-gray-300">Student</th>
-                            <th className="px-4 py-3 text-left font-bold text-gray-900 border-b-2 border-gray-300">Company</th>
-                            <th className="px-4 py-3 text-left font-bold text-gray-900 border-b-2 border-gray-300">Role</th>
-                            <th className="px-4 py-3 text-left font-bold text-gray-900 border-b-2 border-gray-300">Location</th>
-                            <th className="px-4 py-3 text-left font-bold text-gray-900 border-b-2 border-gray-300">Stipend</th>
-                            <th className="px-4 py-3 text-left font-bold text-gray-900 border-b-2 border-gray-300">Join</th>
-                            <th className="px-4 py-3 text-left font-bold text-gray-900 border-b-2 border-gray-300">Status</th>
-                            <th className="px-4 py-3 text-right font-bold text-gray-900 border-b-2 border-gray-300"> </th>
+                            <th className="px-4 py-3 text-left font-bold text-gray-900">Student</th>
+                            <th className="px-4 py-3 text-left font-bold text-gray-900">Company</th>
+                            <th className="px-4 py-3 text-left font-bold text-gray-900">Role</th>
+                            <th className="px-4 py-3 text-left font-bold text-gray-900">Location</th>
+                            <th className="px-4 py-3 text-left font-bold text-gray-900">Stipend</th>
+                            <th className="px-4 py-3 text-left font-bold text-gray-900">Join</th>
+                            <th className="px-4 py-3 text-left font-bold text-gray-900">Status</th>
+                            <th className="px-4 py-3 text-right font-bold text-gray-900"> </th>
+                          </tr>
+                          <tr className="bg-gray-50 border-b-2 border-gray-300">
+                            <th className="px-4 py-2 text-left font-normal text-gray-500 text-xs italic">— any —</th>
+                            <th className="px-4 py-2">
+                              <select
+                                value={companyFilter}
+                                onChange={(e) => setCompanyFilter(e.target.value)}
+                                className="w-full min-w-[130px] rounded border border-gray-300 bg-white px-2 py-1 text-xs font-medium text-gray-900 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-200"
+                              >
+                                <option value="">All companies</option>
+                                {companyOptions.map((c) => (
+                                  <option key={c} value={c}>{c}</option>
+                                ))}
+                              </select>
+                            </th>
+                            <th className="px-4 py-2">
+                              <select
+                                value={roleFilter}
+                                onChange={(e) => setRoleFilter(e.target.value)}
+                                className="w-full min-w-[120px] rounded border border-gray-300 bg-white px-2 py-1 text-xs font-medium text-gray-900 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-200"
+                              >
+                                <option value="">All roles</option>
+                                {roleOptions.map((r) => (
+                                  <option key={r} value={r}>{r}</option>
+                                ))}
+                              </select>
+                            </th>
+                            <th className="px-4 py-2">
+                              <select
+                                value={locationFilter}
+                                onChange={(e) => setLocationFilter(e.target.value)}
+                                className="w-full min-w-[120px] rounded border border-gray-300 bg-white px-2 py-1 text-xs font-medium text-gray-900 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-200"
+                              >
+                                <option value="">All locations</option>
+                                {locationOptions.map((l) => (
+                                  <option key={l} value={l}>{l}</option>
+                                ))}
+                              </select>
+                            </th>
+                            <th className="px-4 py-2 text-left font-normal text-gray-500 text-xs italic">—</th>
+                            <th className="px-4 py-2 text-left font-normal text-gray-500 text-xs italic">—</th>
+                            <th className="px-4 py-2">
+                              <select
+                                value={statusFilter}
+                                onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+                                className="w-full min-w-[100px] rounded border border-gray-300 bg-white px-2 py-1 text-xs font-medium text-gray-900 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-200"
+                              >
+                                <option value="all">All</option>
+                                <option value="PENDING">Pending</option>
+                                <option value="COMPLETED">Completed</option>
+                              </select>
+                            </th>
+                            <th className="px-4 py-2 text-right">
+                              {(companyFilter || roleFilter || locationFilter || statusFilter !== 'all') && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setCompanyFilter('');
+                                    setRoleFilter('');
+                                    setLocationFilter('');
+                                    setStatusFilter('all');
+                                  }}
+                                  className="text-xs font-semibold text-blue-700 hover:text-blue-900 underline"
+                                >
+                                  Clear
+                                </button>
+                              )}
+                            </th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200">

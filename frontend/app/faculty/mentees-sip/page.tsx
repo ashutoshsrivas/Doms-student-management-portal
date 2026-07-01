@@ -295,6 +295,8 @@ function MenteeCard({ mentee }: { mentee: Mentee }) {
 
 function Content() {
   const [teams, setTeams] = useState<Team[]>([]);
+  const [viewerIsOrgWide, setViewerIsOrgWide] = useState(false);
+  const [onlyMine, setOnlyMine] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
@@ -305,8 +307,13 @@ function Content() {
       try {
         setLoading(true);
         setError(null);
-        const { data } = await apiClient.get('/sip/my-mentees');
-        if (!cancelled) setTeams(Array.isArray(data?.teams) ? data.teams : []);
+        const { data } = await apiClient.get('/sip/my-mentees', {
+          params: onlyMine ? { scope: 'mine' } : {},
+        });
+        if (!cancelled) {
+          setTeams(Array.isArray(data?.teams) ? data.teams : []);
+          setViewerIsOrgWide(Boolean(data?.viewerIsOrgWide));
+        }
       } catch (err: any) {
         if (!cancelled) setError(err?.response?.data?.message || 'Failed to load mentees');
       } finally {
@@ -316,7 +323,7 @@ function Content() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [onlyMine]);
 
   const totals = useMemo(() => {
     const allMentees = teams.flatMap((t) => t.mentees);
@@ -353,14 +360,41 @@ function Content() {
             Read-only view of your mentees&apos; Summer Internship Programme forms and weekly updates.
           </p>
         </div>
-        <div className="relative">
-          <FiSearch className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search mentee, email, company…"
-            className="w-64 rounded-lg border border-gray-200 bg-white py-2 pl-8 pr-3 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
-          />
+        <div className="flex flex-wrap items-center gap-2">
+          {viewerIsOrgWide && (
+            <button
+              type="button"
+              onClick={() => setOnlyMine((v) => !v)}
+              className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold transition ${
+                onlyMine
+                  ? 'border-blue-600 bg-blue-600 text-white'
+                  : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+              }`}
+              title="Toggle between your own teams and every team in the org"
+            >
+              <span
+                className={`inline-flex h-4 w-7 items-center rounded-full p-0.5 transition ${
+                  onlyMine ? 'bg-white/30' : 'bg-gray-300'
+                }`}
+              >
+                <span
+                  className={`h-3 w-3 rounded-full bg-white transition ${
+                    onlyMine ? 'translate-x-3' : 'translate-x-0'
+                  }`}
+                />
+              </span>
+              My mentees only
+            </button>
+          )}
+          <div className="relative">
+            <FiSearch className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search mentee, email, company…"
+              className="w-64 rounded-lg border border-gray-200 bg-white py-2 pl-8 pr-3 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+            />
+          </div>
         </div>
       </div>
 
