@@ -95,11 +95,7 @@ export default function AdminSIPContent() {
     }
   };
 
-  if (loading) return <div className="text-center py-8 text-gray-900 font-bold">Loading...</div>;
-
-  const currentSession = sessions.find(s => s.id === selectedSessionId);
-
-  // Filtered rows drive both the table and the counts on the status chips.
+  // Hooks must run on every render — keep useMemo above any early return.
   const filteredSips = useMemo(() => {
     const q = search.trim().toLowerCase();
     return sips.filter((s) => {
@@ -113,6 +109,10 @@ export default function AdminSIPContent() {
       return name.includes(q) || enrol.includes(q) || company.includes(q) || role.includes(q) || loc.includes(q);
     });
   }, [sips, search, statusFilter]);
+
+  if (loading) return <div className="text-center py-8 text-gray-900 font-bold">Loading...</div>;
+
+  const currentSession = sessions.find(s => s.id === selectedSessionId);
   const pendingCount = sips.filter((s) => s.status === 'PENDING').length;
   const completedCount = sips.filter((s) => s.status === 'COMPLETED').length;
 
