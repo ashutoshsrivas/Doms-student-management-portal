@@ -441,7 +441,7 @@ function Content() {
 
 export default function MenteesSIPPage() {
   return (
-    <ProtectedRoute requiredRoles={['FACULTY', 'CHAIR_HEAD', 'MENTOR', 'HOD', 'ADMIN']}>
+    <ProtectedRoute requiredRoles={['FACULTY', 'CHAIR_HEAD', 'MENTOR', 'HOD', 'ADMIN', 'PLACEMENT_COORDINATOR']}>
       <DashboardLayout>
         <Content />
       </DashboardLayout>

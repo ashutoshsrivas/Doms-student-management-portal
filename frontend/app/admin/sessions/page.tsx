@@ -326,16 +326,16 @@ export default function SessionsPage() {
 
   return (
     <DashboardLayout title="Academic Sessions">
-      <div className="space-y-6">
+      <div className="space-y-4 sm:space-y-6 px-2 sm:px-0">
         {/* Header */}
-        <div className="flex justify-between items-center">
+        <div className="flex flex-wrap justify-between items-start gap-3">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Academic Sessions</h1>
-            <p className="text-gray-600 mt-1">Manage academic sessions and enroll students</p>
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Academic Sessions</h1>
+            <p className="text-gray-600 mt-1 text-sm sm:text-base">Manage academic sessions and enroll students</p>
           </div>
           <button
             onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition"
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-3 sm:px-4 py-2 rounded-lg transition text-sm sm:text-base whitespace-nowrap"
           >
             <FiPlus className="w-5 h-5" />
             New Session
@@ -344,88 +344,90 @@ export default function SessionsPage() {
 
         {/* Sessions Table */}
         <div className="bg-white rounded-lg shadow overflow-hidden">
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Name</th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Start Date</th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">End Date</th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Students</th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Status</th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {sessions.map((session) => (
-                <tr key={session.id} className="hover:bg-gray-50 transition">
-                  <td className="px-6 py-4 text-sm font-medium text-gray-900">{session.name}</td>
-                  <td className="px-6 py-4 text-sm text-gray-600">
-                    {new Date(session.startDate).toLocaleDateString()}
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-600">
-                    {new Date(session.endDate).toLocaleDateString()}
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-600">
-                    {session._count?.StudentSessions || 0}
-                  </td>
-                  <td className="px-6 py-4 text-sm">
-                    {session.isActive ? (
-                      <span className="inline-flex items-center gap-1 px-3 py-1 bg-green-100 text-green-900 rounded-full text-xs font-bold border border-green-300">
-                        <FiCheck className="w-3 h-3" />
-                        Active
-                      </span>
-                    ) : (
-                      <span className="px-3 py-1 bg-gray-200 text-gray-900 rounded-full text-xs font-bold border border-gray-300">
-                        Inactive
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 text-sm">
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => router.push(`/admin/sessions/${session.id}`)}
-                        className="p-2 hover:bg-purple-100 text-purple-600 rounded transition"
-                        title="Manage Categories"
-                      >
-                        <FiEdit2 className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleViewStudents(session)}
-                        className="p-2 hover:bg-blue-100 text-blue-600 rounded transition"
-                        title="View Students"
-                      >
-                        <FiUsers className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => {
-                          setSelectedSession(session);
-                          setStudentModalMode('manual');
-                          setShowStudentModal(true);
-                        }}
-                        className="p-2 hover:bg-green-100 text-green-600 rounded transition"
-                        title="Add Students"
-                      >
-                        <FiPlus className="w-4 h-4" />
-                      </button>
-                      {!session.isActive && (
-                        <button
-                          onClick={() => handleActivateSession(session.id)}
-                          className="p-2 hover:bg-yellow-100 text-yellow-600 rounded transition"
-                          title="Activate Session"
-                        >
-                          <FiCheck className="w-4 h-4" />
-                        </button>
-                      )}
-                    </div>
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="min-w-[720px] w-full">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="px-4 sm:px-6 py-3 text-left text-sm font-semibold text-gray-900">Name</th>
+                  <th className="px-4 sm:px-6 py-3 text-left text-sm font-semibold text-gray-900 whitespace-nowrap">Start Date</th>
+                  <th className="px-4 sm:px-6 py-3 text-left text-sm font-semibold text-gray-900 whitespace-nowrap">End Date</th>
+                  <th className="px-4 sm:px-6 py-3 text-left text-sm font-semibold text-gray-900">Students</th>
+                  <th className="px-4 sm:px-6 py-3 text-left text-sm font-semibold text-gray-900">Status</th>
+                  <th className="px-4 sm:px-6 py-3 text-left text-sm font-semibold text-gray-900">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {sessions.map((session) => (
+                  <tr key={session.id} className="hover:bg-gray-50 transition">
+                    <td className="px-4 sm:px-6 py-4 text-sm font-medium text-gray-900">{session.name}</td>
+                    <td className="px-4 sm:px-6 py-4 text-sm text-gray-600 whitespace-nowrap">
+                      {new Date(session.startDate).toLocaleDateString()}
+                    </td>
+                    <td className="px-4 sm:px-6 py-4 text-sm text-gray-600 whitespace-nowrap">
+                      {new Date(session.endDate).toLocaleDateString()}
+                    </td>
+                    <td className="px-4 sm:px-6 py-4 text-sm text-gray-600">
+                      {session._count?.StudentSessions || 0}
+                    </td>
+                    <td className="px-4 sm:px-6 py-4 text-sm">
+                      {session.isActive ? (
+                        <span className="inline-flex items-center gap-1 px-3 py-1 bg-green-100 text-green-900 rounded-full text-xs font-bold border border-green-300">
+                          <FiCheck className="w-3 h-3" />
+                          Active
+                        </span>
+                      ) : (
+                        <span className="px-3 py-1 bg-gray-200 text-gray-900 rounded-full text-xs font-bold border border-gray-300">
+                          Inactive
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 sm:px-6 py-4 text-sm">
+                      <div className="flex items-center gap-1 sm:gap-2">
+                        <button
+                          onClick={() => router.push(`/admin/sessions/${session.id}`)}
+                          className="p-2 hover:bg-purple-100 text-purple-600 rounded transition"
+                          title="Manage Categories"
+                        >
+                          <FiEdit2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleViewStudents(session)}
+                          className="p-2 hover:bg-blue-100 text-blue-600 rounded transition"
+                          title="View Students"
+                        >
+                          <FiUsers className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            setSelectedSession(session);
+                            setStudentModalMode('manual');
+                            setShowStudentModal(true);
+                          }}
+                          className="p-2 hover:bg-green-100 text-green-600 rounded transition"
+                          title="Add Students"
+                        >
+                          <FiPlus className="w-4 h-4" />
+                        </button>
+                        {!session.isActive && (
+                          <button
+                            onClick={() => handleActivateSession(session.id)}
+                            className="p-2 hover:bg-yellow-100 text-yellow-600 rounded transition"
+                            title="Activate Session"
+                          >
+                            <FiCheck className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
 
         {/* Pagination */}
-        <div className="flex justify-between items-center">
+        <div className="flex flex-wrap justify-between items-center gap-2">
           <p className="text-sm text-gray-600">
             Page {page} of {totalPages}
           </p>

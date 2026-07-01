@@ -599,9 +599,11 @@ const sipController = {
     try {
       const userId = req.user.id;
       const userRole = req.user.role;
-      const isAdmin = ['ADMIN', 'HOD'].includes(userRole);
+      // Org-wide roles see every mentor team. Faculty/mentor/chair-head
+      // see only their own.
+      const orgWide = ['ADMIN', 'HOD', 'PLACEMENT_COORDINATOR'].includes(userRole);
 
-      const teamWhere = isAdmin ? {} : { facultyId: userId };
+      const teamWhere = orgWide ? {} : { facultyId: userId };
 
       const teams = await MentorTeam.findAll({
         where: teamWhere,

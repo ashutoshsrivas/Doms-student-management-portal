@@ -153,6 +153,8 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
         { name: 'Dashboard', href: '/coordinator/dashboard', iconKey: 'chart' },
         { name: 'Sessions', href: '/coordinator/sessions', iconKey: 'calendar' },
         { name: 'Assessments', href: '/coordinator/assessments', iconKey: 'check' },
+        { name: 'Mentor Teams', href: '/faculty/mentors', iconKey: 'users' },
+        { name: "Mentees' SIP", href: '/faculty/mentees-sip', iconKey: 'briefcase' },
         { name: 'Internships (SIP)', href: '/admin/sip', iconKey: 'briefcase', children: sipChildren },
         { name: 'Job Matching', href: '/coordinator/job-matching', iconKey: 'zap' },
         { name: 'My Tasks', href: '/faculty/tasks', iconKey: 'clipboard' },

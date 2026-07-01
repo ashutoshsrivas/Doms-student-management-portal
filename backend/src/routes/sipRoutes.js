@@ -12,7 +12,7 @@ router.get('/session/:sessionId', authenticateToken, sipController.getSIPsBySess
 router.get(
   '/my-mentees',
   authenticateToken,
-  authorizeRole('FACULTY', 'CHAIR_HEAD', 'MENTOR', 'HOD', 'ADMIN'),
+  authorizeRole('FACULTY', 'CHAIR_HEAD', 'MENTOR', 'HOD', 'ADMIN', 'PLACEMENT_COORDINATOR'),
   sipController.getMyMenteesSIPs
 );
 // SIP-wide statistics + per-student compliance report. Must be defined

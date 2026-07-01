@@ -63,9 +63,9 @@ export default function FacultyMentorDashboard() {
     dueDate: '',
   });
 
-  // Redirect if not faculty
+  // Redirect if not faculty/mentor/chair-head/PC
   useEffect(() => {
-    if (!['FACULTY', 'CHAIR_HEAD', 'MENTOR'].includes(user?.role || '')) {
+    if (!['FACULTY', 'CHAIR_HEAD', 'MENTOR', 'PLACEMENT_COORDINATOR'].includes(user?.role || '')) {
       router.push('/dashboard');
     }
   }, [user?.role, router]);
@@ -143,7 +143,7 @@ export default function FacultyMentorDashboard() {
     }
   };
 
-  if (!user || !['FACULTY', 'CHAIR_HEAD', 'MENTOR'].includes(user.role)) {
+  if (!user || !['FACULTY', 'CHAIR_HEAD', 'MENTOR', 'PLACEMENT_COORDINATOR'].includes(user.role)) {
     return null;
   }
 
