@@ -55,6 +55,11 @@ interface MTeamRow {
   requirements: MRequirement[];
   totals: { requirements: number; responses: number; pendingResponses: number };
 }
+interface SessionOpt { id: string; name: string }
+interface ChairHeadOpt { id: string; firstName: string | null; lastName: string | null; email: string }
+
+const chairLabel = (c: ChairHeadOpt) =>
+  `${c.firstName || ''} ${c.lastName || ''}`.trim() || c.email;
 
 const fmtDate = (s: string | null) =>
   s ? new Date(s).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '—';
@@ -66,6 +71,10 @@ export default function MentorMonitoringPage() {
   const { user } = useAuthStore();
 
   const [rows, setRows] = useState<MTeamRow[]>([]);
+  const [sessions, setSessions] = useState<SessionOpt[]>([]);
+  const [chairHeads, setChairHeads] = useState<ChairHeadOpt[]>([]);
+  const [sessionId, setSessionId] = useState<string>('');
+  const [chairHeadId, setChairHeadId] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [openTeams, setOpenTeams] = useState<Set<string>>(new Set());
@@ -79,18 +88,24 @@ export default function MentorMonitoringPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await apiClient.get('/mentor/monitoring');
-      setRows(res.data.teams || []);
+      const params: Record<string, string> = {};
+      if (sessionId) params.sessionId = sessionId;
+      if (chairHeadId) params.chairHeadId = chairHeadId;
+      const res = await apiClient.get('/mentor/monitoring', { params });
+      const teams: MTeamRow[] = res.data.teams || [];
+      setRows(teams);
+      setSessions(res.data.sessions || []);
+      setChairHeads(res.data.chairHeads || []);
       // Auto-expand all team rows on first load so the user sees activity
       // without an extra click.
-      setOpenTeams(new Set((res.data.teams || []).map((r: MTeamRow) => r.team.id)));
+      setOpenTeams(new Set(teams.map((r) => r.team.id)));
     } catch (e) {
       console.error(e);
       toast.error('Failed to load mentor activity');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [sessionId, chairHeadId]);
   useEffect(() => { load(); }, [load]);
 
   const filtered = useMemo(() => {
@@ -132,7 +147,7 @@ export default function MentorMonitoringPage() {
     });
   };
 
-  if (loading) {
+  if (loading && rows.length === 0) {
     return (
       <DashboardLayout title="Mentor Monitoring">
         <div className="min-h-[60vh] flex items-center justify-center">
@@ -170,16 +185,41 @@ export default function MentorMonitoringPage() {
           <StatCard label="Pending" value={totals.pendingResponses} tone={totals.pendingResponses > 0 ? 'text-red-700' : 'text-gray-600'} />
         </div>
 
-        {/* Search */}
-        <div className="bg-white border border-gray-200 rounded-lg shadow-sm px-3 py-2 mb-4 flex items-center gap-2">
-          <FiSearch className="text-gray-400 ml-1" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by team name, faculty, or session…"
-            className="flex-1 px-2 py-1.5 text-sm text-gray-900 outline-none"
-          />
+        {/* Filters */}
+        <div className="bg-white border border-gray-200 rounded-lg shadow-sm px-3 py-2 mb-4 flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-2 flex-1 min-w-[220px]">
+            <FiSearch className="text-gray-400 ml-1" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by team name, faculty, or session…"
+              className="flex-1 px-2 py-1.5 text-sm text-gray-900 outline-none"
+            />
+          </div>
+          <select
+            value={sessionId}
+            onChange={(e) => setSessionId(e.target.value)}
+            className="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+          >
+            <option value="">All academic sessions</option>
+            {sessions.map((s) => (
+              <option key={s.id} value={s.id}>{s.name}</option>
+            ))}
+          </select>
+          {chairHeads.length > 0 && (
+            <select
+              value={chairHeadId}
+              onChange={(e) => setChairHeadId(e.target.value)}
+              className="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+            >
+              <option value="">All Chair Heads</option>
+              {chairHeads.map((c) => (
+                <option key={c.id} value={c.id}>{chairLabel(c)}</option>
+              ))}
+            </select>
+          )}
+          {loading && <FiLoader className="animate-spin text-blue-600" size={16} />}
         </div>
 
         {filtered.length === 0 ? (

@@ -848,14 +848,53 @@ module.exports = {
   getMonitoring: async (req, res) => {
     try {
       const sessionId = req.query.sessionId || null;
+      const chairHeadId = req.query.chairHeadId || null;
 
       const teamWhere = {};
       if (sessionId) teamWhere.sessionId = sessionId;
       // CHAIR_HEAD can only see teams they themselves created. ADMIN and
-      // HOD see everything.
+      // HOD see everything (and can narrow by chairHeadId).
       if (req.user.role === 'CHAIR_HEAD') {
         teamWhere.createdBy = req.user.id;
+      } else if (chairHeadId) {
+        teamWhere.createdBy = chairHeadId;
       }
+
+      // Filter options for the UI dropdowns. Sessions = every academic
+      // session that owns at least one mentor team. Chair Heads = users
+      // who have created at least one team (only shown to ADMIN/HOD —
+      // CHAIR_HEAD is already scoped to themselves).
+      const [sessionRows, chairRows] = await Promise.all([
+        MentorTeam.findAll({
+          attributes: ['sessionId'],
+          group: ['sessionId'],
+          raw: true,
+        }),
+        MentorTeam.findAll({
+          where: { createdBy: { [Op.ne]: null } },
+          attributes: ['createdBy'],
+          group: ['createdBy'],
+          raw: true,
+        }),
+      ]);
+      const sessionIds = sessionRows.map((r) => r.sessionId).filter(Boolean);
+      const chairIds = chairRows.map((r) => r.createdBy).filter(Boolean);
+      const [sessions, chairHeads] = await Promise.all([
+        sessionIds.length
+          ? AcademicSession.findAll({
+              where: { id: { [Op.in]: sessionIds } },
+              attributes: ['id', 'name'],
+              order: [['startDate', 'DESC']],
+            })
+          : [],
+        req.user.role !== 'CHAIR_HEAD' && chairIds.length
+          ? User.findAll({
+              where: { id: { [Op.in]: chairIds } },
+              attributes: ['id', 'firstName', 'lastName', 'email'],
+              order: [['firstName', 'ASC'], ['lastName', 'ASC']],
+            })
+          : [],
+      ]);
 
       const teams = await MentorTeam.findAll({
         where: teamWhere,
@@ -949,7 +988,13 @@ module.exports = {
         };
       });
 
-      res.json({ teams: out });
+      res.json({
+        teams: out,
+        sessions,
+        chairHeads,
+        selectedSessionId: sessionId,
+        selectedChairHeadId: chairHeadId,
+      });
     } catch (error) {
       console.error('Mentor monitoring error:', error);
       res.status(500).json({ message: 'Failed to load monitoring data' });
