@@ -179,6 +179,7 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
         { name: 'Announcements', href: '/student/announcements', iconKey: 'bell', children: studentAnnouncementsChildren },
       ],
       STUDENT: [
+        { name: 'Dashboard', href: '/student/dashboard', iconKey: 'chart' },
         { name: 'My Assessments', href: '/student/assessments', iconKey: 'list' },
         { name: 'My Mentors', href: '/student/mentors', iconKey: 'users' },
         { name: 'My Profile', href: '/student/profile', iconKey: 'user' },
