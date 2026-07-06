@@ -7,7 +7,7 @@ import toast from 'react-hot-toast';
 import DashboardLayout from '@/app/components/DashboardLayout';
 import Link from 'next/link';
 import { exportAllSIPsToExcel } from '@/app/lib/exportUtils';
-import { FiSearch } from 'react-icons/fi';
+import { FiSearch, FiFlag, FiCheckCircle, FiAlertTriangle } from 'react-icons/fi';
 
 type SIPRow = {
   id: string;
@@ -20,10 +20,48 @@ type SIPRow = {
   status?: string;
   joinDate?: string;
   completionDate?: string;
+  durationWeeks?: number | string | null;
+  updatesSubmitted?: number;
   [key: string]: unknown;
 };
 
 type StatusFilter = 'all' | 'PENDING' | 'COMPLETED';
+type FlagFilter = 'all' | 'red' | 'yellow' | 'green' | 'completed';
+
+const MS_PER_WEEK = 7 * 24 * 60 * 60 * 1000;
+
+type FlagKind = 'red' | 'yellow' | 'green' | 'completed' | 'not-started';
+
+function computeFlag(sip: SIPRow): FlagKind {
+  if (sip.status === 'COMPLETED') return 'completed';
+  if (!sip.joinDate) return 'not-started';
+  const jd = new Date(sip.joinDate).getTime();
+  if (Number.isNaN(jd)) return 'not-started';
+  const weeksElapsed = Math.max(0, Math.floor((Date.now() - jd) / MS_PER_WEEK));
+  const submitted = sip.updatesSubmitted ?? 0;
+  const duration = sip.durationWeeks ? Number(sip.durationWeeks) : null;
+  const expected = duration ? Math.min(weeksElapsed, duration) : weeksElapsed;
+  if (submitted === 0 && weeksElapsed > 0) return 'red';
+  if (expected > submitted) return 'yellow';
+  return 'green';
+}
+
+function FlagBadge({ kind }: { kind: FlagKind }) {
+  const cfg: Record<FlagKind, { bg: string; text: string; label: string; icon: React.ReactNode }> = {
+    red: { bg: 'bg-red-100 border-red-300', text: 'text-red-800', label: 'No updates', icon: <FiFlag className="w-3 h-3" /> },
+    yellow: { bg: 'bg-amber-100 border-amber-300', text: 'text-amber-800', label: 'Behind', icon: <FiAlertTriangle className="w-3 h-3" /> },
+    green: { bg: 'bg-emerald-100 border-emerald-300', text: 'text-emerald-800', label: 'On track', icon: <FiCheckCircle className="w-3 h-3" /> },
+    completed: { bg: 'bg-blue-100 border-blue-300', text: 'text-blue-800', label: 'Done', icon: <FiCheckCircle className="w-3 h-3" /> },
+    'not-started': { bg: 'bg-gray-100 border-gray-300', text: 'text-gray-700', label: 'Not started', icon: <FiFlag className="w-3 h-3" /> },
+  };
+  const c = cfg[kind];
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border ${c.bg} ${c.text} text-[11px] font-bold`}>
+      {c.icon}
+      {c.label}
+    </span>
+  );
+}
 
 export default function AdminSIPContent() {
   const { user } = useAuthStore();
@@ -37,6 +75,7 @@ export default function AdminSIPContent() {
   const [companyFilter, setCompanyFilter] = useState<string>('');
   const [roleFilter, setRoleFilter] = useState<string>('');
   const [locationFilter, setLocationFilter] = useState<string>('');
+  const [flagFilter, setFlagFilter] = useState<FlagFilter>('all');
 
   useEffect(() => {
     const fetchData = async () => {
@@ -72,6 +111,7 @@ export default function AdminSIPContent() {
       setCompanyFilter('');
       setRoleFilter('');
       setLocationFilter('');
+      setFlagFilter('all');
       const sipsResponse = await apiClient.get(`/sip/session/${sessionId}`);
       setSips(sipsResponse.data);
     } catch (error) {
@@ -124,6 +164,7 @@ export default function AdminSIPContent() {
       if (companyFilter && (s.companyName || '') !== companyFilter) return false;
       if (roleFilter && (s.jobRole || '') !== roleFilter) return false;
       if (locationFilter && (s.sipLocation || '') !== locationFilter) return false;
+      if (flagFilter !== 'all' && computeFlag(s) !== flagFilter) return false;
       if (!q) return true;
       const name = (s.studentName || '').toLowerCase();
       const enrol = (s.enrollmentNo || '').toLowerCase();
@@ -132,13 +173,21 @@ export default function AdminSIPContent() {
       const loc = (s.sipLocation || '').toLowerCase();
       return name.includes(q) || enrol.includes(q) || company.includes(q) || role.includes(q) || loc.includes(q);
     });
-  }, [sips, search, statusFilter, companyFilter, roleFilter, locationFilter]);
+  }, [sips, search, statusFilter, companyFilter, roleFilter, locationFilter, flagFilter]);
 
   if (loading) return <div className="text-center py-8 text-gray-900 font-bold">Loading...</div>;
 
   const currentSession = sessions.find(s => s.id === selectedSessionId);
   const pendingCount = sips.filter((s) => s.status === 'PENDING').length;
   const completedCount = sips.filter((s) => s.status === 'COMPLETED').length;
+  const flagCounts = sips.reduce(
+    (acc, s) => {
+      const f = computeFlag(s);
+      acc[f] = (acc[f] || 0) + 1;
+      return acc;
+    },
+    { red: 0, yellow: 0, green: 0, completed: 0, 'not-started': 0 } as Record<FlagKind, number>,
+  );
 
   return (
     <DashboardLayout title="Internship (SIP) Management">
@@ -253,7 +302,7 @@ export default function AdminSIPContent() {
                     <div className="p-6 text-center text-gray-600">No submissions match the current filter.</div>
                   ) : (
                     <div className="overflow-x-auto">
-                      <table className="min-w-[860px] w-full text-sm">
+                      <table className="min-w-[980px] w-full text-sm">
                         <thead className="bg-gray-100">
                           <tr>
                             <th className="px-4 py-3 text-left font-bold text-gray-900">Student</th>
@@ -263,6 +312,7 @@ export default function AdminSIPContent() {
                             <th className="px-4 py-3 text-left font-bold text-gray-900">Stipend</th>
                             <th className="px-4 py-3 text-left font-bold text-gray-900">Join</th>
                             <th className="px-4 py-3 text-left font-bold text-gray-900">Status</th>
+                            <th className="px-4 py-3 text-left font-bold text-gray-900">Flag</th>
                             <th className="px-4 py-3 text-right font-bold text-gray-900"> </th>
                           </tr>
                           <tr className="bg-gray-50 border-b-2 border-gray-300">
@@ -316,8 +366,21 @@ export default function AdminSIPContent() {
                                 <option value="COMPLETED">Completed</option>
                               </select>
                             </th>
+                            <th className="px-4 py-2">
+                              <select
+                                value={flagFilter}
+                                onChange={(e) => setFlagFilter(e.target.value as FlagFilter)}
+                                className="w-full min-w-[110px] rounded border border-gray-300 bg-white px-2 py-1 text-xs font-medium text-gray-900 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-200"
+                              >
+                                <option value="all">All flags</option>
+                                <option value="red">🚩 No updates ({flagCounts.red})</option>
+                                <option value="yellow">⚠️ Behind ({flagCounts.yellow})</option>
+                                <option value="green">✅ On track ({flagCounts.green})</option>
+                                <option value="completed">🎓 Done ({flagCounts.completed})</option>
+                              </select>
+                            </th>
                             <th className="px-4 py-2 text-right">
-                              {(companyFilter || roleFilter || locationFilter || statusFilter !== 'all') && (
+                              {(companyFilter || roleFilter || locationFilter || statusFilter !== 'all' || flagFilter !== 'all') && (
                                 <button
                                   type="button"
                                   onClick={() => {
@@ -325,6 +388,7 @@ export default function AdminSIPContent() {
                                     setRoleFilter('');
                                     setLocationFilter('');
                                     setStatusFilter('all');
+                                    setFlagFilter('all');
                                   }}
                                   className="text-xs font-semibold text-blue-700 hover:text-blue-900 underline"
                                 >
@@ -360,6 +424,9 @@ export default function AdminSIPContent() {
                                 >
                                   {sip.status}
                                 </span>
+                              </td>
+                              <td className="px-4 py-3">
+                                <FlagBadge kind={computeFlag(sip)} />
                               </td>
                               <td className="px-4 py-3 text-right whitespace-nowrap">
                                 <Link

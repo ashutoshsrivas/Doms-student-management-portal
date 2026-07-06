@@ -218,7 +218,27 @@ const sipController = {
         return res.status(403).json({ message: 'Not authorized to view SIPs' });
       }
 
-      res.json(sips);
+      // Attach weekly-update counts so the client can render the
+      // compliance flag (red/yellow/green) without an extra round-trip.
+      const sipIds = sips.map((s) => s.id);
+      const updatesBySip = new Map();
+      if (sipIds.length) {
+        const updates = await SIPWeeklyUpdate.findAll({
+          where: { sipId: { [Op.in]: sipIds }, submitted: true },
+          attributes: ['sipId'],
+          raw: true,
+        });
+        updates.forEach((u) => {
+          updatesBySip.set(u.sipId, (updatesBySip.get(u.sipId) || 0) + 1);
+        });
+      }
+      const out = sips.map((s) => {
+        const plain = s.toJSON();
+        plain.updatesSubmitted = updatesBySip.get(s.id) || 0;
+        return plain;
+      });
+
+      res.json(out);
     } catch (error) {
       console.error('Error fetching SIPs:', error);
       res.status(500).json({ message: 'Failed to fetch SIPs', error: error.message });

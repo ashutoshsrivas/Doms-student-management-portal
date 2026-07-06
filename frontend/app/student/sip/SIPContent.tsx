@@ -393,83 +393,187 @@ export default function SIPContent() {
               <div className="p-6">
           {activeTab === 'personal' && (
             <div className="grid grid-cols-2 gap-4">
-              <input type="text" placeholder="Enrollment No" value={formData.enrollmentNo} onChange={e => handleInputChange('enrollmentNo', e.target.value)} className="col-span-1 border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium placeholder-gray-600" />
-              <input type="text" placeholder="Student Name" value={formData.studentName} onChange={e => handleInputChange('studentName', e.target.value)} className="col-span-1 border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium placeholder-gray-600" />
-              <input type="text" placeholder="Specialization" value={formData.specialization} onChange={e => handleInputChange('specialization', e.target.value)} className="col-span-1 border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium placeholder-gray-600" />
-              <select value={formData.gender} onChange={e => handleInputChange('gender', e.target.value)} className="col-span-1 border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium">
-                <option value="">Select Gender</option>
-                <option value="MALE">Male</option>
-                <option value="FEMALE">Female</option>
-                <option value="OTHER">Other</option>
-              </select>
-              <input type="email" placeholder="Email" value={formData.email} onChange={e => handleInputChange('email', e.target.value)} className="col-span-1 border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium placeholder-gray-600" />
-              <input type="tel" placeholder="Phone No" value={formData.phoneNo} onChange={e => handleInputChange('phoneNo', e.target.value)} className="col-span-1 border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium placeholder-gray-600" />
-              <input type="text" placeholder="Home Town Location" value={formData.homeTownLocation} onChange={e => handleInputChange('homeTownLocation', e.target.value)} className="col-span-2 border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium placeholder-gray-600" />
+              <div className="col-span-1">
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Enrollment No</label>
+                <input type="text" placeholder="e.g. 21GS1234" value={formData.enrollmentNo} onChange={e => handleInputChange('enrollmentNo', e.target.value)} className="w-full border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium placeholder-gray-500" />
+              </div>
+              <div className="col-span-1">
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Student Name</label>
+                <input type="text" placeholder="Full name" value={formData.studentName} onChange={e => handleInputChange('studentName', e.target.value)} className="w-full border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium placeholder-gray-500" />
+              </div>
+              <div className="col-span-1">
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Specialization</label>
+                <input type="text" placeholder="e.g. Marketing" value={formData.specialization} onChange={e => handleInputChange('specialization', e.target.value)} className="w-full border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium placeholder-gray-500" />
+              </div>
+              <div className="col-span-1">
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Gender</label>
+                <select value={formData.gender} onChange={e => handleInputChange('gender', e.target.value)} className="w-full border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium">
+                  <option value="">Select Gender</option>
+                  <option value="MALE">Male</option>
+                  <option value="FEMALE">Female</option>
+                  <option value="OTHER">Other</option>
+                </select>
+              </div>
+              <div className="col-span-1">
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Email</label>
+                <input type="email" placeholder="you@example.com" value={formData.email} onChange={e => handleInputChange('email', e.target.value)} className="w-full border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium placeholder-gray-500" />
+              </div>
+              <div className="col-span-1">
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Phone No</label>
+                <input type="tel" placeholder="10-digit number" value={formData.phoneNo} onChange={e => handleInputChange('phoneNo', e.target.value)} className="w-full border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium placeholder-gray-500" />
+              </div>
+              <div className="col-span-2">
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Home Town Location</label>
+                <input type="text" placeholder="City, State" value={formData.homeTownLocation} onChange={e => handleInputChange('homeTownLocation', e.target.value)} className="w-full border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium placeholder-gray-500" />
+              </div>
             </div>
           )}
 
           {activeTab === 'company' && (
             <div className="grid grid-cols-2 gap-4">
-              <input type="text" placeholder="Company Name" value={formData.companyName} onChange={e => handleInputChange('companyName', e.target.value)} className="col-span-1 border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium placeholder-gray-600" />
-              <input type="text" placeholder="Job Role" value={formData.jobRole} onChange={e => handleInputChange('jobRole', e.target.value)} className="col-span-1 border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium placeholder-gray-600" />
-              <input type="text" placeholder="SIP Location" value={formData.sipLocation} onChange={e => handleInputChange('sipLocation', e.target.value)} className="col-span-1 border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium placeholder-gray-600" />
-              <input type="number" placeholder="Stipend (INR)" value={formData.stipend} onChange={e => handleInputChange('stipend', e.target.value)} className="col-span-1 border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium placeholder-gray-600" />
-              <select value={formData.type} onChange={e => handleInputChange('type', e.target.value)} className="col-span-1 border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium">
-                <option value="ON_CAMPUS">On Campus</option>
-                <option value="OFF_CAMPUS">Off Campus</option>
-              </select>
-              {formData.type === 'OFF_CAMPUS' && (
-                <select value={formData.corporateType} onChange={e => handleInputChange('corporateType', e.target.value)} className="col-span-1 border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium">
-                  <option value="">Select Type</option>
-                  <option value="CORPORATE">Corporate</option>
-                  <option value="FAMILY_BUSINESS">Family Business</option>
-                  <option value="ENTREPRENEURSHIP">Entrepreneurship</option>
-                  <option value="SOCIAL_INTERNSHIP">Social Internship</option>
-                  <option value="GOVT_PROJECTS">Govt. Projects</option>
+              <div className="col-span-1">
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Company Name</label>
+                <input type="text" placeholder="e.g. Infosys" value={formData.companyName} onChange={e => handleInputChange('companyName', e.target.value)} className="w-full border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium placeholder-gray-500" />
+              </div>
+              <div className="col-span-1">
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Job Role</label>
+                <input type="text" placeholder="e.g. Business Analyst Intern" value={formData.jobRole} onChange={e => handleInputChange('jobRole', e.target.value)} className="w-full border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium placeholder-gray-500" />
+              </div>
+              <div className="col-span-1">
+                <label className="block text-xs font-semibold text-gray-700 mb-1">SIP Location</label>
+                <input type="text" placeholder="City where you'll intern" value={formData.sipLocation} onChange={e => handleInputChange('sipLocation', e.target.value)} className="w-full border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium placeholder-gray-500" />
+              </div>
+              <div className="col-span-1">
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Stipend (INR)</label>
+                <input type="number" placeholder="Monthly amount" value={formData.stipend} onChange={e => handleInputChange('stipend', e.target.value)} className="w-full border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium placeholder-gray-500" />
+              </div>
+              <div className="col-span-1">
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Placement Type</label>
+                <select value={formData.type} onChange={e => handleInputChange('type', e.target.value)} className="w-full border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium">
+                  <option value="ON_CAMPUS">On Campus</option>
+                  <option value="OFF_CAMPUS">Off Campus</option>
                 </select>
+              </div>
+              {formData.type === 'OFF_CAMPUS' && (
+                <div className="col-span-1">
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Off-Campus Type</label>
+                  <select value={formData.corporateType} onChange={e => handleInputChange('corporateType', e.target.value)} className="w-full border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium">
+                    <option value="">Select Type</option>
+                    <option value="CORPORATE">Corporate</option>
+                    <option value="FAMILY_BUSINESS">Family Business</option>
+                    <option value="ENTREPRENEURSHIP">Entrepreneurship</option>
+                    <option value="SOCIAL_INTERNSHIP">Social Internship</option>
+                    <option value="GOVT_PROJECTS">Govt. Projects</option>
+                  </select>
+                </div>
               )}
-              <input type="date" value={formData.joinDate} onChange={e => handleInputChange('joinDate', e.target.value)} className="col-span-1 border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium" placeholder="Joining Date" />
-              <input type="date" value={formData.nocDate} onChange={e => handleInputChange('nocDate', e.target.value)} className="col-span-1 border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium" placeholder="NOC Date" />
-              <input type="date" value={formData.completionDate} onChange={e => handleInputChange('completionDate', e.target.value)} className="col-span-1 border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium" placeholder="Completion Date" />
-              <input type="number" placeholder="Duration (weeks)" value={formData.durationWeeks} onChange={e => handleInputChange('durationWeeks', e.target.value)} className="col-span-1 border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium placeholder-gray-600" />
+              <div className="col-span-1">
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Joining Date</label>
+                <input type="date" value={formData.joinDate} onChange={e => handleInputChange('joinDate', e.target.value)} className="w-full border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium" />
+              </div>
+              <div className="col-span-1">
+                <label className="block text-xs font-semibold text-gray-700 mb-1">NOC Date</label>
+                <input type="date" value={formData.nocDate} onChange={e => handleInputChange('nocDate', e.target.value)} className="w-full border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium" />
+              </div>
+              <div className="col-span-1">
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Completion Date</label>
+                <input type="date" value={formData.completionDate} onChange={e => handleInputChange('completionDate', e.target.value)} className="w-full border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium" />
+              </div>
+              <div className="col-span-1">
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Duration (weeks)</label>
+                <input type="number" placeholder="e.g. 8" value={formData.durationWeeks} onChange={e => handleInputChange('durationWeeks', e.target.value)} className="w-full border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium placeholder-gray-500" />
+              </div>
             </div>
           )}
 
           {activeTab === 'supervisor' && (
             <div className="grid grid-cols-2 gap-4">
-              <input type="text" placeholder="Supervisor Name" value={formData.supervisorName} onChange={e => handleInputChange('supervisorName', e.target.value)} className="col-span-1 border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium placeholder-gray-600" />
-              <input type="tel" placeholder="Supervisor Phone" value={formData.supervisorPhone} onChange={e => handleInputChange('supervisorPhone', e.target.value)} className="col-span-1 border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium placeholder-gray-600" />
-              <input type="email" placeholder="Supervisor Email" value={formData.supervisorEmail} onChange={e => handleInputChange('supervisorEmail', e.target.value)} className="col-span-1 border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium placeholder-gray-600" />
-              <input type="text" placeholder="HR Head Name" value={formData.hrHeadName} onChange={e => handleInputChange('hrHeadName', e.target.value)} className="col-span-1 border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium placeholder-gray-600" />
-              <input type="tel" placeholder="HR Phone" value={formData.hrPhone} onChange={e => handleInputChange('hrPhone', e.target.value)} className="col-span-1 border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium placeholder-gray-600" />
-              <input type="email" placeholder="HR Email" value={formData.hrEmail} onChange={e => handleInputChange('hrEmail', e.target.value)} className="col-span-1 border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium placeholder-gray-600" />
-              <textarea placeholder="Office Address" value={formData.officeAddress} onChange={e => handleInputChange('officeAddress', e.target.value)} className="col-span-2 border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium placeholder-gray-600" rows={3} />
+              <div className="col-span-1">
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Supervisor Name</label>
+                <input type="text" placeholder="Your industry supervisor" value={formData.supervisorName} onChange={e => handleInputChange('supervisorName', e.target.value)} className="w-full border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium placeholder-gray-500" />
+              </div>
+              <div className="col-span-1">
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Supervisor Phone</label>
+                <input type="tel" placeholder="10-digit number" value={formData.supervisorPhone} onChange={e => handleInputChange('supervisorPhone', e.target.value)} className="w-full border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium placeholder-gray-500" />
+              </div>
+              <div className="col-span-1">
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Supervisor Email</label>
+                <input type="email" placeholder="supervisor@company.com" value={formData.supervisorEmail} onChange={e => handleInputChange('supervisorEmail', e.target.value)} className="w-full border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium placeholder-gray-500" />
+              </div>
+              <div className="col-span-1">
+                <label className="block text-xs font-semibold text-gray-700 mb-1">HR Head Name</label>
+                <input type="text" placeholder="HR contact person" value={formData.hrHeadName} onChange={e => handleInputChange('hrHeadName', e.target.value)} className="w-full border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium placeholder-gray-500" />
+              </div>
+              <div className="col-span-1">
+                <label className="block text-xs font-semibold text-gray-700 mb-1">HR Phone</label>
+                <input type="tel" placeholder="10-digit number" value={formData.hrPhone} onChange={e => handleInputChange('hrPhone', e.target.value)} className="w-full border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium placeholder-gray-500" />
+              </div>
+              <div className="col-span-1">
+                <label className="block text-xs font-semibold text-gray-700 mb-1">HR Email</label>
+                <input type="email" placeholder="hr@company.com" value={formData.hrEmail} onChange={e => handleInputChange('hrEmail', e.target.value)} className="w-full border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium placeholder-gray-500" />
+              </div>
+              <div className="col-span-2">
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Office Address</label>
+                <textarea placeholder="Full office address" value={formData.officeAddress} onChange={e => handleInputChange('officeAddress', e.target.value)} className="w-full border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium placeholder-gray-500" rows={3} />
+              </div>
             </div>
           )}
 
           {activeTab === 'project' && (
             <div className="grid grid-cols-2 gap-4">
-              <input type="text" placeholder="Project Title" value={formData.projectTitle} onChange={e => handleInputChange('projectTitle', e.target.value)} className="col-span-2 border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium placeholder-gray-600" />
-              <input type="text" placeholder="Faculty Mentor Name" value={formData.facultyMentorName} onChange={e => handleInputChange('facultyMentorName', e.target.value)} className="col-span-1 border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium placeholder-gray-600" />
-              <input type="date" value={formData.sipEndDate} onChange={e => handleInputChange('sipEndDate', e.target.value)} className="col-span-1 border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium" placeholder="SIP End Date" />
+              <div className="col-span-2">
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Project Title</label>
+                <input type="text" placeholder="Title of your internship project" value={formData.projectTitle} onChange={e => handleInputChange('projectTitle', e.target.value)} className="w-full border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium placeholder-gray-500" />
+              </div>
+              <div className="col-span-1">
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Faculty Mentor Name</label>
+                <input type="text" placeholder="Assigned faculty mentor" value={formData.facultyMentorName} onChange={e => handleInputChange('facultyMentorName', e.target.value)} className="w-full border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium placeholder-gray-500" />
+              </div>
+              <div className="col-span-1">
+                <label className="block text-xs font-semibold text-gray-700 mb-1">SIP End Date</label>
+                <input type="date" value={formData.sipEndDate} onChange={e => handleInputChange('sipEndDate', e.target.value)} className="w-full border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium" />
+              </div>
             </div>
           )}
 
           {activeTab === 'grading' && (
             <div className="grid grid-cols-2 gap-4">
-              <input type="number" placeholder="Faculty Grading" step="0.01" value={formData.facultyGrading} onChange={e => handleInputChange('facultyGrading', e.target.value)} className="col-span-1 border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium placeholder-gray-600" />
-              <input type="number" placeholder="Supervisor Grading" step="0.01" value={formData.supervisorGrading} onChange={e => handleInputChange('supervisorGrading', e.target.value)} className="col-span-1 border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium placeholder-gray-600" />
-              <input type="number" placeholder="Extension Weeks" value={formData.extensionWeeks} onChange={e => handleInputChange('extensionWeeks', e.target.value)} className="col-span-1 border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium placeholder-gray-600" />
-              <label className="col-span-1 flex items-center font-semibold text-gray-900">
-                <input type="checkbox" checked={formData.ppOffered} onChange={e => handleInputChange('ppOffered', e.target.checked)} className="mr-3 w-4 h-4" />
-                PPO Offered
-              </label>
+              <div className="col-span-1">
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Faculty Grading</label>
+                <input type="number" placeholder="Out of 10" step="0.01" value={formData.facultyGrading} onChange={e => handleInputChange('facultyGrading', e.target.value)} className="w-full border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium placeholder-gray-500" />
+              </div>
+              <div className="col-span-1">
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Supervisor Grading</label>
+                <input type="number" placeholder="Out of 10" step="0.01" value={formData.supervisorGrading} onChange={e => handleInputChange('supervisorGrading', e.target.value)} className="w-full border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium placeholder-gray-500" />
+              </div>
+              <div className="col-span-1">
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Extension (weeks)</label>
+                <input type="number" placeholder="0 if no extension" value={formData.extensionWeeks} onChange={e => handleInputChange('extensionWeeks', e.target.value)} className="w-full border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium placeholder-gray-500" />
+              </div>
+              <div className="col-span-1 flex items-end pb-2">
+                <label className="flex items-center font-semibold text-gray-900">
+                  <input type="checkbox" checked={formData.ppOffered} onChange={e => handleInputChange('ppOffered', e.target.checked)} className="mr-3 w-4 h-4" />
+                  PPO Offered
+                </label>
+              </div>
               {formData.ppOffered && (
                 <>
-                  <input type="number" placeholder="PPO Compensation (LPA)" step="0.01" value={formData.ppoCompensation} onChange={e => handleInputChange('ppoCompensation', e.target.value)} className="col-span-1 border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium placeholder-gray-600" />
-                  <input type="text" placeholder="PPO Position" value={formData.ppoPosition} onChange={e => handleInputChange('ppoPosition', e.target.value)} className="col-span-1 border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium placeholder-gray-600" />
-                  <input type="text" placeholder="PPO Location" value={formData.ppoLocation} onChange={e => handleInputChange('ppoLocation', e.target.value)} className="col-span-1 border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium placeholder-gray-600" />
-                  <input type="date" value={formData.nocIssueDateExtension} onChange={e => handleInputChange('nocIssueDateExtension', e.target.value)} className="col-span-1 border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium" placeholder="NOC Issue Date (Extension/PPO)" />
+                  <div className="col-span-1">
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">PPO Compensation (LPA)</label>
+                    <input type="number" placeholder="Annual CTC in Lakhs" step="0.01" value={formData.ppoCompensation} onChange={e => handleInputChange('ppoCompensation', e.target.value)} className="w-full border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium placeholder-gray-500" />
+                  </div>
+                  <div className="col-span-1">
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">PPO Position</label>
+                    <input type="text" placeholder="Offered role" value={formData.ppoPosition} onChange={e => handleInputChange('ppoPosition', e.target.value)} className="w-full border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium placeholder-gray-500" />
+                  </div>
+                  <div className="col-span-1">
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">PPO Location</label>
+                    <input type="text" placeholder="Where you'll be posted" value={formData.ppoLocation} onChange={e => handleInputChange('ppoLocation', e.target.value)} className="w-full border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium placeholder-gray-500" />
+                  </div>
+                  <div className="col-span-1">
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">NOC Issue Date (Extension/PPO)</label>
+                    <input type="date" value={formData.nocIssueDateExtension} onChange={e => handleInputChange('nocIssueDateExtension', e.target.value)} className="w-full border-2 border-gray-300 rounded px-4 py-2 text-gray-900 font-medium" />
+                  </div>
                 </>
               )}
             </div>
