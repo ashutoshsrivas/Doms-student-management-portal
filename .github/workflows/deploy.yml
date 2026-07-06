@@ -45,13 +45,22 @@ jobs:
           USER: ${{ secrets.EC2_USER }}
           KEY: ${{ secrets.EC2_SSH_KEY }}
         run: |
-          set -e
-          echo "HOST length: ${#HOST}"
-          echo "USER length: ${#USER}"
-          echo "KEY length: ${#KEY}"
-          test -n "$HOST" || { echo "::error::EC2_HOST secret is empty"; exit 1; }
-          test -n "$USER" || { echo "::error::EC2_USER secret is empty"; exit 1; }
-          test -n "$KEY"  || { echo "::error::EC2_SSH_KEY secret is empty"; exit 1; }
+          set +e
+          echo "## Secret preflight" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Secret | Length | OK? |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|---|" >> $GITHUB_STEP_SUMMARY
+          H_OK=$([ -n "$HOST" ] && echo yes || echo NO)
+          U_OK=$([ -n "$USER" ] && echo yes || echo NO)
+          K_OK=$([ -n "$KEY"  ] && echo yes || echo NO)
+          echo "| EC2_HOST | ${#HOST} | $H_OK |" >> $GITHUB_STEP_SUMMARY
+          echo "| EC2_USER | ${#USER} | $U_OK |" >> $GITHUB_STEP_SUMMARY
+          echo "| EC2_SSH_KEY | ${#KEY} | $K_OK |" >> $GITHUB_STEP_SUMMARY
+          FAIL=0
+          [ -z "$HOST" ] && { echo "::error::EC2_HOST secret is empty"; FAIL=1; }
+          [ -z "$USER" ] && { echo "::error::EC2_USER secret is empty"; FAIL=1; }
+          [ -z "$KEY"  ] && { echo "::error::EC2_SSH_KEY secret is empty"; FAIL=1; }
+          exit $FAIL
 
       - name: Set up SSH key + known_hosts
         env:
