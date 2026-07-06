@@ -1,16 +1,33 @@
 name: Deploy to production
 
-# Initial trigger: manual only (workflow_dispatch). This is intentional —
-# you must add the required secrets and run a manual deploy successfully
-# at least once before enabling auto-deploy on push.
+# Triggers:
+#   - push to main → auto-deploy (main use case)
+#   - workflow_dispatch → manual re-deploy from the Actions tab
 #
-# To enable auto-deploy after the first manual run succeeds, uncomment the
-# `push` trigger below.
+# Required repo secrets (Settings → Secrets and variables → Actions):
+#   EC2_HOST      doms.geu.ac.in
+#   EC2_USER      ec2-user
+#   EC2_SSH_KEY   the ENTIRE contents of key.pem, including BEGIN/END lines
+# Optional (only if defaults don't match):
+#   EC2_PORT      SSH port (default 22)
+#   APP_DIR       repo checkout on server (default /opt/doms/app)
+#   PM2_BACKEND   pm2 process name (default doms-backend)
+#   PM2_FRONTEND  pm2 process name (default doms-frontend)
+#
+# Env files (backend/.env, frontend/.env.local) live on the EC2 server
+# and are gitignored — the workflow never touches them. To change an env
+# var, SSH in once and edit the file, then re-run this workflow (or push
+# any change to main to trigger a reload).
 
 on:
+  push:
+    branches: [main]
+    # Skip the workflow when only docs/CI files change — nothing to deploy.
+    paths-ignore:
+      - '**/*.md'
+      - '.github/**'
+      - 'scripts/systemd/**'
   workflow_dispatch:
-  # push:
-  #   branches: [main]
 
 concurrency:
   group: production-deploy
