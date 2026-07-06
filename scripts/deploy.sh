@@ -106,3 +106,5 @@ for i in 1 2 3 4 5 6 7 8 9 10; do
 done
 
 die "health check failed after 10 attempts — backend may be down. Check 'pm2 logs $PM2_BACKEND' and consider rolling back."
+
+# deploy trigger — 2026-07-06T06:47:35Z
