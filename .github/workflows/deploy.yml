@@ -47,12 +47,12 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           port: ${{ secrets.EC2_PORT || 22 }}
           command_timeout: 15m
-          # Pass overrides for pm2 process names if your services aren't
-          # named doms-backend / doms-frontend. Set them as repo secrets.
-          envs: PM2_BACKEND,PM2_FRONTEND,APP_DIR
-          script_stop: true
+          # Load nvm so pm2/node/npm are on PATH in non-login shell.
           script: |
-            export PM2_BACKEND="${{ secrets.PM2_BACKEND }}"
-            export PM2_FRONTEND="${{ secrets.PM2_FRONTEND }}"
-            export APP_DIR="${{ secrets.APP_DIR }}"
-            bash "${APP_DIR:-/opt/doms/app}/scripts/deploy.sh"
+            set -euxo pipefail
+            echo "hello from $(whoami) on $(hostname)"
+            export NVM_DIR="$HOME/.nvm"
+            [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" || true
+            which node npm pm2 mysqldump || true
+            APP_DIR="${APP_DIR:-/opt/doms/app}"
+            bash "$APP_DIR/scripts/deploy.sh"
