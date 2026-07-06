@@ -39,20 +39,40 @@ jobs:
     timeout-minutes: 20
 
     steps:
-      - name: SSH into EC2 and run deploy.sh
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          port: ${{ secrets.EC2_PORT || 22 }}
-          command_timeout: 15m
-          # Load nvm so pm2/node/npm are on PATH in non-login shell.
-          script: |
-            set -euxo pipefail
-            echo "hello from $(whoami) on $(hostname)"
-            export NVM_DIR="$HOME/.nvm"
-            [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" || true
-            which node npm pm2 mysqldump || true
-            APP_DIR="${APP_DIR:-/opt/doms/app}"
-            bash "$APP_DIR/scripts/deploy.sh"
+      - name: Preflight — check secrets are present
+        env:
+          HOST: ${{ secrets.EC2_HOST }}
+          USER: ${{ secrets.EC2_USER }}
+          KEY: ${{ secrets.EC2_SSH_KEY }}
+        run: |
+          set -e
+          echo "HOST length: ${#HOST}"
+          echo "USER length: ${#USER}"
+          echo "KEY length: ${#KEY}"
+          test -n "$HOST" || { echo "::error::EC2_HOST secret is empty"; exit 1; }
+          test -n "$USER" || { echo "::error::EC2_USER secret is empty"; exit 1; }
+          test -n "$KEY"  || { echo "::error::EC2_SSH_KEY secret is empty"; exit 1; }
+
+      - name: Set up SSH key + known_hosts
+        env:
+          KEY: ${{ secrets.EC2_SSH_KEY }}
+          HOST: ${{ secrets.EC2_HOST }}
+        run: |
+          set -e
+          mkdir -p ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          head -1 ~/.ssh/id_deploy
+          tail -1 ~/.ssh/id_deploy
+          ssh-keyscan -T 10 -H "$HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Deploy
+        env:
+          HOST: ${{ secrets.EC2_HOST }}
+          USER: ${{ secrets.EC2_USER }}
+        run: |
+          ssh -i ~/.ssh/id_deploy \
+              -o StrictHostKeyChecking=accept-new \
+              -o ServerAliveInterval=30 \
+              "$USER@$HOST" \
+              'bash /opt/doms/app/scripts/deploy.sh'
