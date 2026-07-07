@@ -255,9 +255,11 @@ function CRList({
   const [candidates, setCandidates] = useState<Student[]>([]);
   const [selected, setSelected] = useState<string[]>(cls.Representatives.map((r) => r.studentId));
   const [saving, setSaving] = useState(false);
+  const [search, setSearch] = useState('');
 
   useEffect(() => {
     if (!editing) return;
+    setSearch('');
     (async () => {
       try {
         // Reuse existing users endpoint. Falls back to all if the filter isn't there.
@@ -284,6 +286,24 @@ function CRList({
       return [...prev, id];
     });
   };
+
+  // Filter candidates by name or email. Always keep the currently-selected
+  // rows visible at the top so the user can un-select them even after typing.
+  const visibleCandidates = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const filtered = q
+      ? candidates.filter((s) => {
+          const n = `${s.firstName || ''} ${s.lastName || ''}`.trim().toLowerCase();
+          return n.includes(q) || (s.email || '').toLowerCase().includes(q);
+        })
+      : candidates;
+    // Move selected to the top so they don't disappear from the list.
+    const sel = new Set(selected);
+    return [
+      ...filtered.filter((s) => sel.has(s.id)),
+      ...filtered.filter((s) => !sel.has(s.id)),
+    ];
+  }, [candidates, search, selected]);
 
   const save = async () => {
     try {
@@ -327,14 +347,29 @@ function CRList({
         )
       ) : (
         <div className="space-y-2">
-          <div className="text-xs text-gray-500">
-            Selected {selected.length}/4. Click to add or remove.
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="text-xs text-gray-500">
+              Selected {selected.length}/4. Click to add or remove.
+            </div>
+            <div className="relative flex-1 min-w-[180px] max-w-xs">
+              <FiSearch className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search by name or email…"
+                autoFocus
+                className="w-full rounded border border-gray-300 bg-white py-1.5 pl-7 pr-2 text-xs text-gray-900 placeholder-gray-500 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-200"
+              />
+            </div>
           </div>
           <div className="max-h-56 overflow-y-auto rounded border border-gray-200 bg-gray-50 p-2">
             {candidates.length === 0 ? (
               <div className="text-sm text-gray-500">No student users found.</div>
+            ) : visibleCandidates.length === 0 ? (
+              <div className="text-sm text-gray-500 italic">No students match &ldquo;{search}&rdquo;.</div>
             ) : (
-              candidates.map((s) => {
+              visibleCandidates.map((s) => {
                 const chosen = selected.includes(s.id);
                 return (
                   <button
