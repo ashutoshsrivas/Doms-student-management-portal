@@ -10,7 +10,7 @@ const { FacultyTask, User, FacultyGroup, FacultyGroupMember, FacultyTaskUpdate }
 const { uploadToS3, deleteFromS3 } = require('../utils/s3Upload');
 
 // ADMIN is included so HOD can hand admins tasks too (and vice versa).
-const ASSIGNABLE_ROLES = ['ADMIN', 'HOD', 'FACULTY', 'COORDINATOR', 'PLACEMENT_COORDINATOR', 'TRAINER', 'MENTOR'];
+const ASSIGNABLE_ROLES = ['ADMIN', 'HOD', 'FACULTY', 'CHAIR_HEAD', 'COORDINATOR', 'PLACEMENT_COORDINATOR', 'TRAINER', 'MENTOR'];
 const PRIORITIES = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'];
 
 const sanitiseTitle = (s) => (s || '').toString().trim().slice(0, 250);
