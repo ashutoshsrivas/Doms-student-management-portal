@@ -25,6 +25,7 @@ const facultyNoteRoutes = require('./routes/facultyNoteRoutes');
 const facultyGroupRoutes = require('./routes/facultyGroupRoutes');
 const eventRoutes = require('./routes/eventRoutes');
 const landingRoutes = require('./routes/landingRoutes');
+const classRoutes = require('./routes/classRoutes');
 const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
@@ -74,6 +75,7 @@ app.use('/api/faculty-notes', facultyNoteRoutes);
 app.use('/api/faculty-groups', facultyGroupRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/landing', landingRoutes);
+app.use('/api/classes', classRoutes);
 
 // Health check
 app.get('/health', (req, res) => {

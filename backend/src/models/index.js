@@ -1873,6 +1873,77 @@ const LandingContent = sequelize.define('LandingContent', {
   underscored: true,
 });
 
+// ============ Classes / Sections =========================================
+// A class/section lives inside an academic session. One coordinator
+// (faculty/chair-head/placement coordinator/coordinator), up to 4 CRs
+// (students), and one attendance row per class per date.
+
+const Class = sequelize.define('Class', {
+  id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
+  sessionId: { type: DataTypes.UUID, allowNull: false },
+  name: { type: DataTypes.STRING, allowNull: false },
+  description: { type: DataTypes.TEXT, allowNull: true },
+  coordinatorId: { type: DataTypes.UUID, allowNull: false },
+  createdBy: { type: DataTypes.UUID, allowNull: true },
+  status: {
+    type: DataTypes.ENUM('ACTIVE', 'ARCHIVED'),
+    defaultValue: 'ACTIVE',
+    allowNull: false,
+  },
+}, {
+  tableName: 'classes',
+  timestamps: true,
+  underscored: true,
+  indexes: [{ unique: true, fields: ['session_id', 'name'] }],
+});
+
+const ClassRepresentative = sequelize.define('ClassRepresentative', {
+  id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
+  classId: { type: DataTypes.UUID, allowNull: false },
+  studentId: { type: DataTypes.UUID, allowNull: false },
+}, {
+  tableName: 'class_representatives',
+  timestamps: true,
+  underscored: true,
+  indexes: [{ unique: true, fields: ['class_id', 'student_id'] }],
+});
+
+const ClassAttendance = sequelize.define('ClassAttendance', {
+  id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
+  classId: { type: DataTypes.UUID, allowNull: false },
+  date: { type: DataTypes.DATEONLY, allowNull: false },
+  presentCount: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+  bunkedCount: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+  leaveCount: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+  submittedBy: { type: DataTypes.UUID, allowNull: false },
+  submittedAt: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
+  // Coordinator-only field. Response strips this out for non-admin/HOD
+  // viewers (per product spec).
+  actionTakenReport: { type: DataTypes.TEXT, allowNull: true },
+  atrAt: { type: DataTypes.DATE, allowNull: true },
+  atrBy: { type: DataTypes.UUID, allowNull: true },
+}, {
+  tableName: 'class_attendance',
+  timestamps: true,
+  underscored: true,
+  indexes: [{ unique: true, fields: ['class_id', 'date'] }],
+});
+
+Class.belongsTo(AcademicSession, { foreignKey: 'sessionId', as: 'Session' });
+AcademicSession.hasMany(Class, { foreignKey: 'sessionId', onDelete: 'CASCADE' });
+Class.belongsTo(User, { foreignKey: 'coordinatorId', as: 'Coordinator' });
+User.hasMany(Class, { foreignKey: 'coordinatorId', as: 'CoordinatedClasses' });
+
+Class.hasMany(ClassRepresentative, { foreignKey: 'classId', as: 'Representatives', onDelete: 'CASCADE' });
+ClassRepresentative.belongsTo(Class, { foreignKey: 'classId' });
+ClassRepresentative.belongsTo(User, { foreignKey: 'studentId', as: 'Student' });
+User.hasMany(ClassRepresentative, { foreignKey: 'studentId', as: 'CRAssignments' });
+
+Class.hasMany(ClassAttendance, { foreignKey: 'classId', as: 'Attendance', onDelete: 'CASCADE' });
+ClassAttendance.belongsTo(Class, { foreignKey: 'classId' });
+ClassAttendance.belongsTo(User, { foreignKey: 'submittedBy', as: 'Submitter' });
+ClassAttendance.belongsTo(User, { foreignKey: 'atrBy', as: 'ATRAuthor' });
+
 // Messaging Models
 
 
@@ -1913,4 +1984,7 @@ module.exports = {
   Event,
   BlockedDate,
   LandingContent,
+  Class,
+  ClassRepresentative,
+  ClassAttendance,
 };
