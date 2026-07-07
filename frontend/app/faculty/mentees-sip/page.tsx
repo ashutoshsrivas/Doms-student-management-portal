@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { FiBriefcase, FiCalendar, FiCheckCircle, FiClock, FiExternalLink, FiSearch, FiUser, FiUsers } from 'react-icons/fi';
+import { FiAlertTriangle, FiBriefcase, FiCalendar, FiCheckCircle, FiClock, FiExternalLink, FiFlag, FiSearch, FiUser, FiUsers } from 'react-icons/fi';
 import apiClient from '@/app/lib/apiClient';
 import DashboardLayout from '@/app/components/DashboardLayout';
 import ProtectedRoute from '@/app/components/ProtectedRoute';
@@ -77,6 +77,45 @@ const fmtDate = (iso: string | null | undefined) => {
 
 const studentLabel = (s: Student | null) =>
   s ? `${s.firstName || ''} ${s.lastName || ''}`.trim() || s.email : 'Unknown student';
+
+// Compliance flag — same math as /student/dashboard and /admin/sip-monitor,
+// so all three views agree.
+type FlagKind = 'red' | 'yellow' | 'green' | 'completed' | 'not-started';
+
+const MS_PER_WEEK = 7 * 24 * 60 * 60 * 1000;
+
+function computeMenteeFlag(m: Mentee): FlagKind {
+  if (!m.sip) return 'red';
+  if (m.sip.status === 'COMPLETED') return 'completed';
+  if (!m.sip.joinDate) return 'not-started';
+  const jd = new Date(m.sip.joinDate).getTime();
+  if (Number.isNaN(jd)) return 'not-started';
+  const weeksElapsed = Math.max(0, Math.floor((Date.now() - jd) / MS_PER_WEEK));
+  const submitted = (m.weeklyUpdates || []).filter((u) => u.submitted).length;
+  const duration = m.sip.durationWeeks ? Number(m.sip.durationWeeks) : null;
+  const expected = duration ? Math.min(weeksElapsed, duration) : weeksElapsed;
+  if (submitted === 0 && weeksElapsed > 0) return 'red';
+  if (expected > submitted) return 'yellow';
+  return 'green';
+}
+
+const FLAG_CFG: Record<FlagKind, { bg: string; border: string; text: string; label: string; icon: React.ReactNode }> = {
+  red: { bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-700', label: 'No updates', icon: <FiFlag className="h-3 w-3" /> },
+  yellow: { bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-700', label: 'Behind', icon: <FiAlertTriangle className="h-3 w-3" /> },
+  green: { bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-700', label: 'On track', icon: <FiCheckCircle className="h-3 w-3" /> },
+  completed: { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-700', label: 'Completed', icon: <FiCheckCircle className="h-3 w-3" /> },
+  'not-started': { bg: 'bg-gray-50', border: 'border-gray-200', text: 'text-gray-600', label: 'Not started', icon: <FiClock className="h-3 w-3" /> },
+};
+
+function FlagBadge({ kind }: { kind: FlagKind }) {
+  const c = FLAG_CFG[kind];
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${c.bg} ${c.border} ${c.text}`}>
+      {c.icon}
+      {c.label}
+    </span>
+  );
+}
 
 function StatusPill({ sip }: { sip: SIP | null }) {
   if (!sip) {
@@ -231,6 +270,7 @@ function MenteeCard({ mentee }: { mentee: Mentee }) {
   const [tab, setTab] = useState<'form' | 'updates'>('form');
   const name = studentLabel(mentee.student);
   const updatesCount = mentee.weeklyUpdates.length;
+  const flag = computeMenteeFlag(mentee);
 
   return (
     <div className="rounded-xl border border-gray-200 bg-white">
@@ -248,10 +288,11 @@ function MenteeCard({ mentee }: { mentee: Mentee }) {
             <div className="truncate text-xs text-gray-500">{mentee.student?.email || '—'}</div>
           </div>
         </div>
-        <div className="flex shrink-0 items-center gap-3">
+        <div className="flex shrink-0 items-center gap-2">
           <span className="hidden text-xs text-gray-500 sm:inline">
             {updatesCount} weekly {updatesCount === 1 ? 'update' : 'updates'}
           </span>
+          <FlagBadge kind={flag} />
           <StatusPill sip={mentee.sip} />
         </div>
       </button>
@@ -297,6 +338,7 @@ function Content() {
   const [teams, setTeams] = useState<Team[]>([]);
   const [viewerIsOrgWide, setViewerIsOrgWide] = useState(false);
   const [onlyMine, setOnlyMine] = useState(false);
+  const [flagFilter, setFlagFilter] = useState<'all' | FlagKind>('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
@@ -327,21 +369,25 @@ function Content() {
 
   const totals = useMemo(() => {
     const allMentees = teams.flatMap((t) => t.mentees);
+    const flagCounts: Record<FlagKind, number> = { red: 0, yellow: 0, green: 0, completed: 0, 'not-started': 0 };
+    allMentees.forEach((m) => { flagCounts[computeMenteeFlag(m)] += 1; });
     return {
       teams: teams.length,
       mentees: allMentees.length,
       withSip: allMentees.filter((m) => m.sip).length,
       completed: allMentees.filter((m) => m.sip?.status === 'COMPLETED').length,
+      flagCounts,
     };
   }, [teams]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return teams;
     return teams
       .map((t) => ({
         ...t,
         mentees: t.mentees.filter((m) => {
+          if (flagFilter !== 'all' && computeMenteeFlag(m) !== flagFilter) return false;
+          if (!q) return true;
           const name = studentLabel(m.student).toLowerCase();
           const email = (m.student?.email || '').toLowerCase();
           const company = (m.sip?.companyName || '').toLowerCase();
@@ -349,7 +395,7 @@ function Content() {
         }),
       }))
       .filter((t) => t.mentees.length > 0);
-  }, [teams, query]);
+  }, [teams, query, flagFilter]);
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 p-4 sm:p-6">
@@ -413,6 +459,39 @@ function Content() {
             <div className="mt-1 text-2xl font-semibold text-gray-900">{s.v}</div>
           </div>
         ))}
+      </div>
+
+      {/* Flag filter — click a chip to narrow the list below. Counts are
+          across ALL mentees, not the current filter, so chips stay stable. */}
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2">
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">Filter by flag:</span>
+        {([
+          ['all', 'All', totals.mentees, null],
+          ['red', 'No updates', totals.flagCounts.red, FLAG_CFG.red],
+          ['yellow', 'Behind', totals.flagCounts.yellow, FLAG_CFG.yellow],
+          ['green', 'On track', totals.flagCounts.green, FLAG_CFG.green],
+          ['completed', 'Completed', totals.flagCounts.completed, FLAG_CFG.completed],
+          ['not-started', 'Not started', totals.flagCounts['not-started'], FLAG_CFG['not-started']],
+        ] as [typeof flagFilter, string, number, (typeof FLAG_CFG)[FlagKind] | null][]).map(([k, label, count, cfg]) => {
+          const active = flagFilter === k;
+          const idleTone = cfg
+            ? `${cfg.bg} ${cfg.border} ${cfg.text}`
+            : 'bg-gray-100 text-gray-800 border-gray-300';
+          return (
+            <button
+              key={k}
+              type="button"
+              onClick={() => setFlagFilter(k)}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                active ? 'bg-gray-900 text-white border-gray-900' : `${idleTone} hover:brightness-95`
+              }`}
+            >
+              {cfg?.icon}
+              <span>{label}</span>
+              <span className={active ? 'opacity-90' : 'opacity-70'}>({count})</span>
+            </button>
+          );
+        })}
       </div>
 
       {loading && (
