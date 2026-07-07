@@ -262,11 +262,13 @@ function CRList({
     setSearch('');
     (async () => {
       try {
-        // Reuse existing users endpoint. Falls back to all if the filter isn't there.
-        const res = await apiClient.get('/users', {
-          params: { role: 'STUDENT', page: 1, limit: 500 },
+        // Scoped to the class's session so faculty coordinators only see
+        // students enrolled in that session (much shorter list). Falls back
+        // gracefully if the endpoint returns nothing.
+        const res = await apiClient.get('/classes/eligible-crs', {
+          params: { sessionId: cls.sessionId },
         });
-        const list = (res.data?.users || res.data || []) as any[];
+        const list = (res.data?.users || []) as any[];
         setCandidates(list.map((u: any) => ({
           id: u.id, firstName: u.firstName, lastName: u.lastName, email: u.email,
         })));
@@ -274,7 +276,7 @@ function CRList({
         setCandidates([]);
       }
     })();
-  }, [editing]);
+  }, [editing, cls.sessionId]);
 
   const toggle = (id: string) => {
     setSelected((prev) => {

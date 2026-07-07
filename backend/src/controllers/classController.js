@@ -354,6 +354,39 @@ module.exports = {
     }
   },
 
+  // GET /api/classes/eligible-crs?sessionId=... — list students eligible to
+  // be CRs. Callable by any coordinator role (they need it to populate the
+  // CR picker on their class). Optionally scoped to a session so the list
+  // only shows students enrolled in that session; without sessionId every
+  // student is returned. Only id/name/email so this stays minimal-PII.
+  eligibleCRs: async (req, res) => {
+    try {
+      const where = { approvedRole: 'STUDENT', status: 'ACTIVE' };
+      let students;
+      if (req.query.sessionId) {
+        const { StudentSession } = require('../models');
+        const enrolled = await StudentSession.findAll({
+          where: { academicSessionId: req.query.sessionId },
+          attributes: ['userId'],
+          raw: true,
+        });
+        const ids = [...new Set(enrolled.map((r) => r.userId).filter(Boolean))];
+        if (!ids.length) return res.json({ users: [] });
+        where.id = { [Op.in]: ids };
+      }
+      students = await User.findAll({
+        where,
+        attributes: ['id', 'firstName', 'lastName', 'email'],
+        order: [['firstName', 'ASC'], ['lastName', 'ASC']],
+        limit: 1000,
+      });
+      res.json({ users: students });
+    } catch (err) {
+      console.error('classController.eligibleCRs error:', err);
+      res.status(500).json({ message: 'Failed to list students' });
+    }
+  },
+
   // GET /api/classes/eligible-coordinators — list users who can be assigned
   // as class coordinator (roles: FACULTY, CHAIR_HEAD, PLACEMENT_COORDINATOR,
   // COORDINATOR). Used by the admin create/edit modal.

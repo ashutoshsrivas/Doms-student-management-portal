@@ -10,6 +10,13 @@ router.get('/eligible-coordinators',
   authorizeRole('ADMIN', 'HOD'),
   classController.eligibleCoordinators);
 
+// CR picker — reachable by any role that could coordinate a class, so a
+// faculty coordinator can populate the picker. Actual save is still gated
+// by isOwnCoordinator in the setCRs handler.
+router.get('/eligible-crs',
+  authorizeRole('ADMIN', 'HOD', 'FACULTY', 'CHAIR_HEAD', 'PLACEMENT_COORDINATOR', 'COORDINATOR'),
+  classController.eligibleCRs);
+
 // List classes (scoped inside the controller by role)
 router.get('/', classController.list);
 
