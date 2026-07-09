@@ -1970,6 +1970,25 @@ const WorkBlock = sequelize.define('WorkBlock', {
 WorkBlock.belongsTo(User, { foreignKey: 'userId', as: 'Owner' });
 User.hasMany(WorkBlock, { foreignKey: 'userId', as: 'WorkBlocks', onDelete: 'CASCADE' });
 
+// Extra achievements shown next to the weekly schedule. Free-form
+// title/description; optional category + achievedOn date.
+const FacultyAchievement = sequelize.define('FacultyAchievement', {
+  id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
+  userId: { type: DataTypes.UUID, allowNull: false },
+  title: { type: DataTypes.STRING(255), allowNull: false },
+  category: { type: DataTypes.STRING(120), allowNull: true },
+  description: { type: DataTypes.TEXT, allowNull: true },
+  achievedOn: { type: DataTypes.DATEONLY, allowNull: true },
+}, {
+  tableName: 'faculty_achievements',
+  timestamps: true,
+  underscored: true,
+  indexes: [{ fields: ['user_id'] }],
+});
+
+FacultyAchievement.belongsTo(User, { foreignKey: 'userId', as: 'Owner' });
+User.hasMany(FacultyAchievement, { foreignKey: 'userId', as: 'Achievements', onDelete: 'CASCADE' });
+
 // Messaging Models
 
 
@@ -2014,4 +2033,5 @@ module.exports = {
   ClassRepresentative,
   ClassAttendance,
   WorkBlock,
+  FacultyAchievement,
 };

@@ -6,7 +6,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { FiSave, FiPlus, FiTrash2, FiX, FiPrinter, FiRotateCcw } from 'react-icons/fi';
+import { FiSave, FiPlus, FiTrash2, FiX, FiPrinter, FiRotateCcw, FiAward, FiEdit2 } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 import useAuthStore from '@/app/store/authStore';
 import apiClient from '@/app/lib/apiClient';
@@ -357,6 +357,8 @@ export default function SchedulePage() {
         <p className="text-xs text-gray-500 mt-3">
           Lunch is only allowed between 12:30 PM and 3:00 PM, and can’t exceed 1 hour.
         </p>
+
+        <AchievementsPanel />
       </div>
 
       {modalOpen && editing && (
@@ -592,6 +594,228 @@ function BlockModal({
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------
+// Extra Achievements: self-contained CRUD panel below the grid.
+interface Achievement {
+  id: string;
+  title: string;
+  category?: string | null;
+  description?: string | null;
+  achievedOn?: string | null;
+}
+
+function AchievementsPanel() {
+  const [items, setItems] = useState<Achievement[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState<Partial<Achievement> | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const { data } = await apiClient.get('/schedule/achievements/me');
+      setItems(data.achievements || []);
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Failed to load achievements');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const save = async () => {
+    if (!editing) return;
+    if (!editing.title?.trim()) {
+      toast.error('Title is required');
+      return;
+    }
+    setSaving(true);
+    try {
+      const payload = {
+        title: editing.title,
+        category: editing.category || null,
+        description: editing.description || null,
+        achievedOn: editing.achievedOn || null,
+      };
+      if (editing.id) {
+        await apiClient.patch(`/schedule/achievements/${editing.id}`, payload);
+        toast.success('Updated');
+      } else {
+        await apiClient.post('/schedule/achievements/me', payload);
+        toast.success('Added');
+      }
+      setEditing(null);
+      await load();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Save failed');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const remove = async (id: string) => {
+    if (!confirm('Delete this achievement?')) return;
+    try {
+      await apiClient.delete(`/schedule/achievements/${id}`);
+      toast.success('Deleted');
+      await load();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Delete failed');
+    }
+  };
+
+  const fmtDate = (s?: string | null) => {
+    if (!s) return '';
+    const d = new Date(s);
+    if (Number.isNaN(d.getTime())) return s;
+    return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  };
+
+  return (
+    <div className="mt-8">
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+            <FiAward className="w-5 h-5 text-amber-500" /> Extra Achievements
+          </h2>
+          <p className="text-xs text-gray-500">
+            Publications, awards, workshops, certifications, patents — anything worth noting.
+          </p>
+        </div>
+        <button
+          onClick={() => setEditing({ title: '', category: '', description: '', achievedOn: '' })}
+          className="inline-flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg text-white bg-amber-600 hover:bg-amber-700"
+        >
+          <FiPlus className="w-4 h-4" /> Add achievement
+        </button>
+      </div>
+
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        {loading ? (
+          <div className="p-4 text-sm text-gray-500">Loading…</div>
+        ) : items.length === 0 ? (
+          <div className="p-6 text-sm text-gray-500 text-center">
+            No achievements yet. Add your first one above.
+          </div>
+        ) : (
+          <ul className="divide-y divide-gray-100">
+            {items.map((a) => (
+              <li key={a.id} className="p-3 flex items-start gap-3">
+                <div className="mt-0.5 text-amber-500"><FiAward className="w-4 h-4" /></div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-wrap items-baseline gap-2">
+                    <span className="font-medium text-gray-900">{a.title}</span>
+                    {a.category && (
+                      <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                        {a.category}
+                      </span>
+                    )}
+                    {a.achievedOn && (
+                      <span className="text-xs text-gray-500">{fmtDate(a.achievedOn)}</span>
+                    )}
+                  </div>
+                  {a.description && (
+                    <div className="text-sm text-gray-600 mt-0.5 whitespace-pre-line">{a.description}</div>
+                  )}
+                </div>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setEditing({ ...a })}
+                    className="p-1.5 text-gray-500 hover:bg-gray-100 rounded"
+                    title="Edit"
+                  >
+                    <FiEdit2 className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => remove(a.id)}
+                    className="p-1.5 text-red-500 hover:bg-red-50 rounded"
+                    title="Delete"
+                  >
+                    <FiTrash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {editing && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-lg w-full max-w-md">
+            <div className="flex items-center justify-between px-4 py-3 border-b">
+              <h3 className="text-base font-semibold">
+                {editing.id ? 'Edit achievement' : 'Add achievement'}
+              </h3>
+              <button onClick={() => setEditing(null)} className="text-gray-400 hover:text-gray-600">
+                <FiX className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-4 space-y-3">
+              <div>
+                <label className="text-xs text-gray-600 font-medium">Title</label>
+                <input
+                  className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                  value={editing.title || ''}
+                  onChange={(e) => setEditing({ ...editing, title: e.target.value })}
+                  placeholder="e.g. Best paper award — IEEE Access 2026"
+                  maxLength={250}
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-600 font-medium">Category</label>
+                <input
+                  className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                  value={editing.category || ''}
+                  onChange={(e) => setEditing({ ...editing, category: e.target.value })}
+                  placeholder="e.g. Publication, Award, Workshop, Patent, Certification"
+                  maxLength={120}
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-600 font-medium">Date</label>
+                <input
+                  type="date"
+                  className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                  value={editing.achievedOn || ''}
+                  onChange={(e) => setEditing({ ...editing, achievedOn: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-600 font-medium">Description</label>
+                <textarea
+                  className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                  rows={4}
+                  value={editing.description || ''}
+                  onChange={(e) => setEditing({ ...editing, description: e.target.value })}
+                  placeholder="Optional details (venue, co-authors, link, etc.)"
+                  maxLength={4000}
+                />
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2 px-4 py-3 border-t bg-gray-50 rounded-b-xl">
+              <button
+                onClick={() => setEditing(null)}
+                className="px-3 py-1.5 text-sm rounded-lg border border-gray-300 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={save}
+                disabled={saving}
+                className="inline-flex items-center gap-1 px-3 py-1.5 text-sm text-white bg-amber-600 hover:bg-amber-700 rounded-lg disabled:opacity-60"
+              >
+                <FiSave className="w-4 h-4" /> {saving ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

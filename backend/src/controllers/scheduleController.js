@@ -1,5 +1,5 @@
 const { Op } = require('sequelize');
-const { sequelize, WorkBlock, User } = require('../models');
+const { sequelize, WorkBlock, User, FacultyAchievement } = require('../models');
 
 // Grid bounds
 const GRID_START = 8 * 60;        // 8:00 → minute 480
@@ -146,11 +146,17 @@ exports.getForUser = async (req, res) => {
     attributes: ['id', 'firstName', 'lastName', 'email', 'approvedRole', 'department', 'employeeId'],
   });
   if (!user) return res.status(404).json({ message: 'User not found' });
-  const blocks = await WorkBlock.findAll({
-    where: { userId: user.id },
-    order: [['dayOfWeek', 'ASC'], ['startMinutes', 'ASC']],
-  });
-  res.json({ user, blocks });
+  const [blocks, achievements] = await Promise.all([
+    WorkBlock.findAll({
+      where: { userId: user.id },
+      order: [['dayOfWeek', 'ASC'], ['startMinutes', 'ASC']],
+    }),
+    FacultyAchievement.findAll({
+      where: { userId: user.id },
+      order: [['achievedOn', 'DESC'], ['createdAt', 'DESC']],
+    }),
+  ]);
+  res.json({ user, blocks, achievements });
 };
 
 // GET /api/schedule/all — every schedule at once (for the "download all" PDF flow).
@@ -163,11 +169,10 @@ exports.getAll = async (req, res) => {
       status: { [Op.in]: ['ACTIVE', 'APPROVED'] },
     },
     attributes: ['id', 'firstName', 'lastName', 'email', 'approvedRole', 'department', 'employeeId'],
-    include: [{
-      model: WorkBlock,
-      as: 'WorkBlocks',
-      required: false,
-    }],
+    include: [
+      { model: WorkBlock, as: 'WorkBlocks', required: false },
+      { model: FacultyAchievement, as: 'Achievements', required: false },
+    ],
     order: [['firstName', 'ASC'], ['lastName', 'ASC']],
   });
   const payload = users.map((u) => ({
@@ -192,6 +197,70 @@ exports.getAll = async (req, res) => {
         customLabel: b.customLabel,
       }))
       .sort((a, b) => (a.dayOfWeek - b.dayOfWeek) || (a.startMinutes - b.startMinutes)),
+    achievements: (u.Achievements || [])
+      .map((a) => ({
+        id: a.id,
+        title: a.title,
+        category: a.category,
+        description: a.description,
+        achievedOn: a.achievedOn,
+      }))
+      .sort((a, b) => {
+        const da = a.achievedOn || '';
+        const db = b.achievedOn || '';
+        return db.localeCompare(da);
+      }),
   }));
   res.json({ schedules: payload });
+};
+
+// ---- Achievements CRUD ------------------------------------------------
+function normaliseAchievement(body) {
+  const title = String(body?.title || '').trim().slice(0, 250);
+  if (!title) throw new Error('title is required');
+  return {
+    title,
+    category: body.category ? String(body.category).trim().slice(0, 120) : null,
+    description: body.description ? String(body.description).slice(0, 4000) : null,
+    achievedOn: body.achievedOn ? String(body.achievedOn).slice(0, 10) : null,
+  };
+}
+
+// GET /api/schedule/achievements/me
+exports.listMyAchievements = async (req, res) => {
+  const rows = await FacultyAchievement.findAll({
+    where: { userId: req.user.id },
+    order: [['achievedOn', 'DESC'], ['createdAt', 'DESC']],
+  });
+  res.json({ achievements: rows });
+};
+
+// POST /api/schedule/achievements/me
+exports.addMyAchievement = async (req, res) => {
+  const clean = normaliseAchievement(req.body || {});
+  const row = await FacultyAchievement.create({ ...clean, userId: req.user.id });
+  res.status(201).json({ achievement: row });
+};
+
+// PATCH /api/schedule/achievements/:id
+exports.updateAchievement = async (req, res) => {
+  const row = await FacultyAchievement.findByPk(req.params.id);
+  if (!row) return res.status(404).json({ message: 'Not found' });
+  if (row.userId !== req.user.id && !isAdmin(req.user.role)) {
+    return res.status(403).json({ message: 'Forbidden' });
+  }
+  const clean = normaliseAchievement(req.body || {});
+  await row.update(clean);
+  res.json({ achievement: row });
+};
+
+// DELETE /api/schedule/achievements/:id
+exports.deleteAchievement = async (req, res) => {
+  const row = await FacultyAchievement.findByPk(req.params.id);
+  if (!row) return res.status(404).json({ message: 'Not found' });
+  if (row.userId !== req.user.id && !isAdmin(req.user.role)) {
+    return res.status(403).json({ message: 'Forbidden' });
+  }
+  await row.destroy();
+  res.json({ ok: true });
 };

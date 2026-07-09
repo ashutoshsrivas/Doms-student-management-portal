@@ -15,6 +15,13 @@ const OWN_ROLES = [
 router.get('/me', authorizeRole(...OWN_ROLES), scheduleController.getMine);
 router.put('/me', authorizeRole(...OWN_ROLES), scheduleController.replaceMine);
 
+// Achievements — own list + CRUD. Update/delete gated by ownership OR
+// admin/HOD inside the handler.
+router.get('/achievements/me', authorizeRole(...OWN_ROLES), scheduleController.listMyAchievements);
+router.post('/achievements/me', authorizeRole(...OWN_ROLES), scheduleController.addMyAchievement);
+router.patch('/achievements/:id', authorizeRole(...OWN_ROLES), scheduleController.updateAchievement);
+router.delete('/achievements/:id', authorizeRole(...OWN_ROLES), scheduleController.deleteAchievement);
+
 // Admin/HOD only
 router.get('/users', authorizeRole('ADMIN', 'HOD'), scheduleController.listUsers);
 router.get('/all', authorizeRole('ADMIN', 'HOD'), scheduleController.getAll);

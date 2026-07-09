@@ -42,9 +42,18 @@ interface UserMeta {
   employeeId?: string | null;
 }
 
+interface Achievement {
+  id: string;
+  title: string;
+  category?: string | null;
+  description?: string | null;
+  achievedOn?: string | null;
+}
+
 interface Schedule {
   user: UserMeta;
   blocks: Block[];
+  achievements?: Achievement[];
 }
 
 const ROLE_LABEL: Record<string, string> = {
@@ -100,9 +109,16 @@ function PrintScheduleInner() {
         } else if (mode === 'user') {
           const userId = params.get('userId');
           const { data } = await apiClient.get(`/schedule/user/${userId}`);
-          setSchedules([{ user: data.user, blocks: data.blocks || [] }]);
+          setSchedules([{
+            user: data.user,
+            blocks: data.blocks || [],
+            achievements: data.achievements || [],
+          }]);
         } else {
-          const myBlocks = await apiClient.get('/schedule/me');
+          const [myBlocks, myAch] = await Promise.all([
+            apiClient.get('/schedule/me'),
+            apiClient.get('/schedule/achievements/me').catch(() => ({ data: { achievements: [] } })),
+          ]);
           const u: any = authedUser;
           setSchedules([{
             user: u ? {
@@ -114,6 +130,7 @@ function PrintScheduleInner() {
               email: '', approvedRole: '',
             },
             blocks: myBlocks.data.blocks || [],
+            achievements: myAch.data.achievements || [],
           }]);
         }
       } catch (e: any) {
@@ -177,9 +194,15 @@ function PrintScheduleInner() {
 }
 
 function SchedulePrintCard({ schedule }: { schedule: Schedule }) {
-  const { user, blocks } = schedule;
+  const { user, blocks, achievements } = schedule;
   const byDay: Record<number, Block[]> = { 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
   for (const b of blocks) byDay[b.dayOfWeek]?.push(b);
+  const fmtDate = (s?: string | null) => {
+    if (!s) return '';
+    const d = new Date(s);
+    if (Number.isNaN(d.getTime())) return s;
+    return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  };
 
   return (
     <div className="sched-page">
@@ -271,6 +294,35 @@ function SchedulePrintCard({ schedule }: { schedule: Schedule }) {
           })}
         </div>
       </div>
+
+      {/* Extra Achievements */}
+      {achievements && achievements.length > 0 && (
+        <div style={{ marginTop: 10 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: '#111', marginBottom: 4 }}>
+            Extra Achievements
+          </div>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10 }}>
+            <thead>
+              <tr style={{ background: '#f3f4f6' }}>
+                <th style={{ textAlign: 'left', padding: '4px 6px', border: '1px solid #cbd5e1', width: '38%' }}>Title</th>
+                <th style={{ textAlign: 'left', padding: '4px 6px', border: '1px solid #cbd5e1', width: '18%' }}>Category</th>
+                <th style={{ textAlign: 'left', padding: '4px 6px', border: '1px solid #cbd5e1', width: '14%' }}>Date</th>
+                <th style={{ textAlign: 'left', padding: '4px 6px', border: '1px solid #cbd5e1' }}>Details</th>
+              </tr>
+            </thead>
+            <tbody>
+              {achievements.map((a) => (
+                <tr key={a.id}>
+                  <td style={{ padding: '4px 6px', border: '1px solid #e5e7eb', fontWeight: 600 }}>{a.title}</td>
+                  <td style={{ padding: '4px 6px', border: '1px solid #e5e7eb' }}>{a.category || ''}</td>
+                  <td style={{ padding: '4px 6px', border: '1px solid #e5e7eb' }}>{fmtDate(a.achievedOn)}</td>
+                  <td style={{ padding: '4px 6px', border: '1px solid #e5e7eb', whiteSpace: 'pre-line' }}>{a.description || ''}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
