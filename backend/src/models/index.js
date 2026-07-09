@@ -1944,6 +1944,32 @@ ClassAttendance.belongsTo(Class, { foreignKey: 'classId' });
 ClassAttendance.belongsTo(User, { foreignKey: 'submittedBy', as: 'Submitter' });
 ClassAttendance.belongsTo(User, { foreignKey: 'atrBy', as: 'ATRAuthor' });
 
+// Faculty weekly schedule (Mon–Sat, 8:00–18:00). Non-student roles place
+// work-blocks on a 15-min grid. startMinutes/endMinutes are minutes since
+// midnight; dayOfWeek 1..6 = Mon..Sat.
+const WorkBlock = sequelize.define('WorkBlock', {
+  id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
+  userId: { type: DataTypes.UUID, allowNull: false },
+  dayOfWeek: { type: DataTypes.INTEGER, allowNull: false },
+  startMinutes: { type: DataTypes.INTEGER, allowNull: false },
+  endMinutes: { type: DataTypes.INTEGER, allowNull: false },
+  blockType: {
+    type: DataTypes.ENUM('ACADEMIC', 'ADMINISTRATIVE', 'RESEARCH', 'MENTOR_MENTEE', 'LUNCH', 'CUSTOM'),
+    allowNull: false,
+  },
+  title: { type: DataTypes.STRING(255), allowNull: false, defaultValue: '' },
+  details: { type: DataTypes.TEXT, allowNull: true },
+  customLabel: { type: DataTypes.STRING(120), allowNull: true },
+}, {
+  tableName: 'work_blocks',
+  timestamps: true,
+  underscored: true,
+  indexes: [{ fields: ['user_id', 'day_of_week'] }],
+});
+
+WorkBlock.belongsTo(User, { foreignKey: 'userId', as: 'Owner' });
+User.hasMany(WorkBlock, { foreignKey: 'userId', as: 'WorkBlocks', onDelete: 'CASCADE' });
+
 // Messaging Models
 
 
@@ -1987,4 +2013,5 @@ module.exports = {
   Class,
   ClassRepresentative,
   ClassAttendance,
+  WorkBlock,
 };
