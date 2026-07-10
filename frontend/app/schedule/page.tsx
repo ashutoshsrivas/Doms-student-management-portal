@@ -6,7 +6,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { FiSave, FiPlus, FiTrash2, FiX, FiPrinter, FiRotateCcw, FiAward, FiEdit2 } from 'react-icons/fi';
+import { FiSave, FiPlus, FiTrash2, FiX, FiPrinter, FiRotateCcw, FiStar, FiEdit2 } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 import useAuthStore from '@/app/store/authStore';
 import apiClient from '@/app/lib/apiClient';
@@ -358,7 +358,7 @@ export default function SchedulePage() {
           Lunch is only allowed between 12:30 PM and 3:00 PM, and can’t exceed 1 hour.
         </p>
 
-        <AchievementsPanel />
+        <ContributionsPanel />
       </div>
 
       {modalOpen && editing && (
@@ -599,8 +599,9 @@ function BlockModal({
 }
 
 // ---------------------------------------------------------------------
-// Extra Achievements: self-contained CRUD panel below the grid.
-interface Achievement {
+// Extra Contribution: self-contained CRUD panel below the grid.
+// (Backed by /schedule/achievements/* on the server; label change only.)
+interface Contribution {
   id: string;
   title: string;
   category?: string | null;
@@ -608,10 +609,10 @@ interface Achievement {
   achievedOn?: string | null;
 }
 
-function AchievementsPanel() {
-  const [items, setItems] = useState<Achievement[]>([]);
+function ContributionsPanel() {
+  const [items, setItems] = useState<Contribution[]>([]);
   const [loading, setLoading] = useState(true);
-  const [editing, setEditing] = useState<Partial<Achievement> | null>(null);
+  const [editing, setEditing] = useState<Partial<Contribution> | null>(null);
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
@@ -620,7 +621,7 @@ function AchievementsPanel() {
       const { data } = await apiClient.get('/schedule/achievements/me');
       setItems(data.achievements || []);
     } catch (e: any) {
-      toast.error(e?.response?.data?.message || 'Failed to load achievements');
+      toast.error(e?.response?.data?.message || 'Failed to load contributions');
     } finally {
       setLoading(false);
     }
@@ -659,7 +660,7 @@ function AchievementsPanel() {
   };
 
   const remove = async (id: string) => {
-    if (!confirm('Delete this achievement?')) return;
+    if (!confirm('Delete this contribution?')) return;
     try {
       await apiClient.delete(`/schedule/achievements/${id}`);
       toast.success('Deleted');
@@ -681,7 +682,7 @@ function AchievementsPanel() {
       <div className="flex items-center justify-between mb-3">
         <div>
           <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-            <FiAward className="w-5 h-5 text-amber-500" /> Extra Achievements
+            <FiStar className="w-5 h-5 text-amber-500" /> Extra Contribution
           </h2>
           <p className="text-xs text-gray-500">
             Publications, awards, workshops, certifications, patents — anything worth noting.
@@ -691,7 +692,7 @@ function AchievementsPanel() {
           onClick={() => setEditing({ title: '', category: '', description: '', achievedOn: '' })}
           className="inline-flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg text-white bg-amber-600 hover:bg-amber-700"
         >
-          <FiPlus className="w-4 h-4" /> Add achievement
+          <FiPlus className="w-4 h-4" /> Add contribution
         </button>
       </div>
 
@@ -700,13 +701,13 @@ function AchievementsPanel() {
           <div className="p-4 text-sm text-gray-500">Loading…</div>
         ) : items.length === 0 ? (
           <div className="p-6 text-sm text-gray-500 text-center">
-            No achievements yet. Add your first one above.
+            No contributions yet. Add your first one above.
           </div>
         ) : (
           <ul className="divide-y divide-gray-100">
             {items.map((a) => (
               <li key={a.id} className="p-3 flex items-start gap-3">
-                <div className="mt-0.5 text-amber-500"><FiAward className="w-4 h-4" /></div>
+                <div className="mt-0.5 text-amber-500"><FiStar className="w-4 h-4" /></div>
                 <div className="flex-1 min-w-0">
                   <div className="flex flex-wrap items-baseline gap-2">
                     <span className="font-medium text-gray-900">{a.title}</span>
@@ -750,7 +751,7 @@ function AchievementsPanel() {
           <div className="bg-white rounded-xl shadow-lg w-full max-w-md">
             <div className="flex items-center justify-between px-4 py-3 border-b">
               <h3 className="text-base font-semibold">
-                {editing.id ? 'Edit achievement' : 'Add achievement'}
+                {editing.id ? 'Edit contribution' : 'Add contribution'}
               </h3>
               <button onClick={() => setEditing(null)} className="text-gray-400 hover:text-gray-600">
                 <FiX className="w-5 h-5" />

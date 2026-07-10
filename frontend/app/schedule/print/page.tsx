@@ -42,7 +42,7 @@ interface UserMeta {
   employeeId?: string | null;
 }
 
-interface Achievement {
+interface Contribution {
   id: string;
   title: string;
   category?: string | null;
@@ -53,7 +53,7 @@ interface Achievement {
 interface Schedule {
   user: UserMeta;
   blocks: Block[];
-  achievements?: Achievement[];
+  achievements?: Contribution[];
 }
 
 const ROLE_LABEL: Record<string, string> = {
@@ -295,11 +295,11 @@ function SchedulePrintCard({ schedule }: { schedule: Schedule }) {
         </div>
       </div>
 
-      {/* Extra Achievements */}
+      {/* Extra Contribution */}
       {achievements && achievements.length > 0 && (
         <div style={{ marginTop: 10 }}>
           <div style={{ fontSize: 12, fontWeight: 700, color: '#111', marginBottom: 4 }}>
-            Extra Achievements
+            Extra Contribution
           </div>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10 }}>
             <thead>
