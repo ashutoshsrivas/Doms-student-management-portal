@@ -507,6 +507,14 @@ const facultyTaskController = {
       const task = await FacultyTask.findByPk(req.params.id);
       if (!task) return res.status(404).json({ message: 'Task not found' });
 
+      // Assigner (creator) OR admin/HOD may delete. No status/time gate —
+      // deletion is allowed at any point.
+      const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'HOD';
+      const isAssigner = task.assignedBy && task.assignedBy === req.user.id;
+      if (!isAdmin && !isAssigner) {
+        return res.status(403).json({ message: 'Only the task creator or an admin/HOD can delete this task' });
+      }
+
       const siblings = task.sharedCompletion && task.groupTaskId
         ? await FacultyTask.findAll({ where: { groupTaskId: task.groupTaskId } })
         : [task];
@@ -517,7 +525,21 @@ const facultyTaskController = {
           try { await deleteFromS3(s.documentUrl); } catch (e) { /* best effort */ }
         }
       }
-      await FacultyTask.destroy({ where: { id: { [Op.in]: siblings.map((s) => s.id) } } });
+
+      // The faculty_task_updates FK was created with ON DELETE NO ACTION,
+      // so we must drop child rows explicitly before removing the parent.
+      // Wrapped in a transaction so a mid-way failure doesn't half-delete.
+      const siblingIds = siblings.map((s) => s.id);
+      await sequelize.transaction(async (t) => {
+        await FacultyTaskUpdate.destroy({
+          where: { taskId: { [Op.in]: siblingIds } },
+          transaction: t,
+        });
+        await FacultyTask.destroy({
+          where: { id: { [Op.in]: siblingIds } },
+          transaction: t,
+        });
+      });
       res.json({ message: 'Task deleted', deletedCount: siblings.length, shared: task.sharedCompletion });
     } catch (error) {
       console.error('FacultyTask delete error:', error);

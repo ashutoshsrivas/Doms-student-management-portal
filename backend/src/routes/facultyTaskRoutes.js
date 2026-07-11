@@ -45,6 +45,7 @@ router.patch(
 router.patch('/:id', authorizeRole('ADMIN', 'HOD'), facultyTaskController.update);
 router.patch('/:id/remark', authorizeRole('ADMIN', 'HOD'), facultyTaskController.setRemark);
 router.patch('/:id/reopen', authorizeRole('ADMIN', 'HOD'), facultyTaskController.reopen);
-router.delete('/:id', authorizeRole('ADMIN', 'HOD'), facultyTaskController.remove);
+// Delete — assigner or admin/HOD, at any status. Gated inside the handler.
+router.delete('/:id', facultyTaskController.remove);
 
 module.exports = router;
