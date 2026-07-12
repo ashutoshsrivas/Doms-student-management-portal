@@ -106,6 +106,8 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
         { name: 'Classes', href: '/admin/classes', iconKey: 'list' },
         { name: 'Assessments', href: '/admin/assessments', iconKey: 'check' },
         { name: 'Mentor Teams', href: '/admin/mentors', iconKey: 'users' },
+        { name: 'My Mentees', href: '/faculty/mentors', iconKey: 'users' },
+        { name: "Mentees' SIP", href: '/faculty/mentees-sip', iconKey: 'briefcase' },
         { name: 'Mentor Monitoring', href: '/admin/mentor-monitoring', iconKey: 'list', children: [
           { name: 'Mentor Report', href: '/admin/mentor-report', iconKey: 'fileText' },
         ] },
@@ -151,6 +153,8 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
         { name: 'Classes', href: '/admin/classes', iconKey: 'list' },
         { name: 'Assessments', href: '/admin/assessments', iconKey: 'check' },
         { name: 'Mentor Teams', href: '/admin/mentors', iconKey: 'users' },
+        { name: 'My Mentees', href: '/faculty/mentors', iconKey: 'users' },
+        { name: "Mentees' SIP", href: '/faculty/mentees-sip', iconKey: 'briefcase' },
         { name: 'Mentor Monitoring', href: '/admin/mentor-monitoring', iconKey: 'list', children: [
           { name: 'Mentor Report', href: '/admin/mentor-report', iconKey: 'fileText' },
         ] },

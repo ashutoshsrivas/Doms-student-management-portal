@@ -98,7 +98,7 @@ export default function AssessmentsPage() {
   // Redirect if not authorized
   useEffect(() => {
     if (currentUser) {
-      const allowedRoles = ['ADMIN', 'HOD', 'MENTOR', 'FACULTY', 'PLACEMENT_COORDINATOR'];
+      const allowedRoles = ['ADMIN', 'HOD', 'MENTOR', 'FACULTY', 'CHAIR_HEAD', 'PLACEMENT_COORDINATOR'];
       if (!allowedRoles.includes(currentUser.role)) {
         router.push('/dashboard');
       }

@@ -988,6 +988,16 @@ module.exports = {
         };
       });
 
+      // Admin/HOD teams always tail the list — governance role, not a
+      // peer-mentor. Within each bucket keep the createdAt DESC order
+      // Sequelize already applied.
+      const TAIL_ROLES = new Set(['ADMIN', 'HOD']);
+      out.sort((a, b) => {
+        const ra = TAIL_ROLES.has(a.team?.Faculty?.approvedRole) ? 1 : 0;
+        const rb = TAIL_ROLES.has(b.team?.Faculty?.approvedRole) ? 1 : 0;
+        return ra - rb;
+      });
+
       res.json({
         teams: out,
         sessions,

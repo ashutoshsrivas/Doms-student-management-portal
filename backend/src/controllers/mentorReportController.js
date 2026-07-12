@@ -8,8 +8,22 @@ const { QueryTypes, Op } = require('sequelize');
 
 const MENTOR_ROLES = [
   'FACULTY', 'CHAIR_HEAD', 'PLACEMENT_COORDINATOR',
-  'COORDINATOR', 'MENTOR', 'HOD',
+  'COORDINATOR', 'MENTOR', 'HOD', 'ADMIN',
 ];
+
+// Admin/HOD teams appear at the end of every ordering — they carry a
+// governance role, not a peer-mentor role, so they should tail every
+// list unless explicitly sorted otherwise.
+const TAIL_ROLES = new Set(['ADMIN', 'HOD']);
+const roleRank = (role) => (TAIL_ROLES.has(role) ? 1 : 0);
+function sortMentorsAdminLast(list, nameKey = 'facultyName', roleKey = 'facultyRole') {
+  return [...list].sort((a, b) => {
+    const ra = roleRank(a[roleKey]);
+    const rb = roleRank(b[roleKey]);
+    if (ra !== rb) return ra - rb;
+    return String(a[nameKey] || '').localeCompare(String(b[nameKey] || ''));
+  });
+}
 
 const MS_PER_WEEK = 7 * 24 * 60 * 60 * 1000;
 
@@ -87,7 +101,8 @@ exports.getFullReport = async (req, res) => {
     `, { replacements: { sid }, type: QueryTypes.SELECT });
 
     // 2) Unassigned staff — eligible mentor roles with no active team.
-    const unassigned = await sequelize.query(`
+    // Sort peer-mentor roles first, admin/HOD last (see TAIL_ROLES).
+    const unassignedRaw = await sequelize.query(`
       SELECT u.id, u.first_name, u.last_name, u.email, u.employee_id,
              u.approved_role, u.department
       FROM users u
@@ -96,8 +111,13 @@ exports.getFullReport = async (req, res) => {
       WHERE u.approved_role IN (:roles)
         AND u.status IN ('ACTIVE','APPROVED')
         AND t.id IS NULL
-      ORDER BY u.approved_role, u.first_name
+      ORDER BY u.first_name
     `, { replacements: { sid, roles: MENTOR_ROLES }, type: QueryTypes.SELECT });
+    const unassigned = sortMentorsAdminLast(
+      unassignedRaw.map((u) => ({ ...u, _name: `${u.first_name} ${u.last_name || ''}` })),
+      '_name',
+      'approved_role',
+    ).map(({ _name, ...rest }) => rest);
 
     // 3) Denominators
     const [eligibleRow] = await sequelize.query(`
@@ -160,7 +180,7 @@ exports.getFullReport = async (req, res) => {
       if (m.companyName) f.companies.add(m.companyName);
     }
 
-    const facultyRollup = Array.from(perFaculty.values()).map((f) => ({
+    const facultyRollupRaw = Array.from(perFaculty.values()).map((f) => ({
       facultyId: f.facultyId,
       facultyName: f.facultyName,
       facultyEmail: f.facultyEmail,
@@ -176,7 +196,8 @@ exports.getFullReport = async (req, res) => {
       distinctCompanies: f.companies.size,
       greenRate: f.total ? Math.round((f.green / f.total) * 1000) / 10 : 0,
       redRate: f.total ? Math.round((f.red / f.total) * 1000) / 10 : 0,
-    })).sort((a, b) => a.facultyName.localeCompare(b.facultyName));
+    }));
+    const facultyRollup = sortMentorsAdminLast(facultyRollupRaw);
 
     // Students in this session who are NOT part of any active mentor team
     const studentsWithoutMentor = await sequelize.query(`
@@ -244,12 +265,17 @@ exports.getFullReport = async (req, res) => {
     const withSip = mentees.filter((m) => m.sipStatus).length;
     const distinctCompanies = new Set(mentees.filter((m) => m.companyName).map((m) => m.companyName)).size;
 
-    // Top / bottom lists — only faculties with 3+ mentees, otherwise the
-    // percentages are noise.
+    // Top / bottom lists — peer mentors ranked first; when scores tie,
+    // admin/HOD fall to the end.
+    const compareBy = (getScore) => (a, b) => {
+      const rr = roleRank(a.facultyRole) - roleRank(b.facultyRole);
+      if (rr !== 0) return rr;
+      return getScore(b) - getScore(a);
+    };
     const meaningful = facultyRollup.filter((f) => f.total >= 3);
-    const topGreen = [...meaningful].sort((a, b) => b.greenRate - a.greenRate).slice(0, 5);
-    const topRed = [...facultyRollup].sort((a, b) => b.red - a.red).slice(0, 5);
-    const largestTeams = [...facultyRollup].sort((a, b) => b.total - a.total).slice(0, 5);
+    const topGreen = [...meaningful].sort(compareBy((r) => r.greenRate)).slice(0, 5);
+    const topRed = [...facultyRollup].sort(compareBy((r) => r.red)).slice(0, 5);
+    const largestTeams = [...facultyRollup].sort(compareBy((r) => r.total)).slice(0, 5);
 
     res.json({
       session: { id: session.id, name: session.name, isActive: session.isActive },

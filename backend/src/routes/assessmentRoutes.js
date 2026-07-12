@@ -12,7 +12,7 @@ console.log('  - getAssessmentSubmissions:', typeof assessmentController.getAsse
 
 // Authorization middleware for assessment creation
 const canCreateAssessment = (req, res, next) => {
-  const allowedRoles = ['ADMIN', 'HOD', 'MENTOR', 'FACULTY', 'PLACEMENT_COORDINATOR'];
+  const allowedRoles = ['ADMIN', 'HOD', 'MENTOR', 'FACULTY', 'CHAIR_HEAD', 'PLACEMENT_COORDINATOR'];
   if (allowedRoles.includes(req.user?.role)) {
     next();
   } else {
