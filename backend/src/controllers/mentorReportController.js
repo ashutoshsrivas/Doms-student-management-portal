@@ -178,6 +178,22 @@ exports.getFullReport = async (req, res) => {
       redRate: f.total ? Math.round((f.red / f.total) * 1000) / 10 : 0,
     })).sort((a, b) => a.facultyName.localeCompare(b.facultyName));
 
+    // Students in this session who are NOT part of any active mentor team
+    const studentsWithoutMentor = await sequelize.query(`
+      SELECT su.id, su.first_name, su.last_name, su.email,
+             su.registration_number, su.phone_number, su.department,
+             ss.id AS student_session_id, ss.status AS enrollment_status
+      FROM student_sessions ss
+      JOIN users su ON su.id = ss.user_id
+      WHERE ss.academic_session_id = :sid
+        AND NOT EXISTS (
+          SELECT 1 FROM mentor_team_members m
+          JOIN mentor_teams t ON t.id = m.mentor_team_id
+          WHERE m.student_session_id = ss.id AND t.status='ACTIVE'
+        )
+      ORDER BY su.first_name, su.last_name
+    `, { replacements: { sid }, type: QueryTypes.SELECT });
+
     // Totals for the whole session
     const totals = {
       eligibleMentors,
@@ -185,7 +201,7 @@ exports.getFullReport = async (req, res) => {
       activeTeams: new Set(mentees.map((m) => m.teamId)).size,
       assignedMentees: mentees.length,
       studentsInSession,
-      orphanStudents: Math.max(0, studentsInSession - mentees.length),
+      studentsWithoutMentor: studentsWithoutMentor.length,
       flags: {
         red: mentees.filter((m) => m.flag === 'red').length,
         yellow: mentees.filter((m) => m.flag === 'yellow').length,
@@ -248,6 +264,7 @@ exports.getFullReport = async (req, res) => {
       distinctCompanies,
       facultyRollup,
       mentees,
+      studentsWithoutMentor,
       insights: { topGreen, topRed, largestTeams },
     });
   } catch (error) {
