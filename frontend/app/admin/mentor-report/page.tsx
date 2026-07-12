@@ -277,7 +277,7 @@ export default function MentorReportPage() {
               <FiDownload className="w-4 h-4" /> CSV
             </button>
             <button
-              onClick={() => window.print()}
+              onClick={() => window.open('/admin/mentor-report/print', '_blank')}
               className="inline-flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg text-white bg-blue-600 hover:bg-blue-700"
             >
               <FiPrinter className="w-4 h-4" /> Save as PDF
