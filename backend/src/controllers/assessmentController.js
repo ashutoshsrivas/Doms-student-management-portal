@@ -94,20 +94,19 @@ const assessmentController = {
         }
       }
 
-      // For FACULTY, PLACEMENT_COORDINATOR, TRAINER: only see their own assessments
-      if (['FACULTY', 'PLACEMENT_COORDINATOR', 'TRAINER'].includes(userRole)) {
+      // FACULTY-style roles see only assessments they created themselves.
+      // ADMIN/HOD see all; STUDENT is handled separately above.
+      if (['FACULTY', 'CHAIR_HEAD', 'PLACEMENT_COORDINATOR', 'TRAINER'].includes(userRole)) {
         where.createdBy = userId;
         console.log('[getAssessments] Non-admin user filtered to own assessments:', userId);
       }
 
-      // Build where clause
-      // For admin/faculty/HOD: if no sessionId provided, get all assessments from all sessions
-      // For students: require sessionId (already handled above)
-      // For others: require sessionId
+      // sessionId is optional for staff — no session filter means "all
+      // sessions". Only students require it (already handled above).
       if (sessionId) {
         where.academicSessionId = sessionId;
-      } else if (userRole === 'STUDENT' || !['ADMIN', 'HOD', 'MENTOR', 'FACULTY', 'PLACEMENT_COORDINATOR', 'TRAINER'].includes(userRole)) {
-        console.log('[getAssessments] Non-admin user without sessionId');
+      } else if (userRole === 'STUDENT' || !['ADMIN', 'HOD', 'MENTOR', 'FACULTY', 'CHAIR_HEAD', 'PLACEMENT_COORDINATOR', 'TRAINER'].includes(userRole)) {
+        console.log('[getAssessments] Non-staff user without sessionId');
         return res.status(400).json({ message: 'academicSessionId is required' });
       }
 
