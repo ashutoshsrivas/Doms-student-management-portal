@@ -106,7 +106,9 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
         { name: 'Classes', href: '/admin/classes', iconKey: 'list' },
         { name: 'Assessments', href: '/admin/assessments', iconKey: 'check' },
         { name: 'Mentor Teams', href: '/admin/mentors', iconKey: 'users' },
-        { name: 'Mentor Monitoring', href: '/admin/mentor-monitoring', iconKey: 'list' },
+        { name: 'Mentor Monitoring', href: '/admin/mentor-monitoring', iconKey: 'list', children: [
+          { name: 'Mentor Report', href: '/admin/mentor-report', iconKey: 'fileText' },
+        ] },
         { name: 'Internships (SIP)', href: '/admin/sip', iconKey: 'briefcase', children: sipChildren },
         { name: 'File Management', href: '/admin/files', iconKey: 'hardDrive' },
         { name: 'Reports', href: '/admin/reports', iconKey: 'fileText' },
@@ -149,7 +151,9 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
         { name: 'Classes', href: '/admin/classes', iconKey: 'list' },
         { name: 'Assessments', href: '/admin/assessments', iconKey: 'check' },
         { name: 'Mentor Teams', href: '/admin/mentors', iconKey: 'users' },
-        { name: 'Mentor Monitoring', href: '/admin/mentor-monitoring', iconKey: 'list' },
+        { name: 'Mentor Monitoring', href: '/admin/mentor-monitoring', iconKey: 'list', children: [
+          { name: 'Mentor Report', href: '/admin/mentor-report', iconKey: 'fileText' },
+        ] },
         { name: 'Internships (SIP)', href: '/admin/sip', iconKey: 'briefcase', children: sipChildren },
         { name: 'File Management', href: '/admin/files', iconKey: 'hardDrive' },
         { name: 'Reports', href: '/admin/reports', iconKey: 'fileText' },
