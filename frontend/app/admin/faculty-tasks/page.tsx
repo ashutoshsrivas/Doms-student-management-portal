@@ -1347,18 +1347,53 @@ export default function AdminFacultyTasksPage() {
 
               {/* Individual faculty pick */}
               <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-semibold text-gray-700 uppercase">
-                    Pick faculty ({bulkForm.assigneeIds.size} selected)
-                  </label>
-                  <input
-                    type="text"
-                    value={bulkSearch}
-                    onChange={(e) => setBulkSearch(e.target.value)}
-                    placeholder="Search faculty…"
-                    className="px-2 py-1 border border-gray-300 rounded text-xs text-gray-900 placeholder-gray-500"
-                  />
-                </div>
+                {(() => {
+                  const visibleIds = bulkVisibleFaculty.map((f) => f.user.id);
+                  const allVisibleChecked =
+                    visibleIds.length > 0 && visibleIds.every((id) => bulkForm.assigneeIds.has(id));
+                  const toggleAllVisible = () => {
+                    setBulkForm((p) => {
+                      const next = new Set(p.assigneeIds);
+                      if (allVisibleChecked) {
+                        visibleIds.forEach((id) => next.delete(id));
+                      } else {
+                        visibleIds.forEach((id) => next.add(id));
+                      }
+                      return { ...p, assigneeIds: next };
+                    });
+                  };
+                  return (
+                    <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                      <label className="text-xs font-semibold text-gray-700 uppercase">
+                        Pick faculty ({bulkForm.assigneeIds.size} selected)
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={toggleAllVisible}
+                          disabled={visibleIds.length === 0}
+                          className="px-2 py-1 text-xs font-semibold rounded border border-indigo-300 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                          title={
+                            bulkSearch
+                              ? `${allVisibleChecked ? 'Clear' : 'Select'} the ${visibleIds.length} matching faculty`
+                              : `${allVisibleChecked ? 'Clear' : 'Select'} all ${visibleIds.length} faculty`
+                          }
+                        >
+                          {allVisibleChecked
+                            ? `Clear ${bulkSearch ? 'visible' : 'all'}`
+                            : `Select ${bulkSearch ? `all visible (${visibleIds.length})` : `all (${visibleIds.length})`}`}
+                        </button>
+                        <input
+                          type="text"
+                          value={bulkSearch}
+                          onChange={(e) => setBulkSearch(e.target.value)}
+                          placeholder="Search faculty…"
+                          className="px-2 py-1 border border-gray-300 rounded text-xs text-gray-900 placeholder-gray-500"
+                        />
+                      </div>
+                    </div>
+                  );
+                })()}
                 <div className="border-2 border-gray-200 rounded-lg max-h-56 overflow-y-auto divide-y divide-gray-100">
                   {bulkVisibleFaculty.length === 0 ? (
                     <p className="p-3 text-sm text-gray-500 italic">No faculty match.</p>
