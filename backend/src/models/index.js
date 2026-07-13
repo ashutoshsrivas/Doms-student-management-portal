@@ -2004,8 +2004,8 @@ const MentorFeedbackMessage = sequelize.define('MentorFeedbackMessage', {
   timestamps: true,
   underscored: true,
   indexes: [
-    { fields: ['mentor_user_id', 'student_user_id', 'created_at'] },
-    { fields: ['student_user_id'] },
+    { name: 'mfm_pair_created', fields: ['mentor_user_id', 'student_user_id', 'created_at'] },
+    { name: 'mfm_student', fields: ['student_user_id'] },
   ],
 });
 
