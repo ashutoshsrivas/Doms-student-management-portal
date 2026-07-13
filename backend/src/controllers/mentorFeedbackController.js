@@ -4,7 +4,11 @@
 const { Op, QueryTypes } = require('sequelize');
 const { sequelize, MentorFeedbackMessage, User } = require('../models');
 
-const isAdmin = (role) => role === 'ADMIN' || role === 'HOD';
+// Supervisors can read + post on any thread. Admin/HOD already did;
+// coordinator + placement coordinator now included per product ask.
+const SUPERVISOR_ROLES = new Set(['ADMIN', 'HOD', 'COORDINATOR', 'PLACEMENT_COORDINATOR']);
+const isSupervisor = (role) => SUPERVISOR_ROLES.has(role);
+const isAdmin = (role) => isSupervisor(role);
 
 // Confirm the (mentor, student) pair actually shares an active mentor
 // team. Prevents random users from posting into someone else's thread.
@@ -84,6 +88,72 @@ exports.post = async (req, res) => {
   } catch (e) {
     console.error('mentor feedback post error:', e);
     res.status(500).json({ message: 'Failed to post message' });
+  }
+};
+
+// GET /api/mentor-feedback/all — supervisor view. Lists every unique
+// (mentor, student) pair with at least one message, plus a snippet.
+exports.listAll = async (req, res) => {
+  try {
+    if (!isSupervisor(req.user.role)) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+    const rows = await sequelize.query(
+      `SELECT
+         m.mentor_user_id,
+         m.student_user_id,
+         (SELECT COUNT(*) FROM mentor_feedback_messages
+            WHERE mentor_user_id = m.mentor_user_id
+              AND student_user_id = m.student_user_id) AS message_count,
+         lm.body AS last_body,
+         lm.created_at AS last_at,
+         lm.author_user_id AS last_author,
+         mu.first_name AS mentor_first, mu.last_name AS mentor_last,
+         mu.email AS mentor_email, mu.approved_role AS mentor_role,
+         mu.department AS mentor_department,
+         su.first_name AS student_first, su.last_name AS student_last,
+         su.email AS student_email
+       FROM (
+         SELECT mentor_user_id, student_user_id, MAX(created_at) AS max_at
+           FROM mentor_feedback_messages
+          GROUP BY mentor_user_id, student_user_id
+       ) m
+       JOIN mentor_feedback_messages lm
+         ON lm.mentor_user_id = m.mentor_user_id
+        AND lm.student_user_id = m.student_user_id
+        AND lm.created_at = m.max_at
+       JOIN users mu ON mu.id = m.mentor_user_id
+       JOIN users su ON su.id = m.student_user_id
+       ORDER BY m.max_at DESC`,
+      { type: QueryTypes.SELECT },
+    );
+    const threads = rows.map((r) => ({
+      mentor: {
+        id: r.mentor_user_id,
+        firstName: r.mentor_first,
+        lastName: r.mentor_last,
+        email: r.mentor_email,
+        approvedRole: r.mentor_role,
+        department: r.mentor_department,
+      },
+      student: {
+        id: r.student_user_id,
+        firstName: r.student_first,
+        lastName: r.student_last,
+        email: r.student_email,
+      },
+      messageCount: Number(r.message_count || 0),
+      lastMessage: {
+        body: r.last_body,
+        createdAt: r.last_at,
+        fromMentor: r.last_author === r.mentor_user_id,
+        fromStudent: r.last_author === r.student_user_id,
+      },
+    }));
+    res.json({ threads });
+  } catch (e) {
+    console.error('mentor feedback listAll error:', e);
+    res.status(500).json({ message: 'Failed to load conversations' });
   }
 };
 

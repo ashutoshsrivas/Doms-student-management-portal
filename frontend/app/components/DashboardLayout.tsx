@@ -110,6 +110,7 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
         { name: "Mentees' SIP", href: '/faculty/mentees-sip', iconKey: 'briefcase' },
         { name: 'Mentor Monitoring', href: '/admin/mentor-monitoring', iconKey: 'list', children: [
           { name: 'Mentor Report', href: '/admin/mentor-report', iconKey: 'fileText' },
+          { name: 'Mentor Messages', href: '/admin/mentor-messages', iconKey: 'bell' },
         ] },
         { name: 'Internships (SIP)', href: '/admin/sip', iconKey: 'briefcase', children: sipChildren },
         { name: 'File Management', href: '/admin/files', iconKey: 'hardDrive' },
@@ -157,6 +158,7 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
         { name: "Mentees' SIP", href: '/faculty/mentees-sip', iconKey: 'briefcase' },
         { name: 'Mentor Monitoring', href: '/admin/mentor-monitoring', iconKey: 'list', children: [
           { name: 'Mentor Report', href: '/admin/mentor-report', iconKey: 'fileText' },
+          { name: 'Mentor Messages', href: '/admin/mentor-messages', iconKey: 'bell' },
         ] },
         { name: 'Internships (SIP)', href: '/admin/sip', iconKey: 'briefcase', children: sipChildren },
         { name: 'File Management', href: '/admin/files', iconKey: 'hardDrive' },
@@ -176,6 +178,7 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
         { name: 'My Classes', href: '/admin/classes', iconKey: 'list' },
         { name: 'Mentor Teams', href: '/faculty/mentors', iconKey: 'users' },
         { name: "Mentees' SIP", href: '/faculty/mentees-sip', iconKey: 'briefcase' },
+        { name: 'Mentor Messages', href: '/admin/mentor-messages', iconKey: 'bell' },
         { name: 'Internships (SIP)', href: '/admin/sip', iconKey: 'briefcase', children: sipChildren },
         { name: 'Job Matching', href: '/coordinator/job-matching', iconKey: 'zap' },
         { name: 'My Schedule', href: '/schedule', iconKey: 'calendar' },
@@ -192,6 +195,7 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
       COORDINATOR: [
         { name: 'Dashboard', href: '/coordinator/dashboard', iconKey: 'chart' },
         { name: 'My Classes', href: '/admin/classes', iconKey: 'list' },
+        { name: 'Mentor Messages', href: '/admin/mentor-messages', iconKey: 'bell' },
         { name: 'My Schedule', href: '/schedule', iconKey: 'calendar' },
         { name: 'My Tasks', href: '/faculty/tasks', iconKey: 'clipboard' },
         { name: 'Announcements', href: '/admin/announcements', iconKey: 'bell', children: adminAnnouncementsChildren },

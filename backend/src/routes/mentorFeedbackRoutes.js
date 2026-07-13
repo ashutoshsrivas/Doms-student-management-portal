@@ -10,6 +10,9 @@ router.use(authenticateToken);
 router.get('/thread', ctrl.list);
 router.post('/thread', ctrl.post);
 
+// Supervisor view — everyone's conversations (gated in controller).
+router.get('/all', ctrl.listAll);
+
 // Student-side helper — list my mentors with last-message preview.
 router.get('/my-mentors', ctrl.myMentors);
 
