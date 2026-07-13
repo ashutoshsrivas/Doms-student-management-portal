@@ -5,6 +5,7 @@ import useAuthStore from '@/app/store/authStore';
 import apiClient from '@/app/lib/apiClient';
 import toast from 'react-hot-toast';
 import DashboardLayout from '@/app/components/DashboardLayout';
+import StudentMentorFeedback from '@/app/components/StudentMentorFeedback';
 
 type WeeklyUpdate = {
   id: string;
@@ -701,6 +702,9 @@ export default function SIPContent() {
             </div>
           </div>
         )}
+
+        {/* Mentor conversations */}
+        <StudentMentorFeedback />
       </div>
     </DashboardLayout>
   );

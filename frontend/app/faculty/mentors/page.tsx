@@ -7,6 +7,7 @@ import useAuthStore from '@/app/store/authStore';
 import apiClient from '@/app/lib/apiClient';
 import toast from 'react-hot-toast';
 import DashboardLayout from '@/app/components/DashboardLayout';
+import MentorFeedbackModal from '@/app/components/MentorFeedbackModal';
 
 interface MentorTeamMember {
   StudentSession?: {
@@ -368,6 +369,20 @@ export default function FacultyMentorDashboard() {
               </form>
             </div>
           </div>
+        )}
+
+        {/* Feedback thread — opens when a mentee card is clicked. Profile
+            link uses the current team's session id (fetched with the team). */}
+        {selectedMentee && user?.id && (
+          <MentorFeedbackModal
+            open={!!selectedMentee}
+            onClose={() => setSelectedMentee(null)}
+            mentorUserId={user.id}
+            studentUserId={selectedMentee.id}
+            headerTitle={`${selectedMentee.firstName} ${selectedMentee.lastName || ''}`.trim()}
+            headerSubtitle={selectedMentee.email}
+            profileHref={null}
+          />
         )}
       </div>
     </DashboardLayout>

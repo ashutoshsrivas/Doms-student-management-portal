@@ -28,6 +28,7 @@ const landingRoutes = require('./routes/landingRoutes');
 const classRoutes = require('./routes/classRoutes');
 const scheduleRoutes = require('./routes/scheduleRoutes');
 const mentorReportRoutes = require('./routes/mentorReportRoutes');
+const mentorFeedbackRoutes = require('./routes/mentorFeedbackRoutes');
 const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
@@ -80,6 +81,7 @@ app.use('/api/landing', landingRoutes);
 app.use('/api/classes', classRoutes);
 app.use('/api/schedule', scheduleRoutes);
 app.use('/api/mentor-report', mentorReportRoutes);
+app.use('/api/mentor-feedback', mentorFeedbackRoutes);
 
 // Health check
 app.get('/health', (req, res) => {

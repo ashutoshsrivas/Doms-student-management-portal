@@ -5,6 +5,8 @@ import { FiAlertTriangle, FiBriefcase, FiCalendar, FiCheckCircle, FiClock, FiExt
 import apiClient from '@/app/lib/apiClient';
 import DashboardLayout from '@/app/components/DashboardLayout';
 import ProtectedRoute from '@/app/components/ProtectedRoute';
+import MentorFeedbackModal from '@/app/components/MentorFeedbackModal';
+import { FiMessageCircle } from 'react-icons/fi';
 
 type Student = { id: string; firstName: string | null; lastName: string | null; email: string };
 
@@ -265,12 +267,25 @@ function WeeklyTimeline({ updates }: { updates: WeeklyUpdate[] }) {
   );
 }
 
-function MenteeCard({ mentee }: { mentee: Mentee }) {
+function MenteeCard({
+  mentee,
+  mentorUserId,
+  sessionId,
+}: {
+  mentee: Mentee;
+  mentorUserId: string | null;
+  sessionId: string | null;
+}) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<'form' | 'updates'>('form');
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   const name = studentLabel(mentee.student);
   const updatesCount = mentee.weeklyUpdates.length;
   const flag = computeMenteeFlag(mentee);
+  const profileHref = sessionId && mentee.studentSessionId
+    ? `/admin/sessions/${sessionId}/students/${mentee.studentSessionId}/profile`
+    : null;
+  const canOpenFeedback = !!(mentorUserId && mentee.student?.id);
 
   return (
     <div className="rounded-xl border border-gray-200 bg-white">
@@ -328,7 +343,32 @@ function MenteeCard({ mentee }: { mentee: Mentee }) {
               {tab === 'form' ? <SIPDetail sip={mentee.sip} /> : <WeeklyTimeline updates={mentee.weeklyUpdates} />}
             </>
           )}
+
+          {/* Feedback trigger — always shown, even when there's no SIP yet. */}
+          {canOpenFeedback && (
+            <div className="mt-4 flex items-center justify-end">
+              <button
+                type="button"
+                onClick={() => setFeedbackOpen(true)}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-sm text-blue-700 hover:bg-blue-100"
+              >
+                <FiMessageCircle className="h-4 w-4" /> Feedback / message
+              </button>
+            </div>
+          )}
         </div>
+      )}
+
+      {canOpenFeedback && (
+        <MentorFeedbackModal
+          open={feedbackOpen}
+          onClose={() => setFeedbackOpen(false)}
+          mentorUserId={mentorUserId!}
+          studentUserId={mentee.student!.id}
+          headerTitle={name}
+          headerSubtitle={mentee.student?.email || ''}
+          profileHref={profileHref}
+        />
       )}
     </div>
   );
@@ -542,7 +582,12 @@ function Content() {
             </div>
             <div className="space-y-2.5">
               {team.mentees.map((m) => (
-                <MenteeCard key={m.studentSessionId} mentee={m} />
+                <MenteeCard
+                  key={m.studentSessionId}
+                  mentee={m}
+                  mentorUserId={team.faculty?.id || null}
+                  sessionId={team.session?.id || null}
+                />
               ))}
             </div>
           </section>

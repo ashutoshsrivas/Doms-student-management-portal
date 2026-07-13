@@ -1989,6 +1989,30 @@ const FacultyAchievement = sequelize.define('FacultyAchievement', {
 FacultyAchievement.belongsTo(User, { foreignKey: 'userId', as: 'Owner' });
 User.hasMany(FacultyAchievement, { foreignKey: 'userId', as: 'Achievements', onDelete: 'CASCADE' });
 
+// Mentor <-> mentee feedback thread. Each row is one chat message.
+// The "thread" is defined implicitly by the (mentorUserId, studentUserId)
+// pair — since a student can have multiple mentors, feedback stays
+// scoped to a single mentor-mentee relationship.
+const MentorFeedbackMessage = sequelize.define('MentorFeedbackMessage', {
+  id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
+  mentorUserId: { type: DataTypes.UUID, allowNull: false },
+  studentUserId: { type: DataTypes.UUID, allowNull: false },
+  authorUserId: { type: DataTypes.UUID, allowNull: false },
+  body: { type: DataTypes.TEXT, allowNull: false },
+}, {
+  tableName: 'mentor_feedback_messages',
+  timestamps: true,
+  underscored: true,
+  indexes: [
+    { fields: ['mentor_user_id', 'student_user_id', 'created_at'] },
+    { fields: ['student_user_id'] },
+  ],
+});
+
+MentorFeedbackMessage.belongsTo(User, { foreignKey: 'mentorUserId', as: 'Mentor' });
+MentorFeedbackMessage.belongsTo(User, { foreignKey: 'studentUserId', as: 'Student' });
+MentorFeedbackMessage.belongsTo(User, { foreignKey: 'authorUserId', as: 'Author' });
+
 // Messaging Models
 
 
@@ -2034,4 +2058,5 @@ module.exports = {
   ClassAttendance,
   WorkBlock,
   FacultyAchievement,
+  MentorFeedbackMessage,
 };

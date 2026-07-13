@@ -138,7 +138,9 @@ export default function StudentProfilePage() {
 
   // Redirect if not admin or placement coordinator
   useEffect(() => {
-    if (user && !['ADMIN', 'PLACEMENT_COORDINATOR'].includes(user.role)) {
+    // Mentors, HOD, and admin can all view a mentee's profile.
+    const allowed = ['ADMIN', 'HOD', 'PLACEMENT_COORDINATOR', 'FACULTY', 'CHAIR_HEAD', 'MENTOR', 'COORDINATOR'];
+    if (user && !allowed.includes(user.role)) {
       router.push('/dashboard');
     }
   }, [user, router]);
