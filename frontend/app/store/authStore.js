@@ -2,6 +2,14 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import Cookie from 'js-cookie';
 
+// TRAINER is a permissions alias for PLACEMENT_COORDINATOR. Rewrite
+// the user's role at every ingress so every downstream role gate that
+// checks for PC also passes for a trainer.
+const aliasUser = (u) => {
+  if (u && u.role === 'TRAINER') return { ...u, role: 'PLACEMENT_COORDINATOR' };
+  return u;
+};
+
 const useAuthStore = create(
   persist(
     (set, get) => ({
@@ -12,7 +20,7 @@ const useAuthStore = create(
       isLoading: false,
       error: null,
 
-      setUser: (user) => set({ user }),
+      setUser: (user) => set({ user: aliasUser(user) }),
       setToken: (token) => set({ token }),
       setRefreshToken: (refreshToken) => set({ refreshToken }),
       setIsLoading: (loading) => set({ isLoading: loading }),
@@ -41,7 +49,7 @@ const useAuthStore = create(
 
           const data = await response.json();
           set({
-            user: data.user,
+            user: aliasUser(data.user),
             token: data.token,
             refreshToken: data.refreshToken,
             isAuthenticated: true,
@@ -161,7 +169,7 @@ const useAuthStore = create(
 
             if (response.ok) {
               const data = await response.json();
-              set({ user: data.user || data, isLoading: false });
+              set({ user: aliasUser(data.user || data), isLoading: false });
             } else {
               // Token might be invalid, clear auth
               set({
@@ -198,6 +206,11 @@ const useAuthStore = create(
         user: state.user,
         isAuthenticated: state.isAuthenticated,
       }),
+      // Existing sessions may have been persisted while TRAINER was
+      // still a raw role — alias on rehydrate.
+      onRehydrateStorage: () => (state) => {
+        if (state?.user) state.user = aliasUser(state.user);
+      },
     }
   )
 );

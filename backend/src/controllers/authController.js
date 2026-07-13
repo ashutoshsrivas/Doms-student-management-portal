@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const { sequelize, User, Role, UserRole, AcademicSession } = require('../models');
+const { effectiveRole } = require('../middleware/auth');
 const { v4: uuidv4 } = require('uuid');
 const crypto = require('crypto');
 const { uploadToS3, deleteFromS3 } = require('../utils/s3Upload');
@@ -212,7 +213,7 @@ const authController = {
           email: user.email,
           firstName: user.firstName,
           lastName: user.lastName,
-          role: user.approvedRole,
+          role: effectiveRole(user.approvedRole),
           status: user.status,
           profileImage: user.profileImage,
         },
@@ -257,7 +258,7 @@ const authController = {
           email: user.email,
           firstName: user.firstName,
           lastName: user.lastName,
-          role: user.approvedRole,
+          role: effectiveRole(user.approvedRole),
           status: user.status,
         },
       });
@@ -427,7 +428,7 @@ const authController = {
         registrationNumber: user.registrationNumber,
         requestedRole: user.requestedRole,
         approvedRole: user.approvedRole,
-        role: user.approvedRole, // kept for components that read `role`
+        role: effectiveRole(user.approvedRole), // kept for components that read `role`
         status: user.status,
         profileImage: user.profileImage,
         isVerified: user.isVerified,
@@ -496,7 +497,7 @@ const authController = {
           registrationNumber: user.registrationNumber,
           requestedRole: user.requestedRole,
           approvedRole: user.approvedRole,
-          role: user.approvedRole,
+          role: effectiveRole(user.approvedRole),
           status: user.status,
           profileImage: profileImageUrl,
         },
