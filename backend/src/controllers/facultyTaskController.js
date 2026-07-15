@@ -122,17 +122,16 @@ const facultyTaskController = {
   },
 
   // GET /api/faculty-tasks
-  // ADMIN: all tasks (optional ?assigneeId, ?status filter).
-  // Non-admin: only their own assigned tasks.
+  // Always scoped by assigneeId. Admin/HOD may pass any user's id;
+  // everyone else is silently pinned to their own. If admin omits it
+  // we default to self (the /admin/faculty-tasks view always passes
+  // an explicit id, so no legitimate caller wants the org-wide list).
   list: async (req, res) => {
     try {
       const { assigneeId, status } = req.query;
       const where = {};
-      if (req.user.role === 'ADMIN' || req.user.role === 'HOD') {
-        if (assigneeId) where.assigneeId = String(assigneeId);
-      } else {
-        where.assigneeId = req.user.id;
-      }
+      const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'HOD';
+      where.assigneeId = isAdmin && assigneeId ? String(assigneeId) : req.user.id;
       if (status === 'PENDING' || status === 'COMPLETED') {
         where.status = status;
       }
