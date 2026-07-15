@@ -109,10 +109,13 @@ export default function MyTasksPage() {
   }, [user, router]);
 
   const load = useCallback(async () => {
+    if (!user?.id) return;
     setLoading(true);
     try {
+      // Always scope to the current user — admin/HOD/coordinator would
+      // otherwise get the org-wide list from the /faculty-tasks endpoint.
       const [tRes, aRes] = await Promise.all([
-        apiClient.get('/faculty-tasks'),
+        apiClient.get('/faculty-tasks', { params: { assigneeId: user.id } }),
         apiClient.get('/faculty-tasks/accuracy'),
       ]);
       setTasks(tRes.data.tasks || []);
@@ -123,7 +126,7 @@ export default function MyTasksPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => { load(); }, [load]);
 
