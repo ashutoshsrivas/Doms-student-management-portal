@@ -1,10 +1,16 @@
 const jwt = require('jsonwebtoken');
 const { User, Role } = require('../models');
 
-// TRAINER is a permissions alias for PLACEMENT_COORDINATOR — trainers
-// carry PC access everywhere in the app. The DB keeps their real
-// approved_role so admin views still label them "Trainer".
-const effectiveRole = (role) => (role === 'TRAINER' ? 'PLACEMENT_COORDINATOR' : role);
+// Permission aliases — some roles get another role's access without a
+// DB change. The raw approved_role stays intact so admin listings still
+// see the true label.
+//   TRAINER      -> PLACEMENT_COORDINATOR
+//   COORDINATOR  -> ADMIN
+const ROLE_ALIASES = {
+  TRAINER: 'PLACEMENT_COORDINATOR',
+  COORDINATOR: 'ADMIN',
+};
+const effectiveRole = (role) => ROLE_ALIASES[role] || role;
 
 const authenticateToken = async (req, res, next) => {
   try {

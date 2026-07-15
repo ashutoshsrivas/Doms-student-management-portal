@@ -214,6 +214,7 @@ const authController = {
           firstName: user.firstName,
           lastName: user.lastName,
           role: effectiveRole(user.approvedRole),
+          approvedRole: user.approvedRole,
           status: user.status,
           profileImage: user.profileImage,
         },
@@ -259,6 +260,7 @@ const authController = {
           firstName: user.firstName,
           lastName: user.lastName,
           role: effectiveRole(user.approvedRole),
+          approvedRole: user.approvedRole,
           status: user.status,
         },
       });

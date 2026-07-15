@@ -2,12 +2,20 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import Cookie from 'js-cookie';
 
-// TRAINER is a permissions alias for PLACEMENT_COORDINATOR. Rewrite
-// the user's role at every ingress so every downstream role gate that
-// checks for PC also passes for a trainer.
+// Permission aliases keep the raw approved_role but grant a different
+// role's access. Backend already aliases on new logins; this handles
+// persisted sessions (from before the alias was added) and preserves
+// the raw approvedRole so DashboardLayout can pick the right sidebar.
+const ROLE_ALIASES = {
+  TRAINER: 'PLACEMENT_COORDINATOR',
+  COORDINATOR: 'ADMIN',
+};
 const aliasUser = (u) => {
-  if (u && u.role === 'TRAINER') return { ...u, role: 'PLACEMENT_COORDINATOR' };
-  return u;
+  if (!u) return u;
+  const rawRole = u.approvedRole ?? u.role;
+  const aliased = ROLE_ALIASES[u.role] || u.role;
+  if (aliased === u.role && u.approvedRole !== undefined) return u;
+  return { ...u, role: aliased, approvedRole: rawRole };
 };
 
 const useAuthStore = create(

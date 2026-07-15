@@ -192,13 +192,29 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
         { name: 'My Tasks', href: '/faculty/tasks', iconKey: 'clipboard' },
         { name: 'Announcements', href: '/student/announcements', iconKey: 'bell', children: studentAnnouncementsChildren },
       ],
+      // COORDINATOR is aliased to ADMIN at the auth layer so all admin
+      // endpoints are accessible. Sidebar mirrors ADMIN (minus Landing
+      // Page, File Management and Faculty Tasks) but with faculty-style
+      // My Tasks / My Schedule per product spec.
       COORDINATOR: [
-        { name: 'Dashboard', href: '/coordinator/dashboard', iconKey: 'chart' },
-        { name: 'My Classes', href: '/admin/classes', iconKey: 'list' },
-        { name: 'Mentor Messages', href: '/admin/mentor-messages', iconKey: 'bell' },
+        { name: 'Dashboard', href: '/admin/dashboard', iconKey: 'chart' },
+        { name: 'Users', href: '/admin/users', iconKey: 'users' },
+        { name: 'Sessions', href: '/admin/sessions', iconKey: 'calendar' },
+        { name: 'Classes', href: '/admin/classes', iconKey: 'list' },
+        { name: 'Assessments', href: '/admin/assessments', iconKey: 'check' },
+        { name: 'Mentor Teams', href: '/admin/mentors', iconKey: 'users' },
+        { name: 'My Mentees', href: '/faculty/mentors', iconKey: 'users' },
+        { name: "Mentees' SIP", href: '/faculty/mentees-sip', iconKey: 'briefcase' },
+        { name: 'Mentor Monitoring', href: '/admin/mentor-monitoring', iconKey: 'list', children: [
+          { name: 'Mentor Report', href: '/admin/mentor-report', iconKey: 'fileText' },
+          { name: 'Mentor Messages', href: '/admin/mentor-messages', iconKey: 'bell' },
+        ] },
+        { name: 'Internships (SIP)', href: '/admin/sip', iconKey: 'briefcase', children: sipChildren },
+        { name: 'Reports', href: '/admin/reports', iconKey: 'fileText' },
         { name: 'My Schedule', href: '/schedule', iconKey: 'calendar' },
         { name: 'My Tasks', href: '/faculty/tasks', iconKey: 'clipboard' },
         { name: 'Announcements', href: '/admin/announcements', iconKey: 'bell', children: adminAnnouncementsChildren },
+        { name: 'Profile', href: '/profile', iconKey: 'user' },
       ],
       MENTOR: [
         { name: 'Dashboard', href: '/faculty/dashboard', iconKey: 'chart' },
@@ -219,7 +235,12 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
       ],
     };
 
-    return [...(roleNav[user?.role as string] || []), ...baseNav];
+    // COORDINATOR is aliased to ADMIN in user.role, but we want them to
+    // keep their custom sidebar. Every other role uses the aliased
+    // role's sidebar (e.g. TRAINER → PLACEMENT_COORDINATOR).
+    const rawRole = (user as { approvedRole?: string } | null)?.approvedRole;
+    const navKey = rawRole === 'COORDINATOR' ? 'COORDINATOR' : (user?.role as string);
+    return [...(roleNav[navKey] || []), ...baseNav];
   };
 
   const getIcon = (iconKey: string) => {
