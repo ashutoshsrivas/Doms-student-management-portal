@@ -6,6 +6,7 @@ import apiClient from '@/app/lib/apiClient';
 import DashboardLayout from '@/app/components/DashboardLayout';
 import ProtectedRoute from '@/app/components/ProtectedRoute';
 import MentorFeedbackModal from '@/app/components/MentorFeedbackModal';
+import LinkifiedText from '@/app/components/LinkifiedText';
 import { FiMessageCircle } from 'react-icons/fi';
 
 type Student = { id: string; firstName: string | null; lastName: string | null; email: string };
@@ -259,7 +260,9 @@ function WeeklyTimeline({ updates }: { updates: WeeklyUpdate[] }) {
                 Submitted {u.submittedAt ? fmtDate(u.submittedAt) : '—'}
               </div>
             </div>
-            <p className="mt-1.5 whitespace-pre-wrap text-sm text-gray-700">{u.statusText}</p>
+            <p className="mt-1.5 whitespace-pre-wrap text-sm text-gray-700">
+              <LinkifiedText text={u.statusText} />
+            </p>
           </div>
         </li>
       ))}

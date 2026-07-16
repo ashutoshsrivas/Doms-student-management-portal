@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { FiUsers, FiPlus, FiEdit2, FiCheckCircle, FiClock } from 'react-icons/fi';
+import { FiUsers, FiPlus, FiEdit2, FiCheckCircle, FiClock, FiTrash2 } from 'react-icons/fi';
 import useAuthStore from '@/app/store/authStore';
 import apiClient from '@/app/lib/apiClient';
 import toast from 'react-hot-toast';
@@ -57,6 +57,7 @@ export default function FacultyMentorDashboard() {
   const [requirements, setRequirements] = useState<Requirement[]>([]);
   const [loading, setLoading] = useState(true);
   const [showRequirementModal, setShowRequirementModal] = useState(false);
+  const [editingRequirementId, setEditingRequirementId] = useState<string | null>(null);
   const [selectedMentee, setSelectedMentee] = useState<Mentee | null>(null);
   const [requirementForm, setRequirementForm] = useState({
     title: '',
@@ -116,6 +117,22 @@ export default function FacultyMentorDashboard() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const closeRequirementModal = () => {
+    setShowRequirementModal(false);
+    setEditingRequirementId(null);
+    setRequirementForm({ title: '', description: '', dueDate: '' });
+  };
+
+  const openEditRequirement = (r: Requirement) => {
+    setEditingRequirementId(r.id);
+    setRequirementForm({
+      title: r.title || '',
+      description: r.description || '',
+      dueDate: r.dueDate ? new Date(r.dueDate).toISOString().slice(0, 10) : '',
+    });
+    setShowRequirementModal(true);
+  };
+
   const handleCreateRequirement = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -125,22 +142,36 @@ export default function FacultyMentorDashboard() {
     }
 
     try {
-      const response = await apiClient.post(
-        `/mentor/teams/${selectedTeam.id}/requirements`,
-        {
-          title: requirementForm.title,
-          description: requirementForm.description,
-          dueDate: requirementForm.dueDate || null,
-        }
-      );
-
-      toast.success('Requirement posted successfully');
-      setShowRequirementModal(false);
-      setRequirementForm({ title: '', description: '', dueDate: '' });
+      const payload = {
+        title: requirementForm.title,
+        description: requirementForm.description,
+        dueDate: requirementForm.dueDate || null,
+      };
+      if (editingRequirementId) {
+        await apiClient.patch(`/mentor/requirements/${editingRequirementId}`, payload);
+        toast.success('Requirement updated');
+      } else {
+        await apiClient.post(`/mentor/teams/${selectedTeam.id}/requirements`, payload);
+        toast.success('Requirement posted successfully');
+      }
+      closeRequirementModal();
       fetchTeamData(selectedTeam.id);
     } catch (error) {
-      console.error('Failed to create requirement:', error);
-      toast.error('Failed to post requirement');
+      console.error('Failed to save requirement:', error);
+      toast.error(editingRequirementId ? 'Failed to update requirement' : 'Failed to post requirement');
+    }
+  };
+
+  const handleDeleteRequirement = async (r: Requirement) => {
+    if (!selectedTeam) return;
+    if (!confirm(`Delete requirement "${r.title}"? This also removes any responses.`)) return;
+    try {
+      await apiClient.delete(`/mentor/requirements/${r.id}`);
+      toast.success('Requirement deleted');
+      fetchTeamData(selectedTeam.id);
+    } catch (error) {
+      console.error('Failed to delete requirement:', error);
+      toast.error('Failed to delete requirement');
     }
   };
 
@@ -233,7 +264,11 @@ export default function FacultyMentorDashboard() {
                   <div className="flex justify-between items-center mb-6">
                     <h2 className="text-xl font-semibold text-gray-900">Posted Requirements</h2>
                     <button
-                      onClick={() => setShowRequirementModal(true)}
+                      onClick={() => {
+                        setEditingRequirementId(null);
+                        setRequirementForm({ title: '', description: '', dueDate: '' });
+                        setShowRequirementModal(true);
+                      }}
                       className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
                     >
                       <FiPlus /> Post Requirement
@@ -251,17 +286,33 @@ export default function FacultyMentorDashboard() {
 
                         return (
                           <div key={req.id} className="p-4 border border-gray-200 rounded-lg">
-                            <div className="flex justify-between items-start mb-2">
-                              <h3 className="font-medium text-gray-900">{req.title}</h3>
-                              <span
-                                className={`text-xs px-2 py-1 rounded font-medium ${
-                                  req.status === 'ACTIVE'
-                                    ? 'bg-green-100 text-green-800'
-                                    : 'bg-gray-100 text-gray-800'
-                                }`}
-                              >
-                                {req.status}
-                              </span>
+                            <div className="flex justify-between items-start mb-2 gap-2">
+                              <h3 className="font-medium text-gray-900 flex-1 min-w-0">{req.title}</h3>
+                              <div className="flex items-center gap-1 shrink-0">
+                                <span
+                                  className={`text-xs px-2 py-1 rounded font-medium ${
+                                    req.status === 'ACTIVE'
+                                      ? 'bg-green-100 text-green-800'
+                                      : 'bg-gray-100 text-gray-800'
+                                  }`}
+                                >
+                                  {req.status}
+                                </span>
+                                <button
+                                  onClick={() => openEditRequirement(req)}
+                                  className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded"
+                                  title="Edit requirement"
+                                >
+                                  <FiEdit2 className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteRequirement(req)}
+                                  className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded"
+                                  title="Delete requirement"
+                                >
+                                  <FiTrash2 className="w-4 h-4" />
+                                </button>
+                              </div>
                             </div>
                             <p className="text-sm text-gray-600 mb-2">{req.description}</p>
                             {req.dueDate && (
@@ -302,7 +353,7 @@ export default function FacultyMentorDashboard() {
         {showRequirementModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-white rounded-lg p-8 max-w-2xl w-full mx-4">
-              <h2 className="text-2xl font-bold mb-6">Post Requirement</h2>
+              <h2 className="text-2xl font-bold mb-6">{editingRequirementId ? 'Edit Requirement' : 'Post Requirement'}</h2>
 
               <form onSubmit={handleCreateRequirement}>
                 <div className="space-y-4">
@@ -356,11 +407,11 @@ export default function FacultyMentorDashboard() {
                     type="submit"
                     className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium"
                   >
-                    Post Requirement
+                    {editingRequirementId ? 'Save Changes' : 'Post Requirement'}
                   </button>
                   <button
                     type="button"
-                    onClick={() => setShowRequirementModal(false)}
+                    onClick={closeRequirementModal}
                     className="flex-1 px-4 py-2 border border-gray-300 text-gray-900 rounded-lg hover:bg-gray-50 transition font-medium"
                   >
                     Cancel
