@@ -240,6 +240,7 @@ const reportController = {
           attributes: [
             'id', 'firstName', 'lastName', 'email', 'phoneNumber',
             'registrationNumber', 'department', 'status', 'createdAt',
+            'profileImage',
           ],
           include: [
             { model: StudentProfile, required: false },
@@ -259,6 +260,7 @@ const reportController = {
         phoneNumber: u.phoneNumber || '',
         registrationNumber: u.registrationNumber || '',
         department: u.department || '',
+        profileImage: u.profileImage || '',
         fatherName: p.fatherName || '',
         fatherOccupation: p.fatherOccupation || '',
         motherName: p.motherName || '',
@@ -300,6 +302,7 @@ const reportController = {
         { key: 'phoneNumber', label: 'Phone' },
         { key: 'registrationNumber', label: 'Registration #' },
         { key: 'department', label: 'Department' },
+        { key: 'profileImage', label: 'Display Image URL' },
         { key: 'fatherName', label: 'Father Name' },
         { key: 'fatherOccupation', label: 'Father Occupation' },
         { key: 'motherName', label: 'Mother Name' },
