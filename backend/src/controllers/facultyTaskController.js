@@ -925,13 +925,25 @@ const facultyTaskController = {
   // sorted by priority desc within each bucket.
   pendingQueue: async (req, res) => {
     try {
-      const tasks = await FacultyTask.findAll({
-        where: { status: 'PENDING' },
-        include: [
-          { model: User, as: 'Assignee', attributes: ['id', 'firstName', 'lastName', 'email', 'approvedRole', 'department'] },
-          { model: User, as: 'Assigner', attributes: ['id', 'firstName', 'lastName', 'email'] },
-        ],
-      });
+      // Two independent slices:
+      //   PENDING tasks (bucketed by deadline)
+      //   COMPLETED-not-yet-approved (single "awaiting approval" bucket)
+      const [pending, awaiting] = await Promise.all([
+        FacultyTask.findAll({
+          where: { status: 'PENDING' },
+          include: [
+            { model: User, as: 'Assignee', attributes: ['id', 'firstName', 'lastName', 'email', 'approvedRole', 'department'] },
+            { model: User, as: 'Assigner', attributes: ['id', 'firstName', 'lastName', 'email'] },
+          ],
+        }),
+        FacultyTask.findAll({
+          where: { status: 'COMPLETED', approvedAt: { [Op.is]: null } },
+          include: [
+            { model: User, as: 'Assignee', attributes: ['id', 'firstName', 'lastName', 'email', 'approvedRole', 'department'] },
+            { model: User, as: 'Assigner', attributes: ['id', 'firstName', 'lastName', 'email'] },
+          ],
+        }),
+      ]);
 
       // Priority rank for sort (higher = first)
       const pRank = { URGENT: 4, HIGH: 3, MEDIUM: 2, LOW: 1 };
@@ -940,8 +952,8 @@ const facultyTaskController = {
       const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
       const endOfToday = startOfToday + MS_PER_DAY;
 
-      const buckets = { overdue: [], today: [], upcoming: [], undated: [] };
-      for (const t of tasks) {
+      const buckets = { overdue: [], today: [], upcoming: [], undated: [], awaitingApproval: awaiting };
+      for (const t of pending) {
         if (!t.deadline) buckets.undated.push(t);
         else {
           const d = new Date(t.deadline).getTime();
@@ -963,6 +975,12 @@ const facultyTaskController = {
       buckets.today.sort(sortFn);
       buckets.upcoming.sort(sortFn);
       buckets.undated.sort(sortFn);
+      // Awaiting-approval sorted by completedAt asc (oldest submission first)
+      buckets.awaitingApproval.sort((a, b) => {
+        const ac = a.completedAt ? new Date(a.completedAt).getTime() : 0;
+        const bc = b.completedAt ? new Date(b.completedAt).getTime() : 0;
+        return ac - bc;
+      });
 
       res.json({
         buckets,
@@ -971,12 +989,39 @@ const facultyTaskController = {
           today: buckets.today.length,
           upcoming: buckets.upcoming.length,
           undated: buckets.undated.length,
-          total: tasks.length,
+          awaitingApproval: buckets.awaitingApproval.length,
+          total: pending.length,
         },
       });
     } catch (error) {
       console.error('FacultyTask pendingQueue error:', error);
       res.status(500).json({ message: 'Failed to load pending queue' });
+    }
+  },
+
+  // POST /api/faculty-tasks/approve-all  (ADMIN/HOD or any assigner)
+  // Body (optional): { ids?: string[] } — approve only these tasks.
+  //   Without ids, approve every completed-not-yet-approved task the
+  //   caller may approve (all for admin/HOD; own creations for others).
+  approveAll: async (req, res) => {
+    try {
+      const isAdmin = ['ADMIN', 'HOD'].includes(req.user.role);
+      const where = { status: 'COMPLETED', approvedAt: { [Op.is]: null } };
+      if (Array.isArray(req.body?.ids) && req.body.ids.length > 0) {
+        where.id = { [Op.in]: req.body.ids };
+      }
+      if (!isAdmin) {
+        where.assignedBy = req.user.id;
+      }
+
+      const [affected] = await FacultyTask.update(
+        { approvedAt: new Date(), approvedBy: req.user.id },
+        { where },
+      );
+      res.json({ message: 'Bulk approval done', approved: affected });
+    } catch (error) {
+      console.error('FacultyTask approveAll error:', error);
+      res.status(500).json({ message: 'Failed to approve tasks' });
     }
   },
 

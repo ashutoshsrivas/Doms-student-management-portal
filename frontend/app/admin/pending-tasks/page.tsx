@@ -9,7 +9,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   FiArrowLeft, FiAlertCircle, FiClock, FiCalendar, FiFlag,
-  FiUsers, FiUser, FiExternalLink, FiRefreshCw,
+  FiUsers, FiUser, FiExternalLink, FiRefreshCw, FiCheck, FiCheckCircle,
 } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 import useAuthStore from '@/app/store/authStore';
@@ -35,6 +35,11 @@ interface Task {
   groupTaskId?: string | null;
   extensionStatus?: 'PENDING' | 'APPROVED' | 'REJECTED' | null;
   createdAt: string;
+  completedAt?: string | null;
+  approvedAt?: string | null;
+  submittedLate?: boolean;
+  documentUrl?: string | null;
+  documentName?: string | null;
   Assignee?: { id: string; firstName: string; lastName: string | null; email: string; approvedRole: string; department?: string };
   Assigner?: { id: string; firstName: string; lastName: string | null; email: string };
 }
@@ -45,8 +50,9 @@ interface QueueData {
     today: Task[];
     upcoming: Task[];
     undated: Task[];
+    awaitingApproval: Task[];
   };
-  counts: { overdue: number; today: number; upcoming: number; undated: number; total: number };
+  counts: { overdue: number; today: number; upcoming: number; undated: number; awaitingApproval: number; total: number };
 }
 
 const fmtDate = (s: string | null | undefined) => (s ? new Date(s).toLocaleString() : '—');
@@ -63,6 +69,9 @@ export default function AdminPendingTasksPage() {
     if (user && !['ADMIN', 'HOD'].includes(user.role)) router.push('/dashboard');
   }, [user, router]);
 
+  const [approvingId, setApprovingId] = useState<string | null>(null);
+  const [approvingAll, setApprovingAll] = useState(false);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -75,6 +84,39 @@ export default function AdminPendingTasksPage() {
     }
   }, []);
   useEffect(() => { load(); }, [load]);
+
+  const approveOne = async (t: Task) => {
+    setApprovingId(t.id);
+    try {
+      await apiClient.patch(`/faculty-tasks/${t.id}/approve`);
+      toast.success('Approved');
+      await load();
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string } } };
+      toast.error(err.response?.data?.message || 'Failed to approve');
+    } finally {
+      setApprovingId(null);
+    }
+  };
+
+  const approveAll = async () => {
+    const visible = data?.buckets.awaitingApproval || [];
+    const list = priorityFilter === 'ALL' ? visible : visible.filter((t) => t.priority === priorityFilter);
+    if (list.length === 0) return;
+    if (!confirm(`Approve all ${list.length} pending submission${list.length === 1 ? '' : 's'}? Positive accuracy credit will apply.`)) return;
+    setApprovingAll(true);
+    try {
+      const { data: res } = await apiClient.post('/faculty-tasks/approve-all', {
+        ids: list.map((t) => t.id),
+      });
+      toast.success(`Approved ${res.approved || list.length} task${(res.approved || list.length) === 1 ? '' : 's'}`);
+      await load();
+    } catch {
+      toast.error('Failed to approve all');
+    } finally {
+      setApprovingAll(false);
+    }
+  };
 
   const filterPriority = (rows: Task[]) =>
     priorityFilter === 'ALL' ? rows : rows.filter((t) => t.priority === priorityFilter);
@@ -125,6 +167,80 @@ export default function AdminPendingTasksPage() {
           >
             <FiExternalLink /> Open
           </a>
+        </div>
+      </li>
+    );
+  };
+
+  const renderApprovalTask = (t: Task) => {
+    const ps = PRIORITY_STYLE[t.priority];
+    return (
+      <li key={t.id} className="bg-white border border-indigo-200 rounded-lg p-3 shadow-sm hover:shadow transition">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h4 className="font-semibold text-gray-900">{t.title}</h4>
+              <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border font-semibold ${ps.chip}`}>
+                <FiFlag size={10} /> {ps.label}
+              </span>
+              {t.submittedLate && (
+                <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full font-bold bg-orange-100 text-orange-800 border border-orange-300">
+                  Submitted late
+                </span>
+              )}
+              {t.sharedCompletion && (
+                <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full font-semibold bg-purple-100 text-purple-800 border border-purple-300">
+                  <FiUsers size={10} /> Shared
+                </span>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs text-gray-600">
+              <span className="inline-flex items-center gap-1">
+                <FiUser size={11} /> {t.Assignee ? `${t.Assignee.firstName} ${t.Assignee.lastName || ''}` : '—'}
+                <span className="text-gray-400">·</span>
+                <span className="font-semibold">{t.Assignee?.approvedRole}</span>
+                {t.Assignee?.department && <span className="text-gray-400">·</span>}
+                {t.Assignee?.department && <span>{t.Assignee.department}</span>}
+              </span>
+              {t.completedAt && (
+                <span className="inline-flex items-center gap-1 text-emerald-700">
+                  <FiCheckCircle size={11} /> Submitted {fmtDate(t.completedAt)}
+                </span>
+              )}
+              {t.deadline && (
+                <span className="inline-flex items-center gap-1">
+                  <FiCalendar size={11} /> Due {fmtDate(t.deadline)}
+                </span>
+              )}
+            </div>
+            {t.documentUrl && (
+              <a
+                href={t.documentUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 mt-2 text-xs text-blue-700 hover:underline"
+              >
+                <FiExternalLink size={11} /> {t.documentName || 'Submission document'}
+              </a>
+            )}
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              onClick={() => approveOne(t)}
+              disabled={approvingId === t.id}
+              className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold rounded bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-400 text-white"
+              title="Approve — positive accuracy credit will apply"
+            >
+              <FiCheck /> {approvingId === t.id ? 'Approving…' : 'Approve'}
+            </button>
+            <a
+              href={`/admin/faculty-tasks?facultyId=${t.Assignee?.id || ''}`}
+              className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold rounded bg-blue-50 hover:bg-blue-100 text-blue-700"
+              title="Open in Faculty Tasks"
+            >
+              <FiExternalLink /> Open
+            </a>
+          </div>
         </div>
       </li>
     );
@@ -190,7 +306,7 @@ export default function AdminPendingTasksPage() {
 
         {/* Counters */}
         {data && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-5">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-5">
             <div className="bg-white border border-red-200 rounded-lg p-3 text-center">
               <p className="text-2xl font-bold text-red-700">{data.counts.overdue}</p>
               <p className="text-[11px] uppercase font-semibold text-gray-600">Overdue</p>
@@ -206,6 +322,10 @@ export default function AdminPendingTasksPage() {
             <div className="bg-white border border-gray-200 rounded-lg p-3 text-center">
               <p className="text-2xl font-bold text-gray-700">{data.counts.undated}</p>
               <p className="text-[11px] uppercase font-semibold text-gray-600">No deadline</p>
+            </div>
+            <div className="bg-white border border-indigo-200 rounded-lg p-3 text-center">
+              <p className="text-2xl font-bold text-indigo-700">{data.counts.awaitingApproval || 0}</p>
+              <p className="text-[11px] uppercase font-semibold text-gray-600">Pending approval</p>
             </div>
           </div>
         )}
@@ -226,13 +346,46 @@ export default function AdminPendingTasksPage() {
           </div>
         </div>
 
+        {/* Pending approval section — separate visual card because
+            these are already completed and just need a sign-off. */}
+        {data && data.buckets.awaitingApproval && data.buckets.awaitingApproval.length > 0 && (
+          <div className="bg-indigo-50/40 border border-indigo-200 rounded-lg shadow-sm p-4 md:p-6 mb-4">
+            <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+              <div>
+                <h3 className="text-sm font-bold uppercase tracking-wide text-indigo-800 flex items-center gap-2">
+                  <FiCheckCircle /> Pending Approval
+                  <span className="text-xs font-semibold bg-white border border-indigo-300 rounded-full px-2 py-0.5 text-indigo-800">
+                    {filterPriority(data.buckets.awaitingApproval).length}
+                    {filterPriority(data.buckets.awaitingApproval).length !== data.buckets.awaitingApproval.length &&
+                      ` / ${data.buckets.awaitingApproval.length}`}
+                  </span>
+                </h3>
+                <p className="text-xs text-indigo-800/70 mt-0.5">
+                  Completed submissions waiting for an assigner sign-off. Positive accuracy credit applies after approval.
+                </p>
+              </div>
+              <button
+                onClick={approveAll}
+                disabled={approvingAll || filterPriority(data.buckets.awaitingApproval).length === 0}
+                className="flex items-center gap-2 px-3 py-2 text-sm font-semibold rounded bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-400 text-white"
+                title="Approve every task shown below"
+              >
+                <FiCheck /> {approvingAll ? 'Approving…' : `Approve all (${filterPriority(data.buckets.awaitingApproval).length})`}
+              </button>
+            </div>
+            <ul className="space-y-2">
+              {filterPriority(data.buckets.awaitingApproval).map(renderApprovalTask)}
+            </ul>
+          </div>
+        )}
+
         {/* Buckets */}
-        {!data || data.counts.total === 0 ? (
+        {!data || (data.counts.total === 0 && (data.counts.awaitingApproval || 0) === 0) ? (
           <div className="bg-white border border-gray-200 rounded-lg p-8 text-center text-gray-600">
             <FiAlertCircle className="mx-auto text-gray-400 mb-2" size={28} />
             No pending tasks across the institution 🎉
           </div>
-        ) : (
+        ) : data.counts.total === 0 ? null : (
           <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-4 md:p-6">
             {renderBucket('Overdue', 'text-red-700', data.buckets.overdue)}
             {renderBucket('Today', 'text-blue-700', data.buckets.today)}
