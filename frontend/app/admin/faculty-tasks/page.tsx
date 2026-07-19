@@ -13,7 +13,7 @@ import { useRouter } from 'next/navigation';
 import {
   FiArrowLeft, FiPlus, FiX, FiCheck, FiTrash2, FiAlertCircle, FiRefreshCw,
   FiDownload, FiCalendar, FiFileText, FiLock, FiEdit2, FiFlag,
-  FiMessageSquare, FiSave, FiLoader, FiClock, FiUsers, FiZap,
+  FiMessageSquare, FiSave, FiLoader, FiClock, FiUsers, FiZap, FiList,
 } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 import useAuthStore from '@/app/store/authStore';
@@ -106,6 +106,20 @@ interface FacultyNote {
   Creator?: { id: string; firstName: string; lastName: string | null; email: string };
 }
 
+interface BulkBatch {
+  groupTaskId: string;
+  title: string;
+  description: string | null;
+  deadline: string | null;
+  priority: Priority;
+  mode: 'SHARED' | 'INDIVIDUAL';
+  assigner: { id: string; firstName: string; lastName: string | null; email: string } | null;
+  createdAt: string;
+  total: number;
+  completed: number;
+  pending: number;
+}
+
 // ============ Helpers ============
 
 const fmtDate = (s: string | null | undefined) => (s ? new Date(s).toLocaleString() : '—');
@@ -184,6 +198,14 @@ export default function AdminFacultyTasksPage() {
   // Bulk-assign modal + groups
   const [groups, setGroups] = useState<FacultyGroupLite[]>([]);
   const [showBulk, setShowBulk] = useState(false);
+  const [showBulkHistory, setShowBulkHistory] = useState(false);
+  const [bulkBatches, setBulkBatches] = useState<BulkBatch[]>([]);
+  const [bulkHistoryLoading, setBulkHistoryLoading] = useState(false);
+  const [editingBatch, setEditingBatch] = useState<BulkBatch | null>(null);
+  const [editBatchForm, setEditBatchForm] = useState<{
+    title: string; description: string; deadline: string; priority: Priority;
+  }>({ title: '', description: '', deadline: '', priority: 'MEDIUM' });
+  const [editBatchSaving, setEditBatchSaving] = useState(false);
   const [bulkForm, setBulkForm] = useState<{
     title: string;
     description: string;
@@ -246,6 +268,72 @@ export default function AdminFacultyTasksPage() {
       setNotesLoading(false);
     }
   }, []);
+
+  const loadBulkHistory = useCallback(async () => {
+    setBulkHistoryLoading(true);
+    try {
+      const res = await apiClient.get('/faculty-tasks/bulk-history');
+      setBulkBatches(res.data.batches || []);
+    } catch (e) {
+      console.error(e);
+      toast.error('Failed to load bulk history');
+    } finally {
+      setBulkHistoryLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (showBulkHistory) loadBulkHistory();
+  }, [showBulkHistory, loadBulkHistory]);
+
+  const openEditBatch = (b: BulkBatch) => {
+    setEditingBatch(b);
+    setEditBatchForm({
+      title: b.title,
+      description: b.description || '',
+      deadline: b.deadline ? new Date(b.deadline).toISOString().slice(0, 16) : '',
+      priority: b.priority,
+    });
+  };
+
+  const saveEditBatch = async () => {
+    if (!editingBatch) return;
+    if (!editBatchForm.title.trim()) {
+      toast.error('Title is required');
+      return;
+    }
+    setEditBatchSaving(true);
+    try {
+      await apiClient.patch(`/faculty-tasks/bulk/${editingBatch.groupTaskId}`, {
+        title: editBatchForm.title,
+        description: editBatchForm.description || null,
+        deadline: editBatchForm.deadline || null,
+        priority: editBatchForm.priority,
+      });
+      toast.success(`Updated all ${editingBatch.total} tasks in this batch`);
+      setEditingBatch(null);
+      await loadBulkHistory();
+      if (selectedId) loadTasks(selectedId);
+    } catch (e) {
+      console.error(e);
+      toast.error('Failed to update batch');
+    } finally {
+      setEditBatchSaving(false);
+    }
+  };
+
+  const deleteBatch = async (b: BulkBatch) => {
+    if (!confirm(`Delete this bulk batch? ${b.total} task${b.total === 1 ? '' : 's'} (across ${b.total} faculty) will be removed. This cannot be undone.`)) return;
+    try {
+      await apiClient.delete(`/faculty-tasks/bulk/${b.groupTaskId}`);
+      toast.success(`Deleted ${b.total} tasks`);
+      await loadBulkHistory();
+      if (selectedId) loadTasks(selectedId);
+    } catch (e) {
+      console.error(e);
+      toast.error('Failed to delete batch');
+    }
+  };
 
   const loadGroups = useCallback(async () => {
     try {
@@ -618,6 +706,13 @@ export default function AdminFacultyTasksPage() {
               title="Assign one task to multiple faculty or groups at once"
             >
               <FiZap /> Bulk Assign
+            </button>
+            <button
+              onClick={() => setShowBulkHistory(true)}
+              className="flex items-center gap-2 px-3 py-2 text-gray-700 bg-white hover:bg-gray-100 border border-gray-300 rounded-lg font-semibold text-sm"
+              title="View past bulk assignments — edit or delete the whole batch"
+            >
+              <FiList /> Bulk History
             </button>
             <button
               onClick={() => router.push('/admin/faculty-groups')}
@@ -1519,6 +1614,158 @@ export default function AdminFacultyTasksPage() {
                 className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-400 text-white rounded font-semibold flex items-center gap-2"
               >
                 {perfBusy ? <FiLoader className="animate-spin" /> : <FiDownload />} {perfBusy ? 'Building…' : 'Download PDF'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk history modal */}
+      {showBulkHistory && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-2xl max-w-3xl w-full overflow-hidden flex flex-col" style={{ maxHeight: '85vh' }}>
+            <div className="bg-indigo-600 text-white px-5 py-3 flex items-center justify-between">
+              <h3 className="font-bold flex items-center gap-2"><FiList /> Bulk Task History</h3>
+              <button onClick={() => setShowBulkHistory(false)} className="p-1 hover:bg-white/20 rounded"><FiX /></button>
+            </div>
+            <div className="p-5 overflow-y-auto flex-1">
+              {bulkHistoryLoading ? (
+                <div className="text-sm text-gray-500 text-center py-8">Loading…</div>
+              ) : bulkBatches.length === 0 ? (
+                <div className="text-center py-10">
+                  <p className="text-sm text-gray-700 font-medium">No bulk batches yet</p>
+                  <p className="text-xs text-gray-500 mt-1">Assign a task via <b>Bulk Assign</b> and it will show up here.</p>
+                </div>
+              ) : (
+                <ul className="space-y-2">
+                  {bulkBatches.map((b) => (
+                    <li key={b.groupTaskId} className="border border-gray-200 rounded-lg p-3 hover:border-indigo-300">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-baseline gap-2">
+                            <span className="text-sm font-semibold text-gray-900">{b.title}</span>
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${
+                              b.mode === 'SHARED' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'
+                            }`}>
+                              {b.mode === 'SHARED' ? 'Shared batch' : 'Individual copies'}
+                            </span>
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${PRIORITY_STYLE[b.priority].chip}`}>
+                              {PRIORITY_STYLE[b.priority].label}
+                            </span>
+                          </div>
+                          <div className="text-xs text-gray-500 mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5">
+                            <span>Assigned by <b>{b.assigner ? `${b.assigner.firstName} ${b.assigner.lastName || ''}`.trim() : '—'}</b></span>
+                            <span>{fmtDate(b.createdAt)}</span>
+                            {b.deadline && <span>Due {fmtDate(b.deadline)}</span>}
+                          </div>
+                          <div className="text-xs text-gray-600 mt-1">
+                            <span className="font-semibold text-gray-800">{b.total}</span> assigned
+                            {' · '}
+                            <span className="text-emerald-700 font-semibold">{b.completed}</span> completed
+                            {' · '}
+                            <span className="text-orange-600 font-semibold">{b.pending}</span> pending
+                          </div>
+                          {b.description && (
+                            <p className="text-xs text-gray-600 mt-1.5 line-clamp-2">{b.description}</p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            onClick={() => openEditBatch(b)}
+                            className="p-1.5 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded"
+                            title="Edit — applies to every task in this batch"
+                          >
+                            <FiEdit2 className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => deleteBatch(b)}
+                            className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded"
+                            title="Delete every task in this batch"
+                          >
+                            <FiTrash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <div className="bg-gray-50 px-5 py-3 border-t border-gray-200 flex justify-end">
+              <button onClick={() => setShowBulkHistory(false)} className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded font-semibold">Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk edit modal */}
+      {editingBatch && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-2xl max-w-lg w-full overflow-hidden">
+            <div className="bg-indigo-600 text-white px-5 py-3 flex items-center justify-between">
+              <h3 className="font-bold flex items-center gap-2"><FiEdit2 /> Edit Bulk Batch</h3>
+              <button onClick={() => setEditingBatch(null)} className="p-1 hover:bg-white/20 rounded"><FiX /></button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="text-xs text-indigo-900 bg-indigo-50 border border-indigo-200 rounded-lg px-3 py-2">
+                Changes will apply to <b>all {editingBatch.total}</b> task
+                {editingBatch.total === 1 ? '' : 's'} in this batch. Already-completed tasks stay completed.
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">Title</label>
+                <input
+                  type="text"
+                  value={editBatchForm.title}
+                  onChange={(e) => setEditBatchForm((f) => ({ ...f, title: e.target.value }))}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">Priority</label>
+                <div className="grid grid-cols-4 gap-2">
+                  {(['LOW', 'MEDIUM', 'HIGH', 'URGENT'] as Priority[]).map((p) => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => setEditBatchForm((f) => ({ ...f, priority: p }))}
+                      className={`px-2 py-1.5 text-xs font-semibold rounded border ${
+                        editBatchForm.priority === p
+                          ? 'bg-indigo-600 text-white border-indigo-600'
+                          : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                      }`}
+                    >
+                      {PRIORITY_STYLE[p].label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">Deadline (optional)</label>
+                <input
+                  type="datetime-local"
+                  value={editBatchForm.deadline}
+                  onChange={(e) => setEditBatchForm((f) => ({ ...f, deadline: e.target.value }))}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">Description (optional)</label>
+                <textarea
+                  value={editBatchForm.description}
+                  onChange={(e) => setEditBatchForm((f) => ({ ...f, description: e.target.value }))}
+                  rows={4}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900"
+                />
+              </div>
+            </div>
+            <div className="bg-gray-50 px-5 py-3 border-t border-gray-200 flex gap-2 justify-end">
+              <button onClick={() => setEditingBatch(null)} className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded font-semibold">Cancel</button>
+              <button
+                onClick={saveEditBatch}
+                disabled={editBatchSaving || !editBatchForm.title.trim()}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 text-white rounded font-semibold flex items-center gap-2"
+              >
+                {editBatchSaving ? <FiLoader className="animate-spin" /> : <FiSave />} {editBatchSaving ? 'Saving…' : `Update ${editingBatch.total} tasks`}
               </button>
             </div>
           </div>

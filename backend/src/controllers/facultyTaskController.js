@@ -589,7 +589,10 @@ const facultyTaskController = {
         return res.status(400).json({ message: `No valid assignees (must be ${ASSIGNABLE_ROLES.join(', ')} and ACTIVE)` });
       }
 
-      const groupTaskId = mode === 'SHARED' ? crypto.randomUUID() : null;
+      // Every bulk assign gets a groupTaskId so it can be edited/deleted
+      // as a batch later. sharedCompletion stays as the SHARED vs
+      // INDIVIDUAL distinguishing flag.
+      const groupTaskId = crypto.randomUUID();
       const sharedCompletion = mode === 'SHARED';
       const baseRow = {
         assignedBy: req.user.id,
@@ -1032,6 +1035,151 @@ const facultyTaskController = {
     } catch (error) {
       console.error('FacultyTask performanceReport error:', error);
       res.status(500).json({ message: 'Failed to generate performance report' });
+    }
+  },
+
+  // GET /api/faculty-tasks/bulk-history  (ADMIN/HOD)
+  // List every bulk batch ever created (grouped by groupTaskId). Each
+  // entry summarises the batch: title, mode, assigner, when, and
+  // pending/completed counts.
+  bulkHistory: async (req, res) => {
+    try {
+      const rows = await FacultyTask.findAll({
+        where: { groupTaskId: { [Op.ne]: null } },
+        attributes: [
+          'groupTaskId', 'title', 'description', 'deadline', 'priority',
+          'sharedCompletion', 'assignedBy', 'status', 'createdAt',
+        ],
+        include: [
+          { model: User, as: 'Assigner', attributes: ['id', 'firstName', 'lastName', 'email'] },
+        ],
+        order: [['createdAt', 'DESC']],
+      });
+
+      // Reduce by groupTaskId
+      const batches = new Map();
+      for (const t of rows) {
+        const gid = t.groupTaskId;
+        if (!batches.has(gid)) {
+          batches.set(gid, {
+            groupTaskId: gid,
+            title: t.title,
+            description: t.description,
+            deadline: t.deadline,
+            priority: t.priority,
+            mode: t.sharedCompletion ? 'SHARED' : 'INDIVIDUAL',
+            assigner: t.Assigner
+              ? {
+                  id: t.Assigner.id,
+                  firstName: t.Assigner.firstName,
+                  lastName: t.Assigner.lastName,
+                  email: t.Assigner.email,
+                }
+              : null,
+            createdAt: t.createdAt,
+            total: 0,
+            completed: 0,
+            pending: 0,
+          });
+        }
+        const b = batches.get(gid);
+        b.total += 1;
+        if (t.status === 'COMPLETED') b.completed += 1;
+        else b.pending += 1;
+      }
+      res.json({ batches: Array.from(batches.values()) });
+    } catch (error) {
+      console.error('FacultyTask bulkHistory error:', error);
+      res.status(500).json({ message: 'Failed to load bulk history' });
+    }
+  },
+
+  // GET /api/faculty-tasks/bulk/:groupTaskId  (ADMIN/HOD)
+  // Full detail of a single batch — every row + its assignee.
+  bulkDetail: async (req, res) => {
+    try {
+      const tasks = await FacultyTask.findAll({
+        where: { groupTaskId: req.params.groupTaskId },
+        include: [
+          { model: User, as: 'Assignee', attributes: ['id', 'firstName', 'lastName', 'email', 'approvedRole', 'department'] },
+          { model: User, as: 'Assigner', attributes: ['id', 'firstName', 'lastName', 'email'] },
+        ],
+        order: [['createdAt', 'ASC']],
+      });
+      if (!tasks.length) return res.status(404).json({ message: 'Bulk batch not found' });
+      res.json({
+        groupTaskId: req.params.groupTaskId,
+        title: tasks[0].title,
+        description: tasks[0].description,
+        deadline: tasks[0].deadline,
+        priority: tasks[0].priority,
+        mode: tasks[0].sharedCompletion ? 'SHARED' : 'INDIVIDUAL',
+        tasks,
+      });
+    } catch (error) {
+      console.error('FacultyTask bulkDetail error:', error);
+      res.status(500).json({ message: 'Failed to load bulk batch' });
+    }
+  },
+
+  // PATCH /api/faculty-tasks/bulk/:groupTaskId  (ADMIN/HOD)
+  // Edit title/description/deadline/priority across every row in the
+  // batch. Does NOT touch completion state — a task that was already
+  // completed stays completed.
+  bulkUpdate: async (req, res) => {
+    try {
+      const patch = {};
+      if (req.body.title !== undefined) {
+        const t = sanitiseTitle(req.body.title);
+        if (!t) return res.status(400).json({ message: 'Title cannot be empty' });
+        patch.title = t;
+      }
+      if (req.body.description !== undefined) patch.description = sanitiseText(req.body.description, 5000);
+      if (req.body.deadline !== undefined) patch.deadline = req.body.deadline ? new Date(req.body.deadline) : null;
+      if (req.body.priority !== undefined) patch.priority = sanitisePriority(req.body.priority);
+
+      const [affected] = await FacultyTask.update(patch, {
+        where: { groupTaskId: req.params.groupTaskId },
+      });
+      if (!affected) return res.status(404).json({ message: 'Bulk batch not found' });
+      res.json({ message: 'Bulk batch updated', updated: affected });
+    } catch (error) {
+      console.error('FacultyTask bulkUpdate error:', error);
+      res.status(500).json({ message: 'Failed to update bulk batch' });
+    }
+  },
+
+  // DELETE /api/faculty-tasks/bulk/:groupTaskId  (ADMIN/HOD)
+  // Removes every row and its updates (same FK-safety pattern as the
+  // single-task delete).
+  bulkDelete: async (req, res) => {
+    try {
+      const tasks = await FacultyTask.findAll({
+        where: { groupTaskId: req.params.groupTaskId },
+        attributes: ['id', 'documentUrl'],
+      });
+      if (!tasks.length) return res.status(404).json({ message: 'Bulk batch not found' });
+
+      for (const t of tasks) {
+        if (t.documentUrl) {
+          try { await deleteFromS3(t.documentUrl); } catch (e) { /* best effort */ }
+        }
+      }
+      const taskIds = tasks.map((t) => t.id);
+      await sequelize.transaction(async (tx) => {
+        await FacultyTaskUpdate.destroy({
+          where: { taskId: { [Op.in]: taskIds } },
+          transaction: tx,
+        });
+        await FacultyTask.destroy({
+          where: { id: { [Op.in]: taskIds } },
+          transaction: tx,
+        });
+      });
+      res.json({ message: 'Bulk batch deleted', deleted: tasks.length });
+    } catch (error) {
+      console.error('FacultyTask bulkDelete error:', error);
+      res.status(500).json({ message: 'Failed to delete bulk batch' });
     }
   },
 };
