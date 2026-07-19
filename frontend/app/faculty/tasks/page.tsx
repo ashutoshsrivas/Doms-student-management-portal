@@ -50,8 +50,10 @@ interface Task {
   extensionRequestedAt?: string | null;
   extensionRespondedAt?: string | null;
   extensionResponseReason?: string | null;
+  approvedAt?: string | null;
   Assigner?: { id: string; firstName: string; lastName: string | null; email: string };
   Remarker?: { id: string; firstName: string; lastName: string | null; email: string };
+  Approver?: { id: string; firstName: string; lastName: string | null; email: string } | null;
 }
 
 interface Accuracy {
@@ -65,6 +67,7 @@ interface Accuracy {
     completedLateMore: number;
     overduePending: number;
     notDueYet: number;
+    awaitingApproval: number;
   };
 }
 
@@ -240,9 +243,14 @@ export default function MyTasksPage() {
                   <span className="text-gray-600"> upcoming</span>
                   <span className="block text-[10px] text-gray-500">no effect</span>
                 </div>
+                <div className="bg-indigo-50 border border-indigo-200 rounded px-2 py-1.5 col-span-2 sm:col-span-3">
+                  <span className="font-bold text-indigo-700">{accuracy.breakdown.awaitingApproval}</span>
+                  <span className="text-gray-700"> awaiting approval</span>
+                  <span className="block text-[10px] text-gray-500">held out of score until admin approves</span>
+                </div>
               </div>
             )}
-            <p className="text-[10px] text-gray-500 w-full">Base 100. Score floor 0, no ceiling.</p>
+            <p className="text-[10px] text-gray-500 w-full">Base 100. Score floor 0, no ceiling. Positive credit applies only after the assigner approves your submission.</p>
           </div>
         )}
 
@@ -326,6 +334,23 @@ export default function MyTasksPage() {
                                     <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full font-semibold bg-purple-100 text-purple-800 border border-purple-300" title="Group task — completing it marks it done for everyone in the group">
                                       <FiUsers size={10} /> Group task
                                     </span>
+                                  )}
+                                  {t.status === 'COMPLETED' && (
+                                    t.approvedAt ? (
+                                      <span
+                                        className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full font-semibold bg-emerald-100 text-emerald-800 border border-emerald-300"
+                                        title={`Approved by ${t.Approver ? `${t.Approver.firstName} ${t.Approver.lastName || ''}` : 'assigner'} on ${fmtDate(t.approvedAt)}`}
+                                      >
+                                        <FiCheck size={10} /> Approved
+                                      </span>
+                                    ) : (
+                                      <span
+                                        className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full font-semibold bg-indigo-100 text-indigo-800 border border-indigo-300"
+                                        title="Assigner hasn't approved yet — positive credit will apply after approval"
+                                      >
+                                        Awaiting approval
+                                      </span>
+                                    )
                                   )}
                                 </div>
                                 {t.description && (

@@ -94,8 +94,10 @@ interface Task {
     email: string;
     approvedRole: string;
   };
+  approvedAt?: string | null;
   Assigner?: { id: string; firstName: string; lastName: string | null; email: string };
   Remarker?: { id: string; firstName: string; lastName: string | null; email: string };
+  Approver?: { id: string; firstName: string; lastName: string | null; email: string } | null;
 }
 
 interface FacultyNote {
@@ -467,6 +469,30 @@ export default function AdminFacultyTasksPage() {
       loadTasks(selectedId);
     } catch {
       toast.error('Failed to mark done');
+    }
+  };
+
+  const handleApprove = async (id: string) => {
+    try {
+      await apiClient.patch(`/faculty-tasks/${id}/approve`);
+      toast.success('Approved');
+      loadSummary();
+      loadTasks(selectedId);
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string } } };
+      toast.error(err.response?.data?.message || 'Failed to approve');
+    }
+  };
+
+  const handleUnapprove = async (id: string) => {
+    if (!confirm('Revoke approval? Positive accuracy credit will be reversed.')) return;
+    try {
+      await apiClient.patch(`/faculty-tasks/${id}/unapprove`);
+      toast.success('Approval revoked');
+      loadSummary();
+      loadTasks(selectedId);
+    } catch {
+      toast.error('Failed to revoke');
     }
   };
 
@@ -982,12 +1008,31 @@ export default function AdminFacultyTasksPage() {
                                               <FiCheck /> Done
                                             </button>
                                           ) : (
-                                            <button
-                                              onClick={() => handleReopenTask(t.id)}
-                                              className="flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded bg-yellow-50 hover:bg-yellow-100 text-yellow-700"
-                                            >
-                                              <FiRefreshCw /> Reopen
-                                            </button>
+                                            <>
+                                              {!t.approvedAt ? (
+                                                <button
+                                                  onClick={() => handleApprove(t.id)}
+                                                  className="flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded bg-emerald-50 hover:bg-emerald-100 text-emerald-700"
+                                                  title="Approve — positive accuracy credit will apply"
+                                                >
+                                                  <FiCheck /> Approve
+                                                </button>
+                                              ) : (
+                                                <button
+                                                  onClick={() => handleUnapprove(t.id)}
+                                                  className="flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded bg-emerald-100 hover:bg-emerald-200 text-emerald-800 border border-emerald-300"
+                                                  title={`Approved by ${t.Approver ? `${t.Approver.firstName} ${t.Approver.lastName || ''}` : ''}${t.approvedAt ? ' on ' + fmtDate(t.approvedAt) : ''}. Click to revoke.`}
+                                                >
+                                                  <FiCheck /> Approved
+                                                </button>
+                                              )}
+                                              <button
+                                                onClick={() => handleReopenTask(t.id)}
+                                                className="flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded bg-yellow-50 hover:bg-yellow-100 text-yellow-700"
+                                              >
+                                                <FiRefreshCw /> Reopen
+                                              </button>
+                                            </>
                                           )}
                                           <button
                                             onClick={() => openEdit(t)}

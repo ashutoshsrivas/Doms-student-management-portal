@@ -256,6 +256,10 @@ async function start() {
       { name: 'extension_responded_by', ddl: 'CHAR(36) NULL' },
       { name: 'extension_responded_at', ddl: 'DATETIME NULL' },
       { name: 'extension_response_reason', ddl: 'TEXT NULL' },
+      // Assigner-side approval of a completed task. Positive-delta
+      // effects on the accuracy score only apply once approved_at is set.
+      { name: 'approved_at', ddl: 'DATETIME NULL' },
+      { name: 'approved_by', ddl: 'CHAR(36) NULL' },
     ];
     for (const col of facultyTaskColumns) {
       try {

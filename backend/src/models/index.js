@@ -1599,6 +1599,17 @@ const FacultyTask = sequelize.define('FacultyTask', {
     type: DataTypes.UUID,
     allowNull: true,
   },
+  // Assigner-side sign-off on a completed task. Positive contributions
+  // to the accuracy score (on-time +5, ≤1d-late +1) only apply once
+  // approvedAt is set; negative time-based deltas apply regardless.
+  approvedAt: {
+    type: DataTypes.DATE,
+    allowNull: true,
+  },
+  approvedBy: {
+    type: DataTypes.UUID,
+    allowNull: true,
+  },
   // groupTaskId links sibling rows that came from the same admin action.
   // For INDIVIDUAL/COPY mode: NULL (rows independent).
   // For SHARED mode: same UUID across all siblings, AND sharedCompletion=true.
@@ -1661,6 +1672,7 @@ FacultyTask.belongsTo(User, { foreignKey: 'assigneeId', as: 'Assignee' });
 User.hasMany(FacultyTask, { foreignKey: 'assigneeId', as: 'AssignedTasks' });
 FacultyTask.belongsTo(User, { foreignKey: 'assignedBy', as: 'Assigner' });
 FacultyTask.belongsTo(User, { foreignKey: 'remarkedBy', as: 'Remarker' });
+FacultyTask.belongsTo(User, { foreignKey: 'approvedBy', as: 'Approver' });
 
 // ============ FACULTY GROUP MODELS ============
 // An admin-curated bundle of users that can be assigned tasks together.

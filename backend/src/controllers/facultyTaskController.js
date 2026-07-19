@@ -46,18 +46,39 @@ const SCORE_BASE = 100;
 
 function computeAccuracy(tasks, now = Date.now()) {
   let score = SCORE_BASE;
-  const breakdown = { onTime: 0, late1: 0, late7: 0, lateMore: 0, overdue: 0, notDueYet: 0 };
+  const breakdown = {
+    onTime: 0, late1: 0, late7: 0, lateMore: 0,
+    overdue: 0, notDueYet: 0,
+    // Completed but not yet approved by the assigner. Their positive
+    // deltas (onTime, late1) are withheld from the score until approval.
+    awaitingApproval: 0,
+  };
   for (const t of tasks) {
     if (t.status === 'COMPLETED') {
+      const approved = !!t.approvedAt;
       const hasDeadline = !!t.deadline;
-      if (!hasDeadline) { score += SCORE_DELTAS.onTime; breakdown.onTime += 1; continue; }
+      if (!hasDeadline) {
+        if (approved) { score += SCORE_DELTAS.onTime; breakdown.onTime += 1; }
+        else { breakdown.awaitingApproval += 1; }
+        continue;
+      }
       const lateMs = new Date(t.completedAt).getTime() - new Date(t.deadline).getTime();
-      if (lateMs <= 0) { score += SCORE_DELTAS.onTime; breakdown.onTime += 1; }
-      else {
+      if (lateMs <= 0) {
+        // On-time completion — positive delta gated by approval
+        if (approved) { score += SCORE_DELTAS.onTime; breakdown.onTime += 1; }
+        else { breakdown.awaitingApproval += 1; }
+      } else {
         const d = lateMs / MS_PER_DAY;
-        if (d <= 1) { score += SCORE_DELTAS.late1; breakdown.late1 += 1; }
-        else if (d <= 7) { score += SCORE_DELTAS.late7; breakdown.late7 += 1; }
-        else { score += SCORE_DELTAS.lateMore; breakdown.lateMore += 1; }
+        if (d <= 1) {
+          // +1 counts as a positive delta → gated by approval
+          if (approved) { score += SCORE_DELTAS.late1; breakdown.late1 += 1; }
+          else { breakdown.awaitingApproval += 1; }
+        } else if (d <= 7) {
+          // Time-based negative — applies immediately
+          score += SCORE_DELTAS.late7; breakdown.late7 += 1;
+        } else {
+          score += SCORE_DELTAS.lateMore; breakdown.lateMore += 1;
+        }
       }
     } else {
       if (t.deadline && new Date(t.deadline).getTime() < now) {
@@ -111,6 +132,7 @@ const facultyTaskController = {
           { model: User, as: 'Assignee', attributes: ['id', 'firstName', 'lastName', 'email', 'approvedRole'] },
           { model: User, as: 'Assigner', attributes: ['id', 'firstName', 'lastName', 'email'] },
           { model: User, as: 'Remarker', attributes: ['id', 'firstName', 'lastName', 'email'] },
+          { model: User, as: 'Approver', attributes: ['id', 'firstName', 'lastName', 'email'] },
         ],
       });
 
@@ -224,6 +246,7 @@ const facultyTaskController = {
           { model: User, as: 'Assignee', attributes: ['id', 'firstName', 'lastName', 'email', 'approvedRole', 'department'] },
           { model: User, as: 'Assigner', attributes: ['id', 'firstName', 'lastName', 'email'] },
           { model: User, as: 'Remarker', attributes: ['id', 'firstName', 'lastName', 'email'] },
+          { model: User, as: 'Approver', attributes: ['id', 'firstName', 'lastName', 'email'] },
         ],
       });
       if (!task) return res.status(404).json({ message: 'Task not found' });
@@ -263,6 +286,7 @@ const facultyTaskController = {
           { model: User, as: 'Assignee', attributes: ['id', 'firstName', 'lastName', 'email', 'approvedRole'] },
           { model: User, as: 'Assigner', attributes: ['id', 'firstName', 'lastName', 'email'] },
           { model: User, as: 'Remarker', attributes: ['id', 'firstName', 'lastName', 'email'] },
+          { model: User, as: 'Approver', attributes: ['id', 'firstName', 'lastName', 'email'] },
         ],
       });
       res.json({ task: updated });
@@ -344,6 +368,7 @@ const facultyTaskController = {
           { model: User, as: 'Assignee', attributes: ['id', 'firstName', 'lastName', 'email', 'approvedRole'] },
           { model: User, as: 'Assigner', attributes: ['id', 'firstName', 'lastName', 'email'] },
           { model: User, as: 'Remarker', attributes: ['id', 'firstName', 'lastName', 'email'] },
+          { model: User, as: 'Approver', attributes: ['id', 'firstName', 'lastName', 'email'] },
         ],
       });
       res.json({ task: updated });
@@ -358,11 +383,11 @@ const facultyTaskController = {
     try {
       const task = await FacultyTask.findByPk(req.params.id);
       if (!task) return res.status(404).json({ message: 'Task not found' });
-      await task.update({ status: 'PENDING', completedAt: null, submittedLate: false });
+      await task.update({ status: 'PENDING', completedAt: null, submittedLate: false, approvedAt: null, approvedBy: null });
       // Cascade to siblings if shared
       if (task.sharedCompletion && task.groupTaskId) {
         await FacultyTask.update(
-          { status: 'PENDING', completedAt: null, submittedLate: false },
+          { status: 'PENDING', completedAt: null, submittedLate: false, approvedAt: null, approvedBy: null },
           { where: { groupTaskId: task.groupTaskId, id: { [Op.ne]: task.id } } },
         );
       }
@@ -396,6 +421,7 @@ const facultyTaskController = {
           { model: User, as: 'Assignee', attributes: ['id', 'firstName', 'lastName', 'email', 'approvedRole'] },
           { model: User, as: 'Assigner', attributes: ['id', 'firstName', 'lastName', 'email'] },
           { model: User, as: 'Remarker', attributes: ['id', 'firstName', 'lastName', 'email'] },
+          { model: User, as: 'Approver', attributes: ['id', 'firstName', 'lastName', 'email'] },
         ],
       });
       res.json({ task: updated });
@@ -629,11 +655,13 @@ const facultyTaskController = {
       }
       const tasks = await FacultyTask.findAll({
         where: { assigneeId: requestedId },
-        attributes: ['id', 'status', 'deadline', 'completedAt', 'submittedLate'],
+        attributes: ['id', 'status', 'deadline', 'completedAt', 'submittedLate', 'approvedAt'],
       });
       const result = computeAccuracy(tasks);
 
-      // Breakdown for transparency / UI explanation
+      // Breakdown for transparency / UI explanation. Completed-but-not-
+      // approved goes into `awaitingApproval` instead of the timing
+      // buckets, matching computeAccuracy's semantics.
       const now = Date.now();
       const breakdown = {
         completedOnTime: 0,
@@ -642,15 +670,26 @@ const facultyTaskController = {
         completedLateMore: 0,
         overduePending: 0,
         notDueYet: 0,
+        awaitingApproval: 0,
       };
       for (const t of tasks) {
         if (t.status === 'COMPLETED') {
-          if (!t.deadline) { breakdown.completedOnTime += 1; continue; }
+          const approved = !!t.approvedAt;
+          if (!t.deadline) {
+            if (approved) breakdown.completedOnTime += 1;
+            else breakdown.awaitingApproval += 1;
+            continue;
+          }
           const lateMs = new Date(t.completedAt).getTime() - new Date(t.deadline).getTime();
-          if (lateMs <= 0) breakdown.completedOnTime += 1;
-          else {
+          if (lateMs <= 0) {
+            if (approved) breakdown.completedOnTime += 1;
+            else breakdown.awaitingApproval += 1;
+          } else {
             const d = lateMs / 86400000;
-            if (d <= 1) breakdown.completedLate1 += 1;
+            if (d <= 1) {
+              if (approved) breakdown.completedLate1 += 1;
+              else breakdown.awaitingApproval += 1;
+            }
             else if (d <= 7) breakdown.completedLate7 += 1;
             else breakdown.completedLateMore += 1;
           }
@@ -1035,6 +1074,71 @@ const facultyTaskController = {
     } catch (error) {
       console.error('FacultyTask performanceReport error:', error);
       res.status(500).json({ message: 'Failed to generate performance report' });
+    }
+  },
+
+  // PATCH /api/faculty-tasks/:id/approve
+  // Assigner (task.assignedBy) or ADMIN/HOD may approve. Approval marks
+  // approvedAt/approvedBy so positive score deltas kick in.
+  approve: async (req, res) => {
+    try {
+      const task = await FacultyTask.findByPk(req.params.id);
+      if (!task) return res.status(404).json({ message: 'Task not found' });
+      const isAdmin = ['ADMIN', 'HOD'].includes(req.user.role);
+      const isAssigner = task.assignedBy === req.user.id;
+      if (!isAdmin && !isAssigner) {
+        return res.status(403).json({ message: 'Only the task creator or an admin/HOD can approve' });
+      }
+      if (task.status !== 'COMPLETED') {
+        return res.status(400).json({ message: 'Task must be completed before it can be approved' });
+      }
+      if (task.approvedAt) {
+        return res.json({ message: 'Already approved', task });
+      }
+      await task.update({ approvedAt: new Date(), approvedBy: req.user.id });
+      const updated = await FacultyTask.findByPk(task.id, {
+        include: [
+          { model: User, as: 'Assignee', attributes: ['id', 'firstName', 'lastName', 'email', 'approvedRole'] },
+          { model: User, as: 'Assigner', attributes: ['id', 'firstName', 'lastName', 'email'] },
+          { model: User, as: 'Remarker', attributes: ['id', 'firstName', 'lastName', 'email'] },
+          { model: User, as: 'Approver', attributes: ['id', 'firstName', 'lastName', 'email'] },
+        ],
+      });
+      res.json({ message: 'Task approved', task: updated });
+    } catch (error) {
+      console.error('FacultyTask approve error:', error);
+      res.status(500).json({ message: 'Failed to approve task' });
+    }
+  },
+
+  // PATCH /api/faculty-tasks/:id/unapprove
+  // Same permission as approve — revokes approval, positive deltas
+  // drop out of the score again.
+  unapprove: async (req, res) => {
+    try {
+      const task = await FacultyTask.findByPk(req.params.id);
+      if (!task) return res.status(404).json({ message: 'Task not found' });
+      const isAdmin = ['ADMIN', 'HOD'].includes(req.user.role);
+      const isAssigner = task.assignedBy === req.user.id;
+      if (!isAdmin && !isAssigner) {
+        return res.status(403).json({ message: 'Only the task creator or an admin/HOD can revoke approval' });
+      }
+      if (!task.approvedAt) {
+        return res.json({ message: 'Task is not approved', task });
+      }
+      await task.update({ approvedAt: null, approvedBy: null });
+      const updated = await FacultyTask.findByPk(task.id, {
+        include: [
+          { model: User, as: 'Assignee', attributes: ['id', 'firstName', 'lastName', 'email', 'approvedRole'] },
+          { model: User, as: 'Assigner', attributes: ['id', 'firstName', 'lastName', 'email'] },
+          { model: User, as: 'Remarker', attributes: ['id', 'firstName', 'lastName', 'email'] },
+          { model: User, as: 'Approver', attributes: ['id', 'firstName', 'lastName', 'email'] },
+        ],
+      });
+      res.json({ message: 'Approval revoked', task: updated });
+    } catch (error) {
+      console.error('FacultyTask unapprove error:', error);
+      res.status(500).json({ message: 'Failed to revoke approval' });
     }
   },
 

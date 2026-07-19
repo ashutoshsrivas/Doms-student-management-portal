@@ -51,6 +51,10 @@ router.patch(
 // Admin-only edits
 router.patch('/:id', authorizeRole('ADMIN', 'HOD'), facultyTaskController.update);
 router.patch('/:id/remark', authorizeRole('ADMIN', 'HOD'), facultyTaskController.setRemark);
+
+// Assigner-side approval — controller enforces "assignedBy OR admin/HOD".
+router.patch('/:id/approve', facultyTaskController.approve);
+router.patch('/:id/unapprove', facultyTaskController.unapprove);
 router.patch('/:id/reopen', authorizeRole('ADMIN', 'HOD'), facultyTaskController.reopen);
 // Delete — assigner or admin/HOD, at any status. Gated inside the handler.
 router.delete('/:id', facultyTaskController.remove);
