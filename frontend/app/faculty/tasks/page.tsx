@@ -76,14 +76,11 @@ const dayKey = (s: string) => {
   const d = new Date(s);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
+// Absolute date only — no Today/Yesterday shortcuts, so a viewer sees
+// the exact deadline day at a glance. Per-task rows also print the
+// full date + time next to this header.
 const prettyDay = (key: string) => {
   const d = new Date(`${key}T00:00:00`);
-  const today = new Date();
-  const yest = new Date(); yest.setDate(today.getDate() - 1);
-  const isSameDay = (a: Date, b: Date) =>
-    a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-  if (isSameDay(d, today)) return 'Today';
-  if (isSameDay(d, yest)) return 'Yesterday';
   return d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
 };
 
