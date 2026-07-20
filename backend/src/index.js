@@ -260,6 +260,10 @@ async function start() {
       // effects on the accuracy score only apply once approved_at is set.
       { name: 'approved_at', ddl: 'DATETIME NULL' },
       { name: 'approved_by', ddl: 'CHAR(36) NULL' },
+      // Additional supporting documents the assignee can attach after
+      // submission — even post-approval. Stored as a JSON array of
+      // { url, name, mime, uploadedAt, uploadedBy }.
+      { name: 'extra_documents', ddl: "JSON NULL" },
     ];
     for (const col of facultyTaskColumns) {
       try {

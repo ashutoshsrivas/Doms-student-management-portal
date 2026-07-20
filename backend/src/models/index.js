@@ -1610,6 +1610,13 @@ const FacultyTask = sequelize.define('FacultyTask', {
     type: DataTypes.UUID,
     allowNull: true,
   },
+  // Additional supporting documents the assignee can attach after
+  // submission. Sequelize's JSON getter returns the parsed array.
+  extraDocuments: {
+    type: DataTypes.JSON,
+    allowNull: true,
+    defaultValue: [],
+  },
   // groupTaskId links sibling rows that came from the same admin action.
   // For INDIVIDUAL/COPY mode: NULL (rows independent).
   // For SHARED mode: same UUID across all siblings, AND sharedCompletion=true.

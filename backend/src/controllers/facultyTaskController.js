@@ -378,6 +378,78 @@ const facultyTaskController = {
     }
   },
 
+  // POST /api/faculty-tasks/:id/documents  (multipart `document`)
+  // Append another supporting file to a completed task. Works even
+  // after approval — completion state stays untouched.
+  addDocument: async (req, res) => {
+    try {
+      const task = await FacultyTask.findByPk(req.params.id);
+      if (!task) return res.status(404).json({ message: 'Task not found' });
+      const isAdmin = ['ADMIN', 'HOD'].includes(req.user.role);
+      if (!isAdmin && task.assigneeId !== req.user.id) {
+        return res.status(403).json({ message: 'Only the assignee or an admin can attach documents' });
+      }
+      if (!req.file) return res.status(400).json({ message: 'No document uploaded' });
+
+      let url;
+      try {
+        url = await uploadToS3(
+          req.file.buffer,
+          req.file.originalname,
+          req.file.mimetype,
+          'faculty-tasks',
+        );
+      } catch (e) {
+        console.error('FacultyTask addDocument upload error:', e);
+        return res.status(500).json({ message: 'Failed to upload document' });
+      }
+
+      const existing = Array.isArray(task.extraDocuments) ? task.extraDocuments : [];
+      const next = [
+        ...existing,
+        {
+          url,
+          name: req.file.originalname,
+          mime: req.file.mimetype,
+          uploadedAt: new Date().toISOString(),
+          uploadedBy: req.user.id,
+        },
+      ];
+      await task.update({ extraDocuments: next });
+      res.status(201).json({ extraDocuments: next });
+    } catch (error) {
+      console.error('FacultyTask addDocument error:', error);
+      res.status(500).json({ message: 'Failed to attach document' });
+    }
+  },
+
+  // DELETE /api/faculty-tasks/:id/documents/:idx
+  // Remove one attachment by array index. Uploader (assignee) or admin.
+  removeDocument: async (req, res) => {
+    try {
+      const task = await FacultyTask.findByPk(req.params.id);
+      if (!task) return res.status(404).json({ message: 'Task not found' });
+      const isAdmin = ['ADMIN', 'HOD'].includes(req.user.role);
+      if (!isAdmin && task.assigneeId !== req.user.id) {
+        return res.status(403).json({ message: 'Only the assignee or an admin can remove documents' });
+      }
+      const idx = parseInt(req.params.idx, 10);
+      const list = Array.isArray(task.extraDocuments) ? task.extraDocuments : [];
+      if (!Number.isInteger(idx) || idx < 0 || idx >= list.length) {
+        return res.status(404).json({ message: 'Document not found' });
+      }
+      const [removed] = list.splice(idx, 1);
+      if (removed && removed.url) {
+        try { await deleteFromS3(removed.url); } catch (e) { /* best effort */ }
+      }
+      await task.update({ extraDocuments: list });
+      res.json({ extraDocuments: list });
+    } catch (error) {
+      console.error('FacultyTask removeDocument error:', error);
+      res.status(500).json({ message: 'Failed to remove document' });
+    }
+  },
+
   // PATCH /api/faculty-tasks/:id/reopen  (ADMIN)
   reopen: async (req, res) => {
     try {

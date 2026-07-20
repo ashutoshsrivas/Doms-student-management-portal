@@ -6,7 +6,7 @@
 // shows as a prominent "Feedback from admin" callout. Mark-done supports
 // an optional supporting document upload.
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   FiArrowLeft, FiCheck, FiClock, FiCalendar, FiPaperclip, FiAlertCircle,
@@ -51,6 +51,13 @@ interface Task {
   extensionRespondedAt?: string | null;
   extensionResponseReason?: string | null;
   approvedAt?: string | null;
+  extraDocuments?: Array<{
+    url: string;
+    name: string;
+    mime?: string | null;
+    uploadedAt?: string;
+    uploadedBy?: string;
+  }> | null;
   Assigner?: { id: string; firstName: string; lastName: string | null; email: string };
   Remarker?: { id: string; firstName: string; lastName: string | null; email: string };
   Approver?: { id: string; firstName: string; lastName: string | null; email: string } | null;
@@ -378,6 +385,9 @@ export default function MyTasksPage() {
                                     <FiDownload size={12} />
                                   </a>
                                 )}
+                                {t.status === 'COMPLETED' && (
+                                  <ExtraDocsPanel task={t} onChanged={load} />
+                                )}
                               </div>
                               {t.status === 'PENDING' && (
                                 <button
@@ -477,5 +487,100 @@ export default function MyTasksPage() {
         </div>
       )}
     </DashboardLayout>
+  );
+}
+
+// ---- ExtraDocsPanel ---------------------------------------------------
+// Lists supporting documents attached AFTER a task was submitted and
+// gives the assignee an upload button. Works even after admin approval.
+function ExtraDocsPanel({ task, onChanged }: { task: Task; onChanged: () => Promise<void> | void }) {
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement | null>(null);
+  const docs = task.extraDocuments || [];
+
+  const onPick = () => fileRef.current?.click();
+
+  const onFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('document', file);
+      await apiClient.post(`/faculty-tasks/${task.id}/documents`, fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      toast.success('Document added');
+      await onChanged();
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string } } };
+      toast.error(e.response?.data?.message || 'Failed to upload');
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = '';
+    }
+  };
+
+  const remove = async (idx: number) => {
+    if (!confirm('Remove this document?')) return;
+    try {
+      await apiClient.delete(`/faculty-tasks/${task.id}/documents/${idx}`);
+      toast.success('Removed');
+      await onChanged();
+    } catch {
+      toast.error('Failed to remove');
+    }
+  };
+
+  return (
+    <div className="mt-3">
+      <div className="flex items-center justify-between gap-2 mb-1.5">
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+          Additional documents{docs.length > 0 ? ` (${docs.length})` : ''}
+        </p>
+        <button
+          type="button"
+          onClick={onPick}
+          disabled={uploading}
+          className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 disabled:opacity-60"
+        >
+          <FiUpload size={12} /> {uploading ? 'Uploading…' : 'Add document'}
+        </button>
+        <input
+          ref={fileRef}
+          type="file"
+          className="hidden"
+          onChange={onFileChange}
+        />
+      </div>
+      {docs.length === 0 ? (
+        <p className="text-xs text-gray-400 italic">No additional documents yet.</p>
+      ) : (
+        <ul className="space-y-1">
+          {docs.map((d, i) => (
+            <li key={`${d.url}-${i}`} className="flex items-center gap-2">
+              <a
+                href={d.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-1 inline-flex items-center gap-1.5 px-2 py-1 rounded bg-blue-50 hover:bg-blue-100 text-xs text-blue-700 font-medium border border-blue-200 min-w-0"
+              >
+                <FiPaperclip size={11} className="shrink-0" />
+                <span className="truncate">{d.name || 'Document'}</span>
+                <FiDownload size={11} className="ml-auto shrink-0" />
+              </a>
+              <button
+                type="button"
+                onClick={() => remove(i)}
+                className="p-1 text-gray-400 hover:text-red-600 rounded"
+                title="Remove"
+              >
+                <FiX size={13} />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }

@@ -48,6 +48,15 @@ router.patch(
   facultyTaskController.complete,
 );
 
+// Extra supporting documents — assignee (or admin/HOD) can attach more
+// files even after completion or approval.
+router.post(
+  '/:id/documents',
+  assessmentUpload.single('document'),
+  facultyTaskController.addDocument,
+);
+router.delete('/:id/documents/:idx', facultyTaskController.removeDocument);
+
 // Admin-only edits
 router.patch('/:id', authorizeRole('ADMIN', 'HOD'), facultyTaskController.update);
 router.patch('/:id/remark', authorizeRole('ADMIN', 'HOD'), facultyTaskController.setRemark);
