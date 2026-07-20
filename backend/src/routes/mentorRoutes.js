@@ -98,8 +98,15 @@ router.get(
   mentorController.getRequirement
 );
 
-// Update requirement
+// Update requirement — accept both PUT (legacy) and PATCH (used by
+// the /faculty/mentors edit modal).
 router.put(
+  '/requirements/:requirementId',
+  authenticateToken,
+  authorizeRole('FACULTY', 'ADMIN', 'HOD', 'CHAIR_HEAD'),
+  mentorController.updateRequirement
+);
+router.patch(
   '/requirements/:requirementId',
   authenticateToken,
   authorizeRole('FACULTY', 'ADMIN', 'HOD', 'CHAIR_HEAD'),

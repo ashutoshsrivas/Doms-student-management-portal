@@ -467,7 +467,7 @@ module.exports = {
       }
 
       // Verify authorization
-      if (requirement.createdBy !== userId && req.user?.role !== 'ADMIN') {
+      if (requirement.createdBy !== userId && !['ADMIN', 'HOD'].includes(req.user?.role)) {
         return res.status(403).json({ message: 'Not authorized to update this requirement' });
       }
 
