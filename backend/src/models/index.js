@@ -1611,11 +1611,20 @@ const FacultyTask = sequelize.define('FacultyTask', {
     allowNull: true,
   },
   // Additional supporting documents the assignee can attach after
-  // submission. Sequelize's JSON getter returns the parsed array.
+  // submission. MariaDB stores JSON as LONGTEXT, so match the
+  // codebase pattern for JSON fields: parse a string, coerce
+  // non-arrays to [].
   extraDocuments: {
     type: DataTypes.JSON,
     allowNull: true,
     defaultValue: [],
+    get() {
+      const raw = this.getDataValue('extraDocuments');
+      if (typeof raw === 'string') {
+        try { return JSON.parse(raw); } catch (e) { return []; }
+      }
+      return Array.isArray(raw) ? raw : [];
+    },
   },
   // groupTaskId links sibling rows that came from the same admin action.
   // For INDIVIDUAL/COPY mode: NULL (rows independent).

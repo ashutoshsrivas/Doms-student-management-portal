@@ -496,7 +496,17 @@ export default function MyTasksPage() {
 function ExtraDocsPanel({ task, onChanged }: { task: Task; onChanged: () => Promise<void> | void }) {
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement | null>(null);
-  const docs = task.extraDocuments || [];
+  // Defensive: the backend may serialise this as a JSON string when the
+  // underlying column is LONGTEXT. Coerce to an array either way.
+  const raw = task.extraDocuments as unknown;
+  let docs: NonNullable<Task['extraDocuments']> = [];
+  if (Array.isArray(raw)) docs = raw as NonNullable<Task['extraDocuments']>;
+  else if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) docs = parsed;
+    } catch { /* keep empty */ }
+  }
 
   const onPick = () => fileRef.current?.click();
 
