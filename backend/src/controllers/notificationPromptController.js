@@ -314,6 +314,55 @@ exports.myPending = async (req, res) => {
 
 // POST /api/notification-prompts/:id/respond
 // Body: { text?, choice? } depending on promptType. ACK needs neither.
+// GET /api/notification-prompts/mine/history
+// Prompts the student has responded to (any status), newest first,
+// with their own submitted response inlined for review.
+exports.myHistory = async (req, res) => {
+  try {
+    if (req.user.role !== 'STUDENT') return res.json({ prompts: [] });
+    const rows = await NotificationPromptResponse.findAll({
+      where: { studentUserId: req.user.id },
+      order: [['respondedAt', 'DESC']],
+      include: [{
+        model: NotificationPrompt,
+        include: [
+          { model: AcademicSession, as: 'Session', attributes: ['id', 'name'] },
+        ],
+      }],
+    });
+    const prompts = rows
+      .filter((r) => r.NotificationPrompt) // skip orphaned deletes
+      .map((r) => {
+        const p = r.NotificationPrompt;
+        return {
+          id: p.id,
+          title: p.title,
+          body: p.body,
+          promptType: p.promptType,
+          options: p.options,
+          deadline: p.deadline,
+          status: p.status,
+          createdAt: p.createdAt,
+          attachmentUrl: p.attachmentUrl,
+          attachmentName: p.attachmentName,
+          attachmentMime: p.attachmentMime,
+          Session: p.Session,
+          myResponse: {
+            responseText: r.responseText,
+            responseChoice: r.responseChoice,
+            responseFileUrl: r.responseFileUrl,
+            responseFileName: r.responseFileName,
+            respondedAt: r.respondedAt,
+          },
+        };
+      });
+    res.json({ prompts });
+  } catch (e) {
+    console.error('NotificationPrompt myHistory error:', e);
+    res.status(500).json({ message: 'Failed to load history' });
+  }
+};
+
 exports.respond = async (req, res) => {
   try {
     if (req.user.role !== 'STUDENT') {

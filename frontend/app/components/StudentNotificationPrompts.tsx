@@ -6,7 +6,7 @@
 // list on next refetch.
 
 import { useEffect, useState, useCallback } from 'react';
-import { FiBell, FiCheckCircle, FiPaperclip, FiUpload } from 'react-icons/fi';
+import { FiBell, FiCheckCircle, FiPaperclip, FiUpload, FiChevronDown, FiClock } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 import apiClient from '@/app/lib/apiClient';
 import FilePreview from './FilePreview';
@@ -31,11 +31,26 @@ interface Prompt {
 const fmtDate = (s: string | null | undefined) =>
   s ? new Date(s).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : '';
 
+interface HistoryPrompt extends Prompt {
+  myResponse?: {
+    responseText: string | null;
+    responseChoice: string | null;
+    responseFileUrl: string | null;
+    responseFileName: string | null;
+    respondedAt: string;
+  };
+  status?: 'ACTIVE' | 'ARCHIVED';
+}
+
 export default function StudentNotificationPrompts() {
   const [prompts, setPrompts] = useState<Prompt[] | null>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [files, setFiles] = useState<Record<string, File | null>>({});
   const [saving, setSaving] = useState<string | null>(null);
+
+  // Completed history state — kept out of the noisy pending list.
+  const [history, setHistory] = useState<HistoryPrompt[] | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -45,7 +60,18 @@ export default function StudentNotificationPrompts() {
       setPrompts([]);
     }
   }, []);
-  useEffect(() => { load(); }, [load]);
+  const loadHistory = useCallback(async () => {
+    try {
+      const { data } = await apiClient.get('/notification-prompts/mine/history');
+      setHistory(data.prompts || []);
+    } catch {
+      setHistory([]);
+    }
+  }, []);
+  useEffect(() => {
+    load();
+    loadHistory();
+  }, [load, loadHistory]);
 
   const respond = async (
     p: Prompt,
@@ -65,7 +91,7 @@ export default function StudentNotificationPrompts() {
       }
       await apiClient.post(`/notification-prompts/${p.id}/respond`, body, headers ? { headers } : undefined);
       toast.success('Response recorded');
-      await load();
+      await Promise.all([load(), loadHistory()]);
     } catch (e: unknown) {
       const err = e as { response?: { data?: { message?: string } } };
       toast.error(err.response?.data?.message || 'Failed to submit');
@@ -74,19 +100,22 @@ export default function StudentNotificationPrompts() {
     }
   };
 
-  if (!prompts || prompts.length === 0) return null;
+  const pending = prompts || [];
+  const done = history || [];
+  if (pending.length === 0 && done.length === 0) return null;
 
   return (
-    <div className="max-w-6xl mx-auto px-2 md:px-4 mt-4">
+    <div className="space-y-4">
+      {pending.length > 0 && (
       <div className="rounded-xl border border-indigo-200 bg-indigo-50/60 overflow-hidden">
         <div className="px-4 py-3 flex items-center gap-2 border-b border-indigo-200 bg-indigo-100/60">
           <FiBell className="w-5 h-5 text-indigo-700" />
           <h2 className="font-semibold text-indigo-900">
-            Notifications requiring your response ({prompts.length})
+            Notifications requiring your response ({pending.length})
           </h2>
         </div>
         <ul className="divide-y divide-indigo-100">
-          {prompts.map((p) => (
+          {pending.map((p) => (
             <li key={p.id} className="p-4 bg-white">
               <div className="flex flex-wrap items-baseline gap-2 mb-1">
                 <span className="text-sm font-semibold text-gray-900">{p.title}</span>
@@ -203,6 +232,73 @@ export default function StudentNotificationPrompts() {
           ))}
         </ul>
       </div>
+      )}
+
+      {/* Completed history — collapsed by default, always shows the count. */}
+      {done.length > 0 && (
+        <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setHistoryOpen((o) => !o)}
+            className="w-full px-4 py-3 flex items-center justify-between gap-2 hover:bg-gray-50"
+          >
+            <span className="inline-flex items-center gap-2 text-sm font-semibold text-gray-800">
+              <FiCheckCircle className="w-4 h-4 text-emerald-600" />
+              Completed notifications ({done.length})
+            </span>
+            <FiChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${historyOpen ? 'rotate-180' : ''}`} />
+          </button>
+          {historyOpen && (
+            <ul className="divide-y divide-gray-100 border-t border-gray-200">
+              {done.map((p) => (
+                <li key={p.id} className="p-3">
+                  <div className="flex flex-wrap items-baseline gap-2">
+                    <span className="text-sm font-semibold text-gray-900">{p.title}</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold bg-gray-100 text-gray-700">
+                      {p.promptType === 'ACK' ? 'Acknowledged'
+                        : p.promptType === 'TEXT' ? 'Answer'
+                        : p.promptType === 'CHOICE' ? 'Choice'
+                        : 'File'}
+                    </span>
+                    {p.status === 'ARCHIVED' && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold bg-gray-200 text-gray-700">Closed</span>
+                    )}
+                  </div>
+                  {p.body && <p className="text-xs text-gray-600 mt-1 whitespace-pre-wrap">{p.body}</p>}
+                  {p.attachmentUrl && (
+                    <div className="mt-2 max-w-md">
+                      <FilePreview url={p.attachmentUrl} name={p.attachmentName} mime={p.attachmentMime} />
+                    </div>
+                  )}
+                  {p.myResponse && (
+                    <div className="mt-2 rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2 text-xs">
+                      <div className="text-[11px] uppercase font-semibold text-emerald-800 mb-0.5 flex items-center gap-1">
+                        <FiCheckCircle size={11} /> Your response
+                        <span className="text-emerald-700/70 font-normal">
+                          <FiClock className="inline w-2.5 h-2.5 mr-0.5" />
+                          {fmtDate(p.myResponse.respondedAt)}
+                        </span>
+                      </div>
+                      {p.promptType === 'ACK' && <div className="text-emerald-900 font-medium">Acknowledged.</div>}
+                      {p.promptType === 'TEXT' && p.myResponse.responseText && (
+                        <div className="text-gray-800 whitespace-pre-wrap">{p.myResponse.responseText}</div>
+                      )}
+                      {p.promptType === 'CHOICE' && p.myResponse.responseChoice && (
+                        <div className="text-gray-800">Chose: <b>{p.myResponse.responseChoice}</b></div>
+                      )}
+                      {p.myResponse.responseFileUrl && (
+                        <div className="mt-1.5 max-w-xs">
+                          <FilePreview url={p.myResponse.responseFileUrl} name={p.myResponse.responseFileName} />
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
     </div>
   );
 }

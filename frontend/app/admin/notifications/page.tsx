@@ -8,7 +8,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   FiBell, FiPlus, FiTrash2, FiRefreshCw, FiCheckCircle, FiClock, FiChevronDown, FiX,
-  FiUsers, FiArchive, FiRotateCcw, FiPaperclip,
+  FiUsers, FiArchive, FiRotateCcw, FiPaperclip, FiDownload,
 } from 'react-icons/fi';
 import FilePreview from '@/app/components/FilePreview';
 import toast from 'react-hot-toast';
@@ -190,6 +190,65 @@ export default function AdminNotificationsPage() {
     }
   };
 
+  // Download full responded + pending list as a CSV. Uses the
+  // detail endpoint so we always get fresh data (even when the
+  // panel is collapsed).
+  const downloadCsv = async (p: Prompt) => {
+    const toastId = toast.loading('Building CSV…');
+    try {
+      let detail: ResponseDetail | null = null;
+      if (expanded[p.id] && expanded[p.id] !== 'loading') {
+        detail = expanded[p.id] as ResponseDetail;
+      } else {
+        const { data } = await apiClient.get(`/notification-prompts/${p.id}/responses`);
+        detail = data as ResponseDetail;
+      }
+      if (!detail) throw new Error('No data');
+
+      const header = [
+        'Name', 'Email', 'Registration No.', 'Status',
+        'Response Type', 'Response', 'File', 'Responded At',
+      ];
+      const cellEscape = (v: unknown) => {
+        const s = v == null ? '' : String(v);
+        return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+      };
+      const rows: string[][] = [];
+      for (const r of detail.responses) {
+        const s = r.Student;
+        const name = s ? `${s.firstName || ''} ${s.lastName || ''}`.trim() : '';
+        const answer = p.promptType === 'CHOICE' ? (r.responseChoice || '')
+          : p.promptType === 'TEXT' ? (r.responseText || '')
+          : p.promptType === 'FILE' ? (r.responseFileName || '(file)')
+          : 'Acknowledged';
+        rows.push([
+          name, s?.email || '', s?.registrationNumber || '', 'Responded',
+          p.promptType, answer, r.responseFileUrl || '',
+          new Date(r.respondedAt).toLocaleString(),
+        ]);
+      }
+      for (const s of detail.pendingStudents) {
+        const name = `${s.firstName || ''} ${s.lastName || ''}`.trim();
+        rows.push([name, s.email || '', s.registrationNumber || '', 'Pending', p.promptType, '', '', '']);
+      }
+      const csv = [header, ...rows].map((r) => r.map(cellEscape).join(',')).join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      const slug = p.title.replace(/[^a-z0-9]+/gi, '_').replace(/^_|_$/g, '').slice(0, 60) || 'notification';
+      a.download = `${slug}_responses.csv`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      toast.success(
+        `Downloaded — ${detail.responses.length} responded, ${detail.pendingStudents.length} pending`,
+        { id: toastId },
+      );
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string } } };
+      toast.error(err.response?.data?.message || 'Failed to download', { id: toastId });
+    }
+  };
+
   const remove = async (p: Prompt) => {
     if (!confirm(`Delete notification "${p.title}"? All responses will be removed.`)) return;
     try {
@@ -319,6 +378,13 @@ export default function AdminNotificationsPage() {
                           title={isOpen ? 'Collapse' : 'View responses'}
                         >
                           <FiChevronDown className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                        </button>
+                        <button
+                          onClick={() => downloadCsv(p)}
+                          className="p-1.5 text-gray-500 hover:text-emerald-700 hover:bg-emerald-50 rounded"
+                          title="Download responded + pending list as CSV"
+                        >
+                          <FiDownload className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => archive(p)}

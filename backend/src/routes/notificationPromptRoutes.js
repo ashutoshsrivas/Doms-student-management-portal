@@ -6,8 +6,9 @@ const { assessmentUpload } = require('../middleware/upload');
 
 router.use(authenticateToken);
 
-// Student-side (specific path before /:id catch-all)
+// Student-side (specific paths before /:id catch-all)
 router.get('/mine', ctrl.myPending);
+router.get('/mine/history', ctrl.myHistory);
 
 // Admin/HOD list + create (multipart for optional attachment)
 router.get('/', ctrl.list);

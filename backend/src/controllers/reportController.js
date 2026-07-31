@@ -111,6 +111,7 @@ const reportController = {
       reports: [
         {
           key: 'students_master',
+          category: 'Students',
           title: 'Students Master List',
           description: 'Basic info for every student in the session — name, email, phone, registration number, department, enrolment status and date.',
           requiresSession: true,
@@ -118,6 +119,7 @@ const reportController = {
         },
         {
           key: 'students_profiles_full',
+          category: 'Students',
           title: 'Student Profiles (Complete)',
           description: 'Everything students have filled in their profile — personal background, professional profile, skills, work experience, achievements, projects, certifications, social links, resume URL, hobbies.',
           requiresSession: true,
@@ -125,6 +127,7 @@ const reportController = {
         },
         {
           key: 'sip_details',
+          category: 'Internships (SIP)',
           title: 'SIP Internship Details',
           description: 'Every field of the SIP form — student, company, role, location, stipend, supervisor, HR, dates, grading, PPO offer, status.',
           requiresSession: true,
@@ -132,6 +135,7 @@ const reportController = {
         },
         {
           key: 'sip_qa',
+          category: 'Internships (SIP)',
           title: 'SIP Questions & Answers',
           description: 'Posted SIP questions and each student\'s answer (text + uploaded document URL + submission time).',
           requiresSession: true,
@@ -139,6 +143,7 @@ const reportController = {
         },
         {
           key: 'assessment_summary',
+          category: 'Assessments',
           title: 'Assessments Summary',
           description: 'One row per assessment with total assigned, submitted, graded, average / max / min score.',
           requiresSession: true,
@@ -146,6 +151,7 @@ const reportController = {
         },
         {
           key: 'mentor_teams',
+          category: 'Mentors',
           title: 'Mentor Teams & Members',
           description: 'One row per team-member pairing — team name, faculty mentor, student member.',
           requiresSession: true,
@@ -153,6 +159,7 @@ const reportController = {
         },
         {
           key: 'users_status',
+          category: 'Users',
           title: 'All Users (any status)',
           description: 'Every account in the system — name, email, requested role, approved role, status, department, last login. Not session-scoped.',
           requiresSession: false,

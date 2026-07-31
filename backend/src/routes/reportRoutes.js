@@ -4,7 +4,10 @@ const reportController = require('../controllers/reportController');
 const { authenticateToken, authorizeRole } = require('../middleware/auth');
 
 // Every report route requires an authenticated ADMIN.
-router.use(authenticateToken, authorizeRole('ADMIN', 'HOD'));
+// Reports are read-only exports of curated data. In addition to
+// admin/HOD, PLACEMENT_COORDINATOR is granted access so they can pull
+// their own dashboards without asking admin every time.
+router.use(authenticateToken, authorizeRole('ADMIN', 'HOD', 'PLACEMENT_COORDINATOR'));
 
 // Metadata
 router.get('/types', reportController.listReports);
