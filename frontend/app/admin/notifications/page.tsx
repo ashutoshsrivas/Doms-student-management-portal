@@ -8,8 +8,9 @@ import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   FiBell, FiPlus, FiTrash2, FiRefreshCw, FiCheckCircle, FiClock, FiChevronDown, FiX,
-  FiUsers, FiArchive, FiRotateCcw, FiPaperclip, FiDownload,
+  FiUsers, FiArchive, FiRotateCcw, FiPaperclip,
 } from 'react-icons/fi';
+import FilePreview from '@/app/components/FilePreview';
 import toast from 'react-hot-toast';
 import useAuthStore from '@/app/store/authStore';
 import apiClient from '@/app/lib/apiClient';
@@ -285,15 +286,13 @@ export default function AdminNotificationsPage() {
                         </div>
                         {p.body && <p className="text-sm text-gray-700 mt-1 line-clamp-2 whitespace-pre-wrap">{p.body}</p>}
                         {p.attachmentUrl && (
-                          <a
-                            href={p.attachmentUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 mt-1 text-xs text-blue-700 hover:underline"
-                          >
-                            <FiPaperclip size={11} /> {p.attachmentName || 'Attachment'}
-                            <FiDownload size={11} />
-                          </a>
+                          <div className="mt-2 max-w-md">
+                            <FilePreview
+                              url={p.attachmentUrl}
+                              name={p.attachmentName}
+                              mime={p.attachmentMime}
+                            />
+                          </div>
                         )}
                         <div className="mt-2 flex items-center gap-4 text-xs">
                           <span className="inline-flex items-center gap-1 text-emerald-700">
@@ -529,15 +528,12 @@ function ResponsePanel({ detail }: { detail: ResponseDetail }) {
                     <div className="mt-0.5 text-emerald-700 font-medium">Acknowledged</div>
                   )}
                   {r.responseFileUrl && (
-                    <a
-                      href={r.responseFileUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 mt-1 text-[11px] text-blue-700 hover:underline"
-                    >
-                      <FiPaperclip size={10} /> {r.responseFileName || 'Uploaded file'}
-                      <FiDownload size={10} />
-                    </a>
+                    <div className="mt-2 max-w-xs">
+                      <FilePreview
+                        url={r.responseFileUrl}
+                        name={r.responseFileName}
+                      />
+                    </div>
                   )}
                 </li>
               ))}

@@ -6,9 +6,10 @@
 // list on next refetch.
 
 import { useEffect, useState, useCallback } from 'react';
-import { FiBell, FiCheckCircle, FiPaperclip, FiDownload, FiUpload } from 'react-icons/fi';
+import { FiBell, FiCheckCircle, FiPaperclip, FiUpload } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 import apiClient from '@/app/lib/apiClient';
+import FilePreview from './FilePreview';
 
 type PromptType = 'ACK' | 'TEXT' | 'CHOICE' | 'FILE';
 
@@ -21,6 +22,7 @@ interface Prompt {
   deadline?: string | null;
   attachmentUrl?: string | null;
   attachmentName?: string | null;
+  attachmentMime?: string | null;
   Session?: { id: string; name: string } | null;
   Creator?: { firstName: string | null; lastName: string | null } | null;
   createdAt: string;
@@ -102,15 +104,17 @@ export default function StudentNotificationPrompts() {
               </div>
               {p.body && <p className="text-sm text-gray-700 mb-2 whitespace-pre-wrap">{p.body}</p>}
               {p.attachmentUrl && (
-                <a
-                  href={p.attachmentUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 mb-2 text-xs text-blue-700 hover:underline"
-                >
-                  <FiPaperclip size={11} /> {p.attachmentName || 'Attachment'}
-                  <FiDownload size={11} />
-                </a>
+                <div className="mb-3">
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1 flex items-center gap-1">
+                    <FiPaperclip size={11} /> Attachment
+                  </div>
+                  <FilePreview
+                    url={p.attachmentUrl}
+                    name={p.attachmentName}
+                    mime={p.attachmentMime}
+                    className="max-w-md"
+                  />
+                </div>
               )}
               {p.promptType === 'ACK' && (
                 <button

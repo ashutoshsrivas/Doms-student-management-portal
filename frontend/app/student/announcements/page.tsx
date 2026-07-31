@@ -136,194 +136,157 @@ export default function AnnouncementsPage() {
     );
   }
 
+  const hasActiveFilters = !!(searchTerm || selectedRoles.length > 0 || selectedTypes.length > 0);
+
   return (
     <DashboardLayout title="Announcements">
-      <div className="py-6 px-2 md:px-4 max-w-6xl mx-auto">
-        <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Announcements</h1>
-            <p className="text-gray-600 mt-1 text-sm">Stay updated with important announcements.</p>
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Announcements</h1>
+            <p className="text-sm text-gray-500 mt-0.5">Stay updated with important messages.</p>
           </div>
-          <div>
-            {canCreateAnnouncements && (
-              <Link
-                href="/admin/announcements/create"
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition"
-              >
-                <FiPlus size={18} /> Create Announcement
-              </Link>
+          {canCreateAnnouncements && (
+            <Link
+              href="/admin/announcements/create"
+              className="inline-flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium text-sm transition"
+            >
+              <FiPlus size={16} /> Create
+            </Link>
+          )}
+        </div>
+
+        {/* Actionable notifications the student still owes a response to */}
+        <StudentNotificationPrompts />
+
+        {/* Search + filter shell */}
+        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+          <div className="p-3 sm:p-4 space-y-3">
+            <div className="relative">
+              <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={18} />
+              <input
+                type="text"
+                placeholder="Search by title, content, or name…"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+              />
+            </div>
+
+            {hasActiveFilters && (
+              <div className="flex flex-wrap gap-2 items-center">
+                {searchTerm && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 text-blue-800 text-xs rounded-full border border-blue-200">
+                    <span>“{searchTerm}”</span>
+                    <button onClick={() => setSearchTerm('')} className="hover:text-blue-900"><FiX size={12} /></button>
+                  </span>
+                )}
+                {selectedRoles.map((role) => (
+                  <span key={role} className="inline-flex items-center gap-1 px-2.5 py-1 bg-purple-50 text-purple-800 text-xs rounded-full border border-purple-200">
+                    <span>{role}</span>
+                    <button onClick={() => toggleRole(role)} className="hover:text-purple-900"><FiX size={12} /></button>
+                  </span>
+                ))}
+                {selectedTypes.map((type) => (
+                  <span key={type} className="inline-flex items-center gap-1 px-2.5 py-1 bg-green-50 text-green-800 text-xs rounded-full border border-green-200">
+                    <span>{type}</span>
+                    <button onClick={() => toggleType(type)} className="hover:text-green-900"><FiX size={12} /></button>
+                  </span>
+                ))}
+                <button onClick={clearFilters} className="text-xs text-gray-600 hover:text-gray-900 font-medium">Clear all</button>
+              </div>
             )}
-          </div>
-        </div>
-      </div>
 
-      {/* Actionable notifications the student still owes a response to */}
-      <StudentNotificationPrompts />
-
-      {/* Search and Filters */}
-      <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-4">
-          {/* Search Bar */}
-          <div className="relative">
-            <FiSearch className="absolute left-3 top-3 text-gray-400" size={20} />
-            <input
-              type="text"
-              placeholder="Search by title, content, or name..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
-            />
+            <button
+              onClick={() => setShowFilterPanel(!showFilterPanel)}
+              className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm text-gray-700 hover:bg-gray-50 border border-gray-200"
+            >
+              <span className="inline-flex items-center gap-2 font-medium">
+                <FiFilter size={14} /> Filters
+                {(selectedRoles.length + selectedTypes.length) > 0 && (
+                  <span className="px-2 py-0.5 bg-blue-600 text-white text-[11px] rounded-full font-semibold">
+                    {selectedRoles.length + selectedTypes.length}
+                  </span>
+                )}
+              </span>
+              <FiChevronDown size={16} className={`text-gray-500 transition-transform ${showFilterPanel ? 'rotate-180' : ''}`} />
+            </button>
           </div>
 
-          {/* Active Filters Display */}
-          {(searchTerm || selectedRoles.length > 0 || selectedTypes.length > 0) && (
-            <div className="flex flex-wrap gap-2 items-start">
-              {searchTerm && (
-                <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-100 text-blue-800 text-sm rounded-full">
-                  <span>Search: <strong>{searchTerm}</strong></span>
-                  <button
-                    onClick={() => setSearchTerm('')}
-                    className="hover:text-blue-900"
-                  >
-                    <FiX size={14} />
-                  </button>
-                </div>
-              )}
-              {selectedRoles.map((role) => (
-                <div key={role} className="flex items-center gap-2 px-3 py-1.5 bg-purple-100 text-purple-800 text-sm rounded-full">
-                  <span>{role}</span>
-                  <button
-                    onClick={() => toggleRole(role)}
-                    className="hover:text-purple-900"
-                  >
-                    <FiX size={14} />
-                  </button>
-                </div>
-              ))}
-              {selectedTypes.map((type) => (
-                <div key={type} className="flex items-center gap-2 px-3 py-1.5 bg-green-100 text-green-800 text-sm rounded-full">
-                  <span>{type}</span>
-                  <button
-                    onClick={() => toggleType(type)}
-                    className="hover:text-green-900"
-                  >
-                    <FiX size={14} />
-                  </button>
-                </div>
-              ))}
-              <button
-                onClick={clearFilters}
-                className="px-3 py-1.5 text-gray-600 hover:text-gray-900 text-sm font-medium"
-              >
-                Clear all
-              </button>
-            </div>
-          )}
-
-          {/* Filter Panel Toggle */}
-          <button
-            onClick={() => setShowFilterPanel(!showFilterPanel)}
-            className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg transition"
-          >
-            <div className="flex items-center gap-2">
-              <FiFilter size={18} className="text-gray-600" />
-              <span className="font-medium text-gray-700">Advanced Filters</span>
-              {(selectedRoles.length > 0 || selectedTypes.length > 0) && (
-                <span className="px-2 py-0.5 bg-blue-500 text-white text-xs rounded-full font-semibold">
-                  {selectedRoles.length + selectedTypes.length}
-                </span>
-              )}
-            </div>
-            <FiChevronDown
-              size={20}
-              className={`text-gray-600 transition-transform ${showFilterPanel ? 'rotate-180' : ''}`}
-            />
-          </button>
-
-          {/* Collapsible Filter Panel */}
           {showFilterPanel && (
-            <div className="border border-gray-200 rounded-lg p-4 space-y-4 bg-gray-50">
-              {/* Role Filter */}
+            <div className="border-t border-gray-200 p-3 sm:p-4 space-y-4 bg-gray-50">
               <div>
-                <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                  <span>Uploader Role</span>
-                  <span className="text-xs bg-gray-300 text-gray-700 px-2 py-0.5 rounded">{availableRoles.length} available</span>
-                </h3>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
-                  {availableRoles.map((role) => (
-                    <button
-                      key={role}
-                      onClick={() => toggleRole(role)}
-                      className={`px-3 py-2 rounded-lg font-medium text-sm transition ${
-                        selectedRoles.includes(role)
-                          ? 'bg-purple-600 text-white shadow-md'
-                          : 'bg-white border border-gray-300 text-gray-700 hover:border-purple-300'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between gap-1">
-                        <span>{role}</span>
-                        <span className="text-xs opacity-75">({getRoleCount(role)})</span>
-                      </div>
-                    </button>
-                  ))}
+                <h3 className="text-xs uppercase tracking-wide font-semibold text-gray-500 mb-2">Uploader role</h3>
+                <div className="flex flex-wrap gap-1.5">
+                  {availableRoles.map((role) => {
+                    const on = selectedRoles.includes(role);
+                    return (
+                      <button
+                        key={role}
+                        onClick={() => toggleRole(role)}
+                        className={`px-2.5 py-1 rounded-full text-xs font-semibold border transition ${
+                          on ? 'bg-purple-600 text-white border-purple-600'
+                             : 'bg-white text-gray-700 border-gray-300 hover:border-purple-300'
+                        }`}
+                      >
+                        {role} <span className={`ml-1 ${on ? 'text-purple-100' : 'text-gray-400'}`}>{getRoleCount(role)}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
-
-              {/* Type Filter */}
               <div>
-                <h3 className="font-semibold text-gray-900 mb-3">Announcement Type</h3>
-                <div className="grid grid-cols-2 gap-2">
-                  {typeOptions.map((type) => (
-                    <button
-                      key={type}
-                      onClick={() => toggleType(type)}
-                      className={`px-3 py-2 rounded-lg font-medium text-sm transition ${
-                        selectedTypes.includes(type)
-                          ? 'bg-green-600 text-white shadow-md'
-                          : 'bg-white border border-gray-300 text-gray-700 hover:border-green-300'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between gap-1">
-                        <span>{type}</span>
-                        <span className="text-xs opacity-75">({getTypeCount(type)})</span>
-                      </div>
-                    </button>
-                  ))}
+                <h3 className="text-xs uppercase tracking-wide font-semibold text-gray-500 mb-2">Type</h3>
+                <div className="flex flex-wrap gap-1.5">
+                  {typeOptions.map((type) => {
+                    const on = selectedTypes.includes(type);
+                    return (
+                      <button
+                        key={type}
+                        onClick={() => toggleType(type)}
+                        className={`px-2.5 py-1 rounded-full text-xs font-semibold border transition ${
+                          on ? 'bg-green-600 text-white border-green-600'
+                             : 'bg-white text-gray-700 border-gray-300 hover:border-green-300'
+                        }`}
+                      >
+                        {type} <span className={`ml-1 ${on ? 'text-green-100' : 'text-gray-400'}`}>{getTypeCount(type)}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             </div>
           )}
         </div>
-      </div>
 
-      {/* Content */}
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {error && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
-            <FiAlertCircle className="text-red-600 flex-shrink-0 mt-0.5" size={20} />
-            <div>
-              <h3 className="font-medium text-red-900">Error</h3>
-              <p className="text-red-700 text-sm">{error}</p>
+        {/* Content */}
+        <div>
+          {error && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2 text-sm">
+              <FiAlertCircle className="text-red-600 flex-shrink-0 mt-0.5" size={16} />
+              <div>
+                <div className="font-semibold text-red-900">Error</div>
+                <div className="text-red-700">{error}</div>
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {filteredAnnouncements.length === 0 ? (
-          <div className="text-center py-12">
-            <p className="text-gray-600 text-lg">No announcements found</p>
-            <p className="text-gray-500 mt-1">
-              {announcements.length > 0
-                ? 'Try adjusting your search or filters'
-                : 'Check back later for new updates'}
-            </p>
-          </div>
-        ) : (
-          <div className="grid gap-6">
-            {filteredAnnouncements.map((announcement) => (
-              <AnnouncementCard key={announcement.id} announcement={announcement} showRole={true} />
-            ))}
-          </div>
-        )}
+          {filteredAnnouncements.length === 0 ? (
+            <div className="text-center py-16 border border-dashed border-gray-300 rounded-xl bg-white">
+              <p className="text-gray-800 font-medium">No announcements found</p>
+              <p className="text-gray-500 text-sm mt-1">
+                {announcements.length > 0 ? 'Try adjusting your search or filters.' : 'Check back later for new updates.'}
+              </p>
+            </div>
+          ) : (
+            <div className="grid gap-4">
+              {filteredAnnouncements.map((announcement) => (
+                <AnnouncementCard key={announcement.id} announcement={announcement} showRole={true} />
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </DashboardLayout>
   );
