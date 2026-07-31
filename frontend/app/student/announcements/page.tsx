@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import useAuthStore from '@/app/store/authStore';
 import DashboardLayout from '@/app/components/DashboardLayout';
 import AnnouncementCard, { type Announcement } from '@/app/components/Announcements/AnnouncementCard';
+import StudentNotificationPrompts from '@/app/components/StudentNotificationPrompts';
 import { FiLoader, FiAlertCircle, FiPlus, FiSearch, FiX, FiChevronDown, FiFilter } from 'react-icons/fi';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
@@ -155,6 +156,9 @@ export default function AnnouncementsPage() {
           </div>
         </div>
       </div>
+
+      {/* Actionable notifications the student still owes a response to */}
+      <StudentNotificationPrompts />
 
       {/* Search and Filters */}
       <div className="bg-white border-b border-gray-200 sticky top-0 z-10">

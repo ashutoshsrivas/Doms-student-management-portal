@@ -91,6 +91,7 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
     ];
     const adminAnnouncementsChildren = [
       { name: 'Posts', href: '/admin/announcements', iconKey: 'bell' },
+      { name: 'Notifications', href: '/admin/notifications', iconKey: 'bell' },
       { name: 'Event Calendar', href: '/events', iconKey: 'calendar' },
     ];
     const studentAnnouncementsChildren = [

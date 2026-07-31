@@ -2041,6 +2041,71 @@ MentorFeedbackMessage.belongsTo(User, { foreignKey: 'mentorUserId', as: 'Mentor'
 MentorFeedbackMessage.belongsTo(User, { foreignKey: 'studentUserId', as: 'Student' });
 MentorFeedbackMessage.belongsTo(User, { foreignKey: 'authorUserId', as: 'Author' });
 
+// Actionable notifications for students — a "notification prompt" is a
+// message that requires either an acknowledgement (ACK) or a short
+// written answer (TEXT) from every student in a chosen session. Admin
+// can track who has / hasn't responded.
+const NotificationPrompt = sequelize.define('NotificationPrompt', {
+  id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
+  sessionId: { type: DataTypes.UUID, allowNull: true }, // null = every session
+  title: { type: DataTypes.STRING(255), allowNull: false },
+  body: { type: DataTypes.TEXT, allowNull: true },
+  promptType: {
+    type: DataTypes.ENUM('ACK', 'TEXT', 'CHOICE'),
+    allowNull: false,
+    defaultValue: 'ACK',
+  },
+  // For CHOICE type: array of option strings. Stored as JSON.
+  options: {
+    type: DataTypes.JSON,
+    allowNull: true,
+    get() {
+      const raw = this.getDataValue('options');
+      if (typeof raw === 'string') {
+        try { return JSON.parse(raw); } catch (e) { return []; }
+      }
+      return Array.isArray(raw) ? raw : [];
+    },
+  },
+  deadline: { type: DataTypes.DATE, allowNull: true },
+  status: {
+    type: DataTypes.ENUM('ACTIVE', 'ARCHIVED'),
+    allowNull: false,
+    defaultValue: 'ACTIVE',
+  },
+  createdBy: { type: DataTypes.UUID, allowNull: false },
+}, {
+  tableName: 'notification_prompts',
+  timestamps: true,
+  underscored: true,
+  indexes: [{ fields: ['session_id'] }, { fields: ['status'] }],
+});
+
+const NotificationPromptResponse = sequelize.define('NotificationPromptResponse', {
+  id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
+  promptId: { type: DataTypes.UUID, allowNull: false },
+  studentUserId: { type: DataTypes.UUID, allowNull: false },
+  responseText: { type: DataTypes.TEXT, allowNull: true },
+  responseChoice: { type: DataTypes.STRING(255), allowNull: true },
+  respondedAt: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
+}, {
+  tableName: 'notification_prompt_responses',
+  timestamps: true,
+  underscored: true,
+  indexes: [
+    { unique: true, name: 'npr_prompt_student', fields: ['prompt_id', 'student_user_id'] },
+    { fields: ['student_user_id'] },
+  ],
+});
+
+NotificationPrompt.belongsTo(User, { foreignKey: 'createdBy', as: 'Creator' });
+NotificationPrompt.belongsTo(AcademicSession, { foreignKey: 'sessionId', as: 'Session' });
+NotificationPrompt.hasMany(NotificationPromptResponse, {
+  foreignKey: 'promptId', as: 'Responses', onDelete: 'CASCADE',
+});
+NotificationPromptResponse.belongsTo(NotificationPrompt, { foreignKey: 'promptId' });
+NotificationPromptResponse.belongsTo(User, { foreignKey: 'studentUserId', as: 'Student' });
+
 // Messaging Models
 
 
@@ -2087,4 +2152,6 @@ module.exports = {
   WorkBlock,
   FacultyAchievement,
   MentorFeedbackMessage,
+  NotificationPrompt,
+  NotificationPromptResponse,
 };
