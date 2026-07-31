@@ -2051,10 +2051,15 @@ const NotificationPrompt = sequelize.define('NotificationPrompt', {
   title: { type: DataTypes.STRING(255), allowNull: false },
   body: { type: DataTypes.TEXT, allowNull: true },
   promptType: {
-    type: DataTypes.ENUM('ACK', 'TEXT', 'CHOICE'),
+    type: DataTypes.ENUM('ACK', 'TEXT', 'CHOICE', 'FILE'),
     allowNull: false,
     defaultValue: 'ACK',
   },
+  // Optional attachment (form to fill, guidelines, etc.) that any
+  // notification can carry — surfaces as a download link for students.
+  attachmentUrl: { type: DataTypes.STRING(1024), allowNull: true },
+  attachmentName: { type: DataTypes.STRING(255), allowNull: true },
+  attachmentMime: { type: DataTypes.STRING(120), allowNull: true },
   // For CHOICE type: array of option strings. Stored as JSON.
   options: {
     type: DataTypes.JSON,
@@ -2087,6 +2092,9 @@ const NotificationPromptResponse = sequelize.define('NotificationPromptResponse'
   studentUserId: { type: DataTypes.UUID, allowNull: false },
   responseText: { type: DataTypes.TEXT, allowNull: true },
   responseChoice: { type: DataTypes.STRING(255), allowNull: true },
+  responseFileUrl: { type: DataTypes.STRING(1024), allowNull: true },
+  responseFileName: { type: DataTypes.STRING(255), allowNull: true },
+  responseFileMime: { type: DataTypes.STRING(120), allowNull: true },
   respondedAt: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
 }, {
   tableName: 'notification_prompt_responses',

@@ -283,6 +283,59 @@ async function start() {
       }
     }
 
+    // notification_prompts + notification_prompt_responses: file
+    // attachments (added after the tables shipped without them) and
+    // FILE prompt type on the ENUM.
+    const notificationPromptCols = [
+      { name: 'attachment_url', ddl: 'VARCHAR(1024) NULL' },
+      { name: 'attachment_name', ddl: 'VARCHAR(255) NULL' },
+      { name: 'attachment_mime', ddl: 'VARCHAR(120) NULL' },
+    ];
+    for (const col of notificationPromptCols) {
+      try {
+        await sequelize.query(`ALTER TABLE notification_prompts ADD COLUMN ${col.name} ${col.ddl}`);
+        console.log(`Added ${col.name} column to notification_prompts`);
+      } catch (error) {
+        if (error.message && error.message.includes('Duplicate column')) {
+          console.log(`${col.name} column already exists on notification_prompts`);
+        } else if (error.message && error.message.includes("doesn't exist")) {
+          // Table not created yet — sync() will create with columns in place.
+        } else {
+          console.error(`Error adding ${col.name} to notification_prompts:`, error.message);
+        }
+      }
+    }
+    // Add FILE to promptType ENUM
+    try {
+      await sequelize.query(
+        `ALTER TABLE notification_prompts MODIFY COLUMN prompt_type ENUM('ACK','TEXT','CHOICE','FILE') NOT NULL DEFAULT 'ACK'`,
+      );
+      console.log('notification_prompts.prompt_type ENUM includes FILE');
+    } catch (error) {
+      if (!(error.message && error.message.includes("doesn't exist"))) {
+        console.error('Error updating prompt_type ENUM:', error.message);
+      }
+    }
+    const notificationResponseCols = [
+      { name: 'response_file_url', ddl: 'VARCHAR(1024) NULL' },
+      { name: 'response_file_name', ddl: 'VARCHAR(255) NULL' },
+      { name: 'response_file_mime', ddl: 'VARCHAR(120) NULL' },
+    ];
+    for (const col of notificationResponseCols) {
+      try {
+        await sequelize.query(`ALTER TABLE notification_prompt_responses ADD COLUMN ${col.name} ${col.ddl}`);
+        console.log(`Added ${col.name} column to notification_prompt_responses`);
+      } catch (error) {
+        if (error.message && error.message.includes('Duplicate column')) {
+          console.log(`${col.name} column already exists on notification_prompt_responses`);
+        } else if (error.message && error.message.includes("doesn't exist")) {
+          // Table not created yet — sync() will handle it.
+        } else {
+          console.error(`Error adding ${col.name} to notification_prompt_responses:`, error.message);
+        }
+      }
+    }
+
     // Add created_by column to mentor_teams if missing — used to scope
     // CHAIR_HEAD monitoring to teams they personally created.
     try {

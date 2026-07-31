@@ -8,14 +8,14 @@ import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   FiBell, FiPlus, FiTrash2, FiRefreshCw, FiCheckCircle, FiClock, FiChevronDown, FiX,
-  FiUsers, FiArchive, FiRotateCcw,
+  FiUsers, FiArchive, FiRotateCcw, FiPaperclip, FiDownload,
 } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 import useAuthStore from '@/app/store/authStore';
 import apiClient from '@/app/lib/apiClient';
 import DashboardLayout from '@/app/components/DashboardLayout';
 
-type PromptType = 'ACK' | 'TEXT' | 'CHOICE';
+type PromptType = 'ACK' | 'TEXT' | 'CHOICE' | 'FILE';
 
 interface AcademicSessionLite {
   id: string;
@@ -41,6 +41,9 @@ interface Prompt {
   status: 'ACTIVE' | 'ARCHIVED';
   createdAt: string;
   sessionId: string | null;
+  attachmentUrl?: string | null;
+  attachmentName?: string | null;
+  attachmentMime?: string | null;
   Session?: AcademicSessionLite | null;
   Creator?: UserLite | null;
   eligible: number;
@@ -53,6 +56,8 @@ interface ResponseRow {
   studentUserId: string;
   responseText: string | null;
   responseChoice: string | null;
+  responseFileUrl?: string | null;
+  responseFileName?: string | null;
   respondedAt: string;
   Student: UserLite | null;
 }
@@ -68,6 +73,7 @@ const TYPE_META: Record<PromptType, { label: string; chip: string }> = {
   ACK: { label: 'Acknowledge', chip: 'bg-blue-100 text-blue-800' },
   TEXT: { label: 'Text answer', chip: 'bg-emerald-100 text-emerald-800' },
   CHOICE: { label: 'Choice', chip: 'bg-purple-100 text-purple-800' },
+  FILE: { label: 'File upload', chip: 'bg-amber-100 text-amber-800' },
 };
 
 const fmtDate = (s: string | null | undefined) => (s ? new Date(s).toLocaleString() : '—');
@@ -96,6 +102,7 @@ export default function AdminNotificationsPage() {
     sessionId: '',
     deadline: '',
   });
+  const [attachment, setAttachment] = useState<File | null>(null);
 
   const isAdmin = user?.role === 'ADMIN' || user?.role === 'HOD';
 
@@ -129,6 +136,7 @@ export default function AdminNotificationsPage() {
 
   const resetForm = () => {
     setForm({ title: '', body: '', promptType: 'ACK', options: ['', ''], sessionId: '', deadline: '' });
+    setAttachment(null);
   };
 
   const submit = async (e: React.FormEvent) => {
@@ -140,13 +148,19 @@ export default function AdminNotificationsPage() {
     }
     setCreating(true);
     try {
-      await apiClient.post('/notification-prompts', {
-        title: form.title,
-        body: form.body || null,
-        promptType: form.promptType,
-        options: form.promptType === 'CHOICE' ? form.options.map((o) => o.trim()).filter(Boolean) : null,
-        sessionId: form.sessionId || null,
-        deadline: form.deadline || null,
+      const fd = new FormData();
+      fd.append('title', form.title);
+      if (form.body) fd.append('body', form.body);
+      fd.append('promptType', form.promptType);
+      if (form.promptType === 'CHOICE') {
+        const opts = form.options.map((o) => o.trim()).filter(Boolean);
+        for (const o of opts) fd.append('options', o);
+      }
+      if (form.sessionId) fd.append('sessionId', form.sessionId);
+      if (form.deadline) fd.append('deadline', form.deadline);
+      if (attachment) fd.append('attachment', attachment);
+      await apiClient.post('/notification-prompts', fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
       });
       toast.success('Notification published');
       resetForm();
@@ -270,6 +284,17 @@ export default function AdminNotificationsPage() {
                           {p.deadline && <> · Due {fmtDate(p.deadline)}</>}
                         </div>
                         {p.body && <p className="text-sm text-gray-700 mt-1 line-clamp-2 whitespace-pre-wrap">{p.body}</p>}
+                        {p.attachmentUrl && (
+                          <a
+                            href={p.attachmentUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 mt-1 text-xs text-blue-700 hover:underline"
+                          >
+                            <FiPaperclip size={11} /> {p.attachmentName || 'Attachment'}
+                            <FiDownload size={11} />
+                          </a>
+                        )}
                         <div className="mt-2 flex items-center gap-4 text-xs">
                           <span className="inline-flex items-center gap-1 text-emerald-700">
                             <FiCheckCircle size={11} /> {p.responded} responded
@@ -378,8 +403,8 @@ export default function AdminNotificationsPage() {
               </div>
               <div>
                 <label className="text-xs font-semibold text-gray-700 uppercase">Response type</label>
-                <div className="mt-1 grid grid-cols-3 gap-2">
-                  {(['ACK', 'TEXT', 'CHOICE'] as PromptType[]).map((t) => (
+                <div className="mt-1 grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {(['ACK', 'TEXT', 'CHOICE', 'FILE'] as PromptType[]).map((t) => (
                     <button
                       key={t}
                       type="button"
@@ -392,9 +417,30 @@ export default function AdminNotificationsPage() {
                 </div>
                 <p className="text-[11px] text-gray-500 mt-1">
                   {form.promptType === 'ACK' && 'Student clicks "I acknowledge" to record their response.'}
-                  {form.promptType === 'TEXT' && 'Student types a short answer.'}
+                  {form.promptType === 'TEXT' && 'Student types a short answer (and can optionally attach a file).'}
                   {form.promptType === 'CHOICE' && 'Student picks one of the options you provide.'}
+                  {form.promptType === 'FILE' && 'Student must upload a file to complete this notification.'}
                 </p>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-gray-700 uppercase">Attachment (optional)</label>
+                <input
+                  type="file"
+                  onChange={(e) => setAttachment(e.target.files?.[0] || null)}
+                  className="mt-1 block w-full text-sm text-gray-700 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                />
+                {attachment && (
+                  <div className="mt-1 flex items-center gap-2 text-[11px] text-gray-600">
+                    <FiPaperclip size={11} /> {attachment.name}
+                    <button
+                      type="button"
+                      onClick={() => setAttachment(null)}
+                      className="text-red-600 hover:underline"
+                    >Remove</button>
+                  </div>
+                )}
+                <p className="text-[11px] text-gray-500 mt-0.5">Students see this as a downloadable link on the prompt.</p>
               </div>
               {form.promptType === 'CHOICE' && (
                 <div>
@@ -481,6 +527,17 @@ function ResponsePanel({ detail }: { detail: ResponseDetail }) {
                   )}
                   {prompt.promptType === 'ACK' && (
                     <div className="mt-0.5 text-emerald-700 font-medium">Acknowledged</div>
+                  )}
+                  {r.responseFileUrl && (
+                    <a
+                      href={r.responseFileUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 mt-1 text-[11px] text-blue-700 hover:underline"
+                    >
+                      <FiPaperclip size={10} /> {r.responseFileName || 'Uploaded file'}
+                      <FiDownload size={10} />
+                    </a>
                   )}
                 </li>
               ))}

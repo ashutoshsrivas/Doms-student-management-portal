@@ -8,9 +8,10 @@ const {
   sequelize, NotificationPrompt, NotificationPromptResponse,
   AcademicSession, User, StudentSession,
 } = require('../models');
+const { uploadToS3, deleteFromS3 } = require('../utils/s3Upload');
 
 const isAdmin = (role) => role === 'ADMIN' || role === 'HOD';
-const PROMPT_TYPES = new Set(['ACK', 'TEXT', 'CHOICE']);
+const PROMPT_TYPES = new Set(['ACK', 'TEXT', 'CHOICE', 'FILE']);
 
 function sanitiseTitle(s) {
   return String(s || '').trim().slice(0, 250);
@@ -43,6 +44,23 @@ exports.create = async (req, res) => {
       if (!s) return res.status(400).json({ message: 'Unknown session' });
     }
 
+    // Optional admin attachment (any prompt type)
+    let attachment = null;
+    if (req.file) {
+      try {
+        const url = await uploadToS3(
+          req.file.buffer,
+          req.file.originalname,
+          req.file.mimetype,
+          'notification-prompts',
+        );
+        attachment = { url, name: req.file.originalname, mime: req.file.mimetype };
+      } catch (e) {
+        console.error('NotificationPrompt attachment upload error:', e);
+        return res.status(500).json({ message: 'Failed to upload attachment' });
+      }
+    }
+
     const prompt = await NotificationPrompt.create({
       title,
       body: sanitiseBody(req.body?.body),
@@ -51,6 +69,9 @@ exports.create = async (req, res) => {
       sessionId,
       deadline: req.body?.deadline ? new Date(req.body.deadline) : null,
       createdBy: req.user.id,
+      attachmentUrl: attachment?.url || null,
+      attachmentName: attachment?.name || null,
+      attachmentMime: attachment?.mime || null,
     });
     res.status(201).json({ prompt });
   } catch (e) {
@@ -128,6 +149,9 @@ exports.list = async (req, res) => {
         status: p.status,
         createdAt: p.createdAt,
         sessionId: p.sessionId,
+        attachmentUrl: p.attachmentUrl,
+        attachmentName: p.attachmentName,
+        attachmentMime: p.attachmentMime,
         Session: p.Session,
         Creator: p.Creator,
         eligible,
@@ -199,7 +223,20 @@ exports.remove = async (req, res) => {
     if (!isAdmin(req.user.role)) return res.status(403).json({ message: 'Forbidden' });
     const prompt = await NotificationPrompt.findByPk(req.params.id);
     if (!prompt) return res.status(404).json({ message: 'Prompt not found' });
-    await prompt.destroy();
+
+    // Best-effort S3 cleanup: admin attachment + every student response file.
+    const responseFiles = await NotificationPromptResponse.findAll({
+      where: { promptId: prompt.id, responseFileUrl: { [Op.ne]: null } },
+      attributes: ['responseFileUrl'],
+    });
+    const urls = [
+      prompt.attachmentUrl,
+      ...responseFiles.map((r) => r.responseFileUrl),
+    ].filter(Boolean);
+    for (const u of urls) {
+      try { await deleteFromS3(u); } catch (e) { /* best effort */ }
+    }
+    await prompt.destroy(); // responses cascade via association
     res.json({ ok: true });
   } catch (e) {
     console.error('NotificationPrompt remove error:', e);
@@ -306,14 +343,43 @@ exports.respond = async (req, res) => {
       const options = prompt.options || [];
       if (!options.includes(choice)) return res.status(400).json({ message: 'Invalid choice' });
       patch.responseChoice = choice;
+    } else if (prompt.promptType === 'FILE') {
+      if (!req.file) return res.status(400).json({ message: 'File is required' });
     }
     // ACK carries no payload — the row itself IS the acknowledgement.
+
+    // Optional file for FILE (required) and TEXT (optional). Upload
+    // BEFORE upsert so we don't half-write a response with no file.
+    let uploaded = null;
+    if (req.file && (prompt.promptType === 'FILE' || prompt.promptType === 'TEXT')) {
+      try {
+        const url = await uploadToS3(
+          req.file.buffer,
+          req.file.originalname,
+          req.file.mimetype,
+          'notification-prompts',
+        );
+        uploaded = { url, name: req.file.originalname, mime: req.file.mimetype };
+      } catch (e) {
+        console.error('NotificationPrompt response upload error:', e);
+        return res.status(500).json({ message: 'Failed to upload file' });
+      }
+    }
 
     // Upsert on (promptId, studentUserId)
     const existing = await NotificationPromptResponse.findOne({
       where: { promptId: prompt.id, studentUserId: req.user.id },
     });
+    if (uploaded) {
+      patch.responseFileUrl = uploaded.url;
+      patch.responseFileName = uploaded.name;
+      patch.responseFileMime = uploaded.mime;
+    }
     if (existing) {
+      // Clean up the previous file if we're replacing it
+      if (uploaded && existing.responseFileUrl) {
+        try { await deleteFromS3(existing.responseFileUrl); } catch (e) { /* best effort */ }
+      }
       await existing.update(patch);
       return res.json({ response: existing, message: 'Response updated' });
     }

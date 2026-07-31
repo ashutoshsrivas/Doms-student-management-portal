@@ -2,19 +2,20 @@ const express = require('express');
 const router = express.Router();
 const ctrl = require('../controllers/notificationPromptController');
 const { authenticateToken } = require('../middleware/auth');
+const { assessmentUpload } = require('../middleware/upload');
 
 router.use(authenticateToken);
 
 // Student-side (specific path before /:id catch-all)
 router.get('/mine', ctrl.myPending);
 
-// Admin/HOD list + create
+// Admin/HOD list + create (multipart for optional attachment)
 router.get('/', ctrl.list);
-router.post('/', ctrl.create);
+router.post('/', assessmentUpload.single('attachment'), ctrl.create);
 
-// Per-prompt: responses list (admin/HOD) & respond (student)
+// Per-prompt: responses list (admin/HOD) & respond (student, multipart for FILE/TEXT)
 router.get('/:id/responses', ctrl.responses);
-router.post('/:id/respond', ctrl.respond);
+router.post('/:id/respond', assessmentUpload.single('file'), ctrl.respond);
 router.patch('/:id/archive', ctrl.archive);
 router.delete('/:id', ctrl.remove);
 
