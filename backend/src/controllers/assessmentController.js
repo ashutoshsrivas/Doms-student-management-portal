@@ -95,8 +95,9 @@ const assessmentController = {
       }
 
       // FACULTY-style roles see only assessments they created themselves.
-      // ADMIN/HOD see all; STUDENT is handled separately above.
-      if (['FACULTY', 'CHAIR_HEAD', 'PLACEMENT_COORDINATOR', 'TRAINER'].includes(userRole)) {
+      // ADMIN / HOD / PLACEMENT_COORDINATOR see everything (PC needs the
+      // org-wide view for placement analytics). STUDENT is handled above.
+      if (['FACULTY', 'CHAIR_HEAD', 'TRAINER'].includes(userRole)) {
         where.createdBy = userId;
         console.log('[getAssessments] Non-admin user filtered to own assessments:', userId);
       }
@@ -414,7 +415,7 @@ const assessmentController = {
       }
 
       // Only creator and admin can update
-      if (assessment.createdBy !== userId && !['ADMIN', 'HOD'].includes(req.user.role)) {
+      if (assessment.createdBy !== userId && !['ADMIN', 'HOD', 'PLACEMENT_COORDINATOR'].includes(req.user.role)) {
         return res.status(403).json({ message: 'Not authorized to update this assessment' });
       }
 
@@ -453,7 +454,7 @@ const assessmentController = {
         return res.status(404).json({ message: 'Assessment not found' });
       }
 
-      if (assessment.createdBy !== userId && !['ADMIN', 'HOD'].includes(req.user.role)) {
+      if (assessment.createdBy !== userId && !['ADMIN', 'HOD', 'PLACEMENT_COORDINATOR'].includes(req.user.role)) {
         return res.status(403).json({ message: 'Not authorized' });
       }
 
@@ -492,7 +493,7 @@ const assessmentController = {
         return res.status(404).json({ message: 'Assessment not found' });
       }
 
-      if (assessment.createdBy !== userId && !['ADMIN', 'HOD'].includes(req.user.role)) {
+      if (assessment.createdBy !== userId && !['ADMIN', 'HOD', 'PLACEMENT_COORDINATOR'].includes(req.user.role)) {
         return res.status(403).json({ message: 'Not authorized' });
       }
 
@@ -523,7 +524,7 @@ const assessmentController = {
         return res.status(404).json({ message: 'Assessment not found' });
       }
 
-      if (assessment.createdBy !== userId && !['ADMIN', 'HOD'].includes(req.user.role)) {
+      if (assessment.createdBy !== userId && !['ADMIN', 'HOD', 'PLACEMENT_COORDINATOR'].includes(req.user.role)) {
         return res.status(403).json({ message: 'Not authorized' });
       }
 
@@ -554,7 +555,7 @@ const assessmentController = {
         return res.status(404).json({ message: 'Assessment not found' });
       }
 
-      if (assessment.createdBy !== userId && !['ADMIN', 'HOD'].includes(req.user.role)) {
+      if (assessment.createdBy !== userId && !['ADMIN', 'HOD', 'PLACEMENT_COORDINATOR'].includes(req.user.role)) {
         return res.status(403).json({ message: 'Not authorized' });
       }
 
@@ -588,7 +589,7 @@ const assessmentController = {
         return res.status(404).json({ message: 'Assessment not found' });
       }
 
-      if (assessment.createdBy !== userId && !['ADMIN', 'HOD'].includes(req.user.role)) {
+      if (assessment.createdBy !== userId && !['ADMIN', 'HOD', 'PLACEMENT_COORDINATOR'].includes(req.user.role)) {
         return res.status(403).json({ message: 'Not authorized' });
       }
 
@@ -634,7 +635,7 @@ const assessmentController = {
         return res.status(404).json({ message: 'Assessment not found' });
       }
 
-      if (assessment.createdBy !== userId && !['ADMIN', 'HOD'].includes(req.user.role)) {
+      if (assessment.createdBy !== userId && !['ADMIN', 'HOD', 'PLACEMENT_COORDINATOR'].includes(req.user.role)) {
         return res.status(403).json({ message: 'Not authorized' });
       }
 
@@ -675,7 +676,7 @@ const assessmentController = {
         return res.status(404).json({ message: 'Assessment not found' });
       }
 
-      if (assessment.createdBy !== userId && !['ADMIN', 'HOD'].includes(req.user.role)) {
+      if (assessment.createdBy !== userId && !['ADMIN', 'HOD', 'PLACEMENT_COORDINATOR'].includes(req.user.role)) {
         return res.status(403).json({ message: 'Not authorized' });
       }
 
@@ -1325,7 +1326,7 @@ const assessmentController = {
 
       // Verify user is creator or admin
       const assessment = await Assessment.findByPk(submission.assessmentId);
-      if (assessment.createdBy !== userId && !['ADMIN', 'HOD'].includes(req.user.role)) {
+      if (assessment.createdBy !== userId && !['ADMIN', 'HOD', 'PLACEMENT_COORDINATOR'].includes(req.user.role)) {
         return res.status(403).json({ message: 'Not authorized to grade' });
       }
 
@@ -1372,7 +1373,7 @@ const assessmentController = {
       }
 
       // Check authorization
-      if (assessment.createdBy !== userId && !['ADMIN', 'HOD'].includes(req.user.role)) {
+      if (assessment.createdBy !== userId && !['ADMIN', 'HOD', 'PLACEMENT_COORDINATOR'].includes(req.user.role)) {
         return res.status(403).json({
           message: 'Only creator and admin can view results',
         });

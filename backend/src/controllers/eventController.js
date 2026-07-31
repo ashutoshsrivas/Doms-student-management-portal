@@ -4,8 +4,28 @@
 // and only creator + admin can view it.
 
 const { Op } = require('sequelize');
-const { Event, User, BlockedDate } = require('../models');
+const { Event, User, BlockedDate, StudentSession, AcademicSession } = require('../models');
 const { uploadToS3, deleteFromS3 } = require('../utils/s3Upload');
+
+const VISIBILITY = new Set(['ALL', 'SPECIFIC_SESSION', 'HIDE_FROM_STUDENTS']);
+
+function normaliseTags(input) {
+  if (input == null) return [];
+  let raw = input;
+  if (typeof raw === 'string') {
+    // Accept CSV string or JSON string
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) raw = parsed;
+      else raw = raw.split(',');
+    } catch { raw = raw.split(','); }
+  }
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((t) => String(t || '').trim())
+    .filter(Boolean)
+    .slice(0, 20);
+}
 
 const CREATOR_ROLES = ['ADMIN', 'HOD', 'FACULTY', 'COORDINATOR', 'PLACEMENT_COORDINATOR', 'TRAINER', 'MENTOR'];
 const IMAGE_MAX = 10 * 1024 * 1024;   // 10 MB
@@ -67,9 +87,35 @@ const eventController = {
         if (req.query.to) range[Op.lte] = new Date(req.query.to);
         where.startAt = range;
       }
+
+      // Visibility filter — only students are constrained. Staff see
+      // everything.
+      if (req.user?.role === 'STUDENT') {
+        const enrolments = await StudentSession.findAll({
+          where: { userId: req.user.id },
+          attributes: ['academicSessionId'],
+          raw: true,
+        });
+        const mySessionIds = enrolments.map((e) => e.academicSessionId).filter(Boolean);
+        where[Op.and] = [
+          ...(where[Op.and] || []),
+          {
+            [Op.or]: [
+              { visibility: 'ALL' },
+              ...(mySessionIds.length
+                ? [{ visibility: 'SPECIFIC_SESSION', sessionId: { [Op.in]: mySessionIds } }]
+                : []),
+            ],
+          },
+        ];
+      }
+
       const rows = await Event.findAll({
         where,
-        include: [includeCreator],
+        include: [
+          includeCreator,
+          { model: AcademicSession, as: 'Session', attributes: ['id', 'name'] },
+        ],
         order: [['startAt', 'ASC']],
       });
       res.json({ events: rows.map((r) => scrubReportFor(req.user, r)) });
@@ -82,7 +128,7 @@ const eventController = {
   // GET /api/events/:id
   get: async (req, res) => {
     try {
-      const e = await Event.findByPk(req.params.id, { include: [includeCreator] });
+      const e = await Event.findByPk(req.params.id, { include: [includeCreator, { model: AcademicSession, as: 'Session', attributes: ['id', 'name'] }] });
       if (!e) return res.status(404).json({ message: 'Event not found' });
       res.json({ event: scrubReportFor(req.user, e) });
     } catch (error) {
@@ -144,6 +190,19 @@ const eventController = {
         return res.status(500).json({ message: 'Failed to upload media' });
       }
 
+      // Visibility + optional session scoping + tags
+      const rawVisibility = String(req.body?.visibility || 'ALL').toUpperCase();
+      const visibility = VISIBILITY.has(rawVisibility) ? rawVisibility : 'ALL';
+      const sessionId = visibility === 'SPECIFIC_SESSION' ? (req.body?.sessionId || null) : null;
+      if (visibility === 'SPECIFIC_SESSION' && !sessionId) {
+        return res.status(400).json({ message: 'Pick a session for session-scoped visibility' });
+      }
+      if (sessionId) {
+        const s = await AcademicSession.findByPk(sessionId);
+        if (!s) return res.status(400).json({ message: 'Unknown session' });
+      }
+      const tags = normaliseTags(req.body?.tags);
+
       const event = await Event.create({
         title,
         description: sanitiseText(req.body?.description, 5000),
@@ -153,10 +212,13 @@ const eventController = {
         imageUrl,
         videoUrl,
         registrationUrl: sanitiseUrl(req.body?.registrationUrl),
+        visibility,
+        sessionId,
+        tags,
         createdBy: req.user.id,
       });
 
-      const full = await Event.findByPk(event.id, { include: [includeCreator] });
+      const full = await Event.findByPk(event.id, { include: [includeCreator, { model: AcademicSession, as: 'Session', attributes: ['id', 'name'] }] });
       res.status(201).json({ event: scrubReportFor(req.user, full) });
     } catch (error) {
       console.error('Event create error:', error);
@@ -209,6 +271,28 @@ const eventController = {
         }
         patch.status = req.body.status;
       }
+      if (req.body?.visibility !== undefined) {
+        const v = String(req.body.visibility).toUpperCase();
+        if (!VISIBILITY.has(v)) return res.status(400).json({ message: 'Invalid visibility' });
+        patch.visibility = v;
+        if (v !== 'SPECIFIC_SESSION') patch.sessionId = null;
+      }
+      if (req.body?.sessionId !== undefined) {
+        const sid = req.body.sessionId || null;
+        if (sid) {
+          const s = await AcademicSession.findByPk(sid);
+          if (!s) return res.status(400).json({ message: 'Unknown session' });
+        }
+        patch.sessionId = sid;
+      }
+      // Cross-check: if visibility ends up SPECIFIC_SESSION but no
+      // session picked, reject.
+      const nextVisibility = patch.visibility || event.visibility;
+      const nextSessionId = patch.sessionId !== undefined ? patch.sessionId : event.sessionId;
+      if (nextVisibility === 'SPECIFIC_SESSION' && !nextSessionId) {
+        return res.status(400).json({ message: 'Pick a session for session-scoped visibility' });
+      }
+      if (req.body?.tags !== undefined) patch.tags = normaliseTags(req.body.tags);
 
       // Media replacement
       const imageFile = req.files?.image?.[0] || null;
@@ -229,7 +313,7 @@ const eventController = {
       }
 
       await event.update(patch);
-      const full = await Event.findByPk(event.id, { include: [includeCreator] });
+      const full = await Event.findByPk(event.id, { include: [includeCreator, { model: AcademicSession, as: 'Session', attributes: ['id', 'name'] }] });
       res.json({ event: scrubReportFor(req.user, full) });
     } catch (error) {
       console.error('Event update error:', error);
@@ -280,7 +364,7 @@ const eventController = {
         return res.status(500).json({ message: 'Failed to upload report' });
       }
 
-      const full = await Event.findByPk(event.id, { include: [includeCreator] });
+      const full = await Event.findByPk(event.id, { include: [includeCreator, { model: AcademicSession, as: 'Session', attributes: ['id', 'name'] }] });
       res.json({ event: scrubReportFor(req.user, full) });
     } catch (error) {
       console.error('Event uploadReport error:', error);
@@ -307,7 +391,7 @@ const eventController = {
 
       const rows = await Event.findAll({
         where,
-        include: [includeCreator],
+        include: [includeCreator, { model: AcademicSession, as: 'Session', attributes: ['id', 'name'] }],
         order: [['startAt', 'ASC']],
       });
 

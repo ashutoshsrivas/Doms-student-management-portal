@@ -349,6 +349,27 @@ async function start() {
       }
     }
 
+    // Event calendar — visibility, session scoping and tags. Additive.
+    const eventColumns = [
+      { name: 'visibility', ddl: "ENUM('ALL','SPECIFIC_SESSION','HIDE_FROM_STUDENTS') NOT NULL DEFAULT 'ALL'" },
+      { name: 'session_id', ddl: 'CHAR(36) NULL' },
+      { name: 'tags', ddl: 'JSON NULL' },
+    ];
+    for (const col of eventColumns) {
+      try {
+        await sequelize.query(`ALTER TABLE events ADD COLUMN ${col.name} ${col.ddl}`);
+        console.log(`Added ${col.name} column to events`);
+      } catch (error) {
+        if (error.message && error.message.includes('Duplicate column')) {
+          console.log(`${col.name} column already exists on events`);
+        } else if (error.message && error.message.includes("doesn't exist")) {
+          // fresh install — sync() will create the table with the new fields
+        } else {
+          console.error(`Error adding ${col.name} to events:`, error.message);
+        }
+      }
+    }
+
     // Add CHAIR_HEAD to the users.requested_role and users.approved_role
     // ENUMs if it isn't already a member. Safe to re-run: MySQL silently
     // succeeds when the new ENUM list already contains every existing value.

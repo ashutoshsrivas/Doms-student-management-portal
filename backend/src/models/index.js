@@ -1818,6 +1818,32 @@ const Event = sequelize.define('Event', {
     defaultValue: 'SCHEDULED',
     allowNull: false,
   },
+  // Visibility scope for students. Default 'ALL' = every student sees
+  // it. 'SPECIFIC_SESSION' restricts to students in `sessionId`.
+  // 'HIDE_FROM_STUDENTS' hides the event from students entirely (staff
+  // still see it — useful for staff-only meetings).
+  visibility: {
+    type: DataTypes.ENUM('ALL', 'SPECIFIC_SESSION', 'HIDE_FROM_STUDENTS'),
+    allowNull: false,
+    defaultValue: 'ALL',
+  },
+  // Target session for visibility=SPECIFIC_SESSION.
+  sessionId: { type: DataTypes.UUID, allowNull: true },
+  // Free-form tags. Stored as JSON array (MariaDB LONGTEXT under the
+  // hood), so the same string/array-safe getter every other JSON field
+  // in this repo uses applies.
+  tags: {
+    type: DataTypes.JSON,
+    allowNull: true,
+    defaultValue: [],
+    get() {
+      const raw = this.getDataValue('tags');
+      if (typeof raw === 'string') {
+        try { return JSON.parse(raw); } catch (e) { return []; }
+      }
+      return Array.isArray(raw) ? raw : [];
+    },
+  },
   createdBy: { type: DataTypes.UUID, allowNull: false },
 }, {
   tableName: 'events',
@@ -1828,6 +1854,8 @@ const Event = sequelize.define('Event', {
 
 Event.belongsTo(User, { foreignKey: 'createdBy', as: 'Creator' });
 User.hasMany(Event, { foreignKey: 'createdBy', as: 'CreatedEvents' });
+Event.belongsTo(AcademicSession, { foreignKey: 'sessionId', as: 'Session' });
+AcademicSession.hasMany(Event, { foreignKey: 'sessionId', as: 'Events' });
 
 // Admin-set blocked dates. Stored as a DATEONLY ('YYYY-MM-DD'). Event
 // create / update rejects start_at that falls on any blocked date.

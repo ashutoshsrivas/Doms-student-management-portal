@@ -46,9 +46,13 @@ interface EventItem {
   postReportMime?: string | null;
   postReportUploadedAt?: string | null;
   status: 'SCHEDULED' | 'CANCELLED';
+  visibility?: 'ALL' | 'SPECIFIC_SESSION' | 'HIDE_FROM_STUDENTS';
+  sessionId?: string | null;
+  tags?: string[] | null;
   createdBy: string;
   createdAt: string;
   Creator?: { id: string; firstName: string; lastName: string | null; email: string; approvedRole: string };
+  Session?: { id: string; name: string } | null;
 }
 
 const CREATOR_ROLES = ['ADMIN', 'HOD', 'FACULTY', 'COORDINATOR', 'PLACEMENT_COORDINATOR', 'TRAINER', 'MENTOR'];
@@ -662,10 +666,19 @@ function EventFormModal({ initial, onClose, onSaved }: {
         startAt: initial.startAt.slice(0, 16),
         endAt: initial.endAt ? initial.endAt.slice(0, 16) : '',
         registrationUrl: initial.registrationUrl || '',
+        visibility: (initial.visibility || 'ALL') as 'ALL' | 'SPECIFIC_SESSION' | 'HIDE_FROM_STUDENTS',
+        sessionId: initial.sessionId || '',
+        tagsInput: (initial.tags || []).join(', '),
       };
     }
-    return { title: '', description: '', venue: '', startAt: '', endAt: '', registrationUrl: '' };
+    return { title: '', description: '', venue: '', startAt: '', endAt: '', registrationUrl: '', visibility: 'ALL' as const, sessionId: '', tagsInput: '' };
   });
+  const [sessions, setSessions] = useState<Array<{ id: string; name: string; isActive?: boolean }>>([]);
+  useEffect(() => {
+    apiClient.get('/sessions?limit=100')
+      .then((res) => setSessions(res.data.sessions || []))
+      .catch(() => {});
+  }, []);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
@@ -698,6 +711,14 @@ function EventFormModal({ initial, onClose, onSaved }: {
       if (form.endAt) fd.append('endAt', new Date(form.endAt).toISOString());
       else if (isEdit) fd.append('endAt', ''); // clear
       fd.append('registrationUrl', form.registrationUrl.trim());
+      fd.append('visibility', form.visibility);
+      if (form.visibility === 'SPECIFIC_SESSION' && form.sessionId) {
+        fd.append('sessionId', form.sessionId);
+      } else if (isEdit) {
+        fd.append('sessionId', ''); // clear on edit when visibility flips off
+      }
+      // Tags — CSV string; backend splits + trims.
+      fd.append('tags', form.tagsInput.trim());
       if (imageFile) fd.append('image', imageFile);
       if (videoFile) fd.append('video', videoFile);
 
@@ -791,6 +812,57 @@ function EventFormModal({ initial, onClose, onSaved }: {
               className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg text-sm text-gray-900"
             />
             <p className="text-[11px] text-gray-500 mt-1">Either a Google/MS Form URL or any external registration page.</p>
+          </div>
+
+          {/* Visibility */}
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">Visibility to students</label>
+            <div className="grid grid-cols-3 gap-2">
+              {([
+                { v: 'ALL', label: 'All students', hint: 'Every student sees it' },
+                { v: 'SPECIFIC_SESSION', label: 'Specific session', hint: 'Only students in the chosen session' },
+                { v: 'HIDE_FROM_STUDENTS', label: 'Hide from students', hint: 'Staff-only event (mentors, admin, etc.)' },
+              ] as const).map((opt) => (
+                <button
+                  key={opt.v}
+                  type="button"
+                  onClick={() => setForm((p) => ({ ...p, visibility: opt.v, sessionId: opt.v === 'SPECIFIC_SESSION' ? p.sessionId : '' }))}
+                  className={`px-2 py-2 text-xs font-semibold rounded-lg border text-left ${
+                    form.visibility === opt.v
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'bg-white text-gray-700 border-gray-300 hover:border-blue-300'
+                  }`}
+                >
+                  <div>{opt.label}</div>
+                  <div className={`text-[10px] font-normal mt-0.5 ${form.visibility === opt.v ? 'text-blue-100' : 'text-gray-500'}`}>{opt.hint}</div>
+                </button>
+              ))}
+            </div>
+            {form.visibility === 'SPECIFIC_SESSION' && (
+              <select
+                value={form.sessionId}
+                onChange={(e) => setForm((p) => ({ ...p, sessionId: e.target.value }))}
+                className="mt-2 w-full px-3 py-2 border-2 border-gray-300 rounded-lg text-sm text-gray-900"
+              >
+                <option value="">Pick a session</option>
+                {sessions.map((s) => (
+                  <option key={s.id} value={s.id}>{s.name}{s.isActive ? ' (active)' : ''}</option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          {/* Tags */}
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">Tags (comma-separated)</label>
+            <input
+              type="text"
+              value={form.tagsInput}
+              onChange={(e) => setForm((p) => ({ ...p, tagsInput: e.target.value }))}
+              placeholder="e.g. Placement, Workshop, Guest lecture"
+              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg text-sm text-gray-900"
+            />
+            <p className="text-[11px] text-gray-500 mt-1">Short labels help students spot the event. Up to 20 tags.</p>
           </div>
 
           {/* Image upload */}
