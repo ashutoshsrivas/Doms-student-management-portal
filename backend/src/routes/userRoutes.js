@@ -8,7 +8,7 @@ const { upload, resumeUpload } = require('../middleware/upload');
 router.get(
   '/admin/filter',
   authenticateToken,
-  authorizeRole('ADMIN', 'HOD'),
+  authorizeRole('ADMIN', 'HOD', 'PLACEMENT_COORDINATOR'),
   userController.getUsersWithFilters
 );
 

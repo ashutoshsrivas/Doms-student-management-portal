@@ -30,6 +30,8 @@ interface Assessment {
   assignmentScope: 'ALL_STUDENTS' | 'CATEGORY' | 'SPECIFIC_STUDENT';
   academicSessionId: string;
   createdBy: string;
+  designedBy?: string | null;
+  sourceAssessmentId?: string | null;
   deadline?: string;
   totalPoints: number;
   createdAt: string;
@@ -40,6 +42,12 @@ interface Assessment {
     lastName: string;
     email: string;
   };
+  Designer?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+  } | null;
   AssessmentQuestions?: Array<{
     id: string;
     questionText: string;
@@ -55,6 +63,18 @@ interface Session {
   id: string;
   name: string;
 }
+
+interface FacultyUser {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  approvedRole: string;
+  department?: string;
+}
+
+const DISTRIBUTOR_ROLES = ['ADMIN', 'HOD', 'PLACEMENT_COORDINATOR'];
+const DISTRIBUTE_TARGET_ROLES = ['FACULTY', 'CHAIR_HEAD', 'MENTOR', 'HOD', 'ADMIN', 'PLACEMENT_COORDINATOR'];
 
 const statusColors = {
   DRAFT: 'bg-yellow-100 text-yellow-800 border-yellow-300',
@@ -90,6 +110,12 @@ export default function AssessmentsPage() {
     deadline: '',
     totalPoints: 0,
   });
+
+  const canDistribute = !!currentUser && DISTRIBUTOR_ROLES.includes(currentUser.role);
+  const [facultyList, setFacultyList] = useState<FacultyUser[]>([]);
+  const [facultyLoading, setFacultyLoading] = useState(false);
+  const [selectedFacultyIds, setSelectedFacultyIds] = useState<string[]>([]);
+  const [facultySearch, setFacultySearch] = useState('');
 
   const [deleteConfirm, setDeleteConfirm] = useState<{ show: boolean; assessmentId?: string }>({
     show: false,
@@ -168,12 +194,50 @@ export default function AssessmentsPage() {
       totalPoints: 0,
     });
     setSelectedAssessment(null);
+    setSelectedFacultyIds([]);
+    setFacultySearch('');
   };
+
+  const loadFacultyList = useCallback(async () => {
+    if (!canDistribute || facultyList.length > 0 || facultyLoading) return;
+    try {
+      setFacultyLoading(true);
+      // Pull each role in one shot — /users/admin/filter takes a single role.
+      const rolePulls = await Promise.all(
+        DISTRIBUTE_TARGET_ROLES.map((role) =>
+          apiClient
+            .get(`/users/admin/filter?role=${role}&limit=500`)
+            .then((r) => (r.data?.users || []) as FacultyUser[])
+            .catch(() => [] as FacultyUser[])
+        )
+      );
+      const seen = new Set<string>();
+      const merged: FacultyUser[] = [];
+      const selfId = currentUser?.id;
+      for (const users of rolePulls) {
+        for (const u of users) {
+          if (!seen.has(u.id) && u.id !== selfId) {
+            seen.add(u.id);
+            merged.push(u);
+          }
+        }
+      }
+      merged.sort((a, b) =>
+        `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`)
+      );
+      setFacultyList(merged);
+    } catch (error) {
+      console.error('Failed to load faculty list:', error);
+    } finally {
+      setFacultyLoading(false);
+    }
+  }, [canDistribute, currentUser, facultyList.length, facultyLoading]);
 
   const openCreateModal = () => {
     resetForm();
     setModalMode('create');
     setShowModal(true);
+    loadFacultyList();
   };
 
   const openEditModal = (assessment: Assessment) => {
@@ -206,11 +270,19 @@ export default function AssessmentsPage() {
 
     try {
       if (modalMode === 'create') {
-        await apiClient.post('/assessments', {
+        const payload: Record<string, unknown> = {
           ...formData,
           deadline: formData.deadline ? new Date(formData.deadline) : null,
-        });
-        toast.success('Assessment created successfully');
+        };
+        if (canDistribute && selectedFacultyIds.length > 0) {
+          payload.distributeTo = selectedFacultyIds;
+        }
+        const resp = await apiClient.post('/assessments', payload);
+        if (resp.data?.distributedCount) {
+          toast.success(`Assessment distributed to ${resp.data.distributedCount} faculty`);
+        } else {
+          toast.success('Assessment created successfully');
+        }
       } else if (selectedAssessment) {
         await apiClient.put(`/assessments/${selectedAssessment.id}`, {
           ...formData,
@@ -375,7 +447,7 @@ export default function AssessmentsPage() {
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         {/* Title and Status */}
-                        <div className="flex items-center gap-3 mb-2">
+                        <div className="flex items-center gap-3 mb-2 flex-wrap">
                           <h3 className="text-lg font-semibold text-gray-900">{assessment.title}</h3>
                           <span
                             className={`px-3 py-1 rounded-full text-sm font-medium border flex items-center gap-1 ${getStatusBadgeClass(
@@ -385,6 +457,11 @@ export default function AssessmentsPage() {
                             <StatusIcon size={14} />
                             {assessment.status}
                           </span>
+                          {assessment.Designer && (
+                            <span className="px-2 py-0.5 rounded-full text-xs font-medium border bg-purple-50 text-purple-800 border-purple-200">
+                              Designed by {assessment.Designer.firstName} {assessment.Designer.lastName}
+                            </span>
+                          )}
                         </div>
 
                         {/* Description */}
@@ -676,6 +753,90 @@ export default function AssessmentsPage() {
                   disabled={modalMode === 'edit' && selectedAssessment?.status !== 'DRAFT'}
                 />
               </div>
+
+              {/* Distribute to faculty (create only, org-wide roles only) */}
+              {modalMode === 'create' && canDistribute && (
+                <div className="border-t border-gray-200 pt-4">
+                  <label className="block text-sm font-semibold text-gray-900 mb-1">
+                    Distribute to faculty (optional)
+                  </label>
+                  <p className="text-xs text-gray-600 mb-3">
+                    Selected faculty will each get their own copy of this assessment to assign
+                    students. The assessment will show <strong>designed by you</strong> on their
+                    portal. Leave empty to keep it yourself.
+                  </p>
+                  <div className="relative mb-2">
+                    <FiSearch className="absolute left-3 top-3 text-gray-400" />
+                    <input
+                      type="text"
+                      placeholder="Search faculty by name or email..."
+                      value={facultySearch}
+                      onChange={(e) => setFacultySearch(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm text-gray-900"
+                    />
+                  </div>
+                  {selectedFacultyIds.length > 0 && (
+                    <div className="flex items-center justify-between mb-2 text-xs text-gray-700">
+                      <span>{selectedFacultyIds.length} selected</span>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedFacultyIds([])}
+                        className="text-blue-600 hover:underline"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  )}
+                  <div className="max-h-56 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100">
+                    {facultyLoading ? (
+                      <p className="text-center text-sm text-gray-500 py-4">Loading faculty...</p>
+                    ) : facultyList.length === 0 ? (
+                      <p className="text-center text-sm text-gray-500 py-4">No faculty found</p>
+                    ) : (
+                      facultyList
+                        .filter((f) => {
+                          if (!facultySearch.trim()) return true;
+                          const q = facultySearch.toLowerCase();
+                          return (
+                            `${f.firstName} ${f.lastName}`.toLowerCase().includes(q) ||
+                            f.email.toLowerCase().includes(q)
+                          );
+                        })
+                        .map((f) => {
+                          const checked = selectedFacultyIds.includes(f.id);
+                          return (
+                            <label
+                              key={f.id}
+                              className="flex items-center gap-3 px-3 py-2 hover:bg-gray-50 cursor-pointer"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={(e) => {
+                                  setSelectedFacultyIds((prev) =>
+                                    e.target.checked
+                                      ? [...prev, f.id]
+                                      : prev.filter((id) => id !== f.id)
+                                  );
+                                }}
+                                className="w-4 h-4 accent-blue-600"
+                              />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm text-gray-900 truncate">
+                                  {f.firstName} {f.lastName}
+                                  <span className="ml-2 text-xs text-gray-500">
+                                    {f.approvedRole}
+                                  </span>
+                                </p>
+                                <p className="text-xs text-gray-500 truncate">{f.email}</p>
+                              </div>
+                            </label>
+                          );
+                        })
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Info Text */}
               {modalMode === 'edit' && selectedAssessment?.status !== 'DRAFT' && (

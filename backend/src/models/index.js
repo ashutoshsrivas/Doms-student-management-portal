@@ -639,6 +639,20 @@ const Assessment = sequelize.define('Assessment', {
     type: DataTypes.UUID,
     allowNull: false,
   },
+  // When an admin/HOD/PC distributes an assessment to a faculty member, the
+  // faculty becomes createdBy (they own the copy — assigning students, grading),
+  // and designedBy points to the person who authored the assessment. NULL for
+  // regular self-created assessments.
+  designedBy: {
+    type: DataTypes.UUID,
+    allowNull: true,
+  },
+  // Points back at the master this row was cloned from during distribution.
+  // NULL for master / non-distributed assessments.
+  sourceAssessmentId: {
+    type: DataTypes.UUID,
+    allowNull: true,
+  },
   deadline: {
     type: DataTypes.DATE,
   },
@@ -796,6 +810,9 @@ AcademicSession.hasMany(Assessment, { foreignKey: 'academicSessionId' });
 
 Assessment.belongsTo(User, { foreignKey: 'createdBy', as: 'Creator' });
 User.hasMany(Assessment, { foreignKey: 'createdBy' });
+
+Assessment.belongsTo(User, { foreignKey: 'designedBy', as: 'Designer' });
+User.hasMany(Assessment, { foreignKey: 'designedBy', as: 'DesignedAssessments' });
 
 Assessment.hasMany(AssessmentQuestion, { foreignKey: 'assessmentId', onDelete: 'CASCADE' });
 AssessmentQuestion.belongsTo(Assessment, { foreignKey: 'assessmentId' });

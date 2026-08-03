@@ -370,6 +370,26 @@ async function start() {
       }
     }
 
+    // Assessment distribution — designer + source pointer. Additive.
+    const assessmentColumns = [
+      { name: 'designed_by', ddl: 'CHAR(36) NULL' },
+      { name: 'source_assessment_id', ddl: 'CHAR(36) NULL' },
+    ];
+    for (const col of assessmentColumns) {
+      try {
+        await sequelize.query(`ALTER TABLE assessments ADD COLUMN ${col.name} ${col.ddl}`);
+        console.log(`Added ${col.name} column to assessments`);
+      } catch (error) {
+        if (error.message && error.message.includes('Duplicate column')) {
+          console.log(`${col.name} column already exists on assessments`);
+        } else if (error.message && error.message.includes("doesn't exist")) {
+          // fresh install — sync() will create the table with the new fields
+        } else {
+          console.error(`Error adding ${col.name} to assessments:`, error.message);
+        }
+      }
+    }
+
     // Add CHAIR_HEAD to the users.requested_role and users.approved_role
     // ENUMs if it isn't already a member. Safe to re-run: MySQL silently
     // succeeds when the new ENUM list already contains every existing value.

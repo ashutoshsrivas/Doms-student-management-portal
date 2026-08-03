@@ -20,8 +20,18 @@ const assessmentController = {
   
   // Create assessment
   createAssessment: async (req, res) => {
-    const { title, description, type, assignmentScope, academicSessionId, deadline, totalPoints } = req.body;
+    const {
+      title,
+      description,
+      type,
+      assignmentScope,
+      academicSessionId,
+      deadline,
+      totalPoints,
+      distributeTo,
+    } = req.body;
     const userId = req.user.id;
+    const userRole = req.user.role;
 
     if (!title || !assignmentScope || !academicSessionId) {
       return res.status(400).json({
@@ -29,22 +39,87 @@ const assessmentController = {
       });
     }
 
-    try {
-      const assessment = await Assessment.create({
-        title,
-        description,
-        type: type || 'MANUAL',
-        status: 'DRAFT',
-        assignmentScope,
-        academicSessionId,
-        createdBy: userId,
-        deadline: deadline ? new Date(deadline) : null,
-        totalPoints: totalPoints || 0,
-      });
+    // Only org-wide roles are allowed to distribute a designed assessment to
+    // faculty. Others just get a normal self-owned assessment.
+    const DISTRIBUTOR_ROLES = new Set(['ADMIN', 'HOD', 'PLACEMENT_COORDINATOR']);
+    const rawDistribute = Array.isArray(distributeTo) ? distributeTo : [];
+    const facultyIds = DISTRIBUTOR_ROLES.has(userRole)
+      ? [...new Set(rawDistribute.map((id) => String(id).trim()).filter(Boolean))]
+      : [];
 
-      res.status(201).json({
-        message: 'Assessment created successfully',
-        assessment,
+    try {
+      // Non-distribution path — same behavior as before.
+      if (facultyIds.length === 0) {
+        const assessment = await Assessment.create({
+          title,
+          description,
+          type: type || 'MANUAL',
+          status: 'DRAFT',
+          assignmentScope,
+          academicSessionId,
+          createdBy: userId,
+          deadline: deadline ? new Date(deadline) : null,
+          totalPoints: totalPoints || 0,
+        });
+
+        return res.status(201).json({
+          message: 'Assessment created successfully',
+          assessment,
+        });
+      }
+
+      // Distribution path: validate every recipient exists and is a faculty-style
+      // role. Reject the whole request on any bad id so we don't create partial
+      // fan-out that's a pain to clean up.
+      const FACULTY_ROLES = ['FACULTY', 'CHAIR_HEAD', 'MENTOR', 'HOD', 'ADMIN', 'PLACEMENT_COORDINATOR', 'TRAINER', 'COORDINATOR'];
+      const recipients = await User.findAll({
+        where: { id: { [Op.in]: facultyIds } },
+        attributes: ['id', 'firstName', 'lastName', 'approvedRole', 'status'],
+      });
+      if (recipients.length !== facultyIds.length) {
+        return res.status(400).json({
+          message: 'One or more selected faculty could not be found',
+        });
+      }
+      const badRole = recipients.find((u) => !FACULTY_ROLES.includes(u.approvedRole));
+      if (badRole) {
+        return res.status(400).json({
+          message: `Cannot distribute to ${badRole.firstName} ${badRole.lastName} (role: ${badRole.approvedRole})`,
+        });
+      }
+
+      // Create one copy per recipient. designedBy points back at the author,
+      // createdBy is the recipient so they own the copy (assign students, grade).
+      const created = [];
+      for (const recipient of recipients) {
+        const copy = await Assessment.create({
+          title,
+          description,
+          type: type || 'MANUAL',
+          status: 'DRAFT',
+          assignmentScope,
+          academicSessionId,
+          createdBy: recipient.id,
+          designedBy: userId,
+          deadline: deadline ? new Date(deadline) : null,
+          totalPoints: totalPoints || 0,
+        });
+        created.push(copy);
+      }
+
+      // Wire every copy to the first as its source, so we can group them later
+      // if we ever want a "master" view. Cheap now, useful later.
+      const sourceId = created[0].id;
+      await Assessment.update(
+        { sourceAssessmentId: sourceId },
+        { where: { id: { [Op.in]: created.map((c) => c.id) } } },
+      );
+
+      return res.status(201).json({
+        message: `Assessment distributed to ${created.length} faculty`,
+        assessment: created[0],
+        distributedCount: created.length,
+        assessmentIds: created.map((c) => c.id),
       });
     } catch (error) {
       console.error('Create assessment error:', error);
@@ -125,6 +200,12 @@ const assessmentController = {
           model: User,
           attributes: ['id', 'firstName', 'lastName', 'email'],
           as: 'Creator',
+        },
+        {
+          model: User,
+          attributes: ['id', 'firstName', 'lastName', 'email'],
+          as: 'Designer',
+          required: false,
         },
         {
           model: AssessmentQuestion,
@@ -266,6 +347,12 @@ const assessmentController = {
             as: 'Creator',
           },
           {
+            model: User,
+            attributes: ['id', 'firstName', 'lastName', 'email'],
+            as: 'Designer',
+            required: false,
+          },
+          {
             model: AssessmentQuestion,
             attributes: ['id', 'questionText', 'questionType', 'pointsValue', 'metadata'],
           },
@@ -336,6 +423,12 @@ const assessmentController = {
             model: User,
             attributes: ['id', 'firstName', 'lastName', 'email'],
             as: 'Creator',
+          },
+          {
+            model: User,
+            attributes: ['id', 'firstName', 'lastName', 'email'],
+            as: 'Designer',
+            required: false,
           },
           {
             model: AssessmentQuestion,

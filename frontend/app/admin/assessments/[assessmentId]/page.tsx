@@ -29,6 +29,8 @@ interface Assessment {
   assignmentScope: 'ALL_STUDENTS' | 'CATEGORY' | 'SPECIFIC_STUDENT';
   academicSessionId: string;
   createdBy: string;
+  designedBy?: string | null;
+  sourceAssessmentId?: string | null;
   deadline?: string;
   totalPoints: number;
   createdAt: string;
@@ -39,6 +41,12 @@ interface Assessment {
     lastName: string;
     email: string;
   };
+  Designer?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+  } | null;
   AssessmentQuestions?: AssessmentQuestion[];
 }
 
@@ -403,6 +411,11 @@ export default function AssessmentDetailsPage() {
             </button>
             <div className="flex-1">
               <h1 className="text-3xl font-bold text-gray-900">{assessment.title}</h1>
+              {assessment.Designer && (
+                <div className="mt-2 inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium border bg-purple-50 text-purple-800 border-purple-200">
+                  Designed by {assessment.Designer.firstName} {assessment.Designer.lastName}
+                </div>
+              )}
               <p className="text-gray-600 mt-1">{assessment.description}</p>
             </div>
             <span
