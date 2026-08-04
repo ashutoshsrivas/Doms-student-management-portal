@@ -719,6 +719,12 @@ const AssessmentAssignment = sequelize.define('AssessmentAssignment', {
   categoryId: {
     type: DataTypes.UUID,
   },
+  // For distributed assessments, tracks which faculty picked this student.
+  // NULL means the assessment creator (designer) added it.
+  assignedBy: {
+    type: DataTypes.UUID,
+    allowNull: true,
+  },
   assignedAt: {
     type: DataTypes.DATE,
     defaultValue: DataTypes.NOW,
@@ -727,6 +733,36 @@ const AssessmentAssignment = sequelize.define('AssessmentAssignment', {
   tableName: 'assessment_assignments',
   timestamps: true,
   underscored: true,
+});
+
+// Which faculty a designed assessment has been distributed to. The assessment
+// itself stays as one row (single set of questions + rubric); each faculty
+// picks their own students through AssessmentAssignment.assignedBy.
+const AssessmentDistribution = sequelize.define('AssessmentDistribution', {
+  id: {
+    type: DataTypes.UUID,
+    defaultValue: DataTypes.UUIDV4,
+    primaryKey: true,
+  },
+  assessmentId: {
+    type: DataTypes.UUID,
+    allowNull: false,
+  },
+  facultyId: {
+    type: DataTypes.UUID,
+    allowNull: false,
+  },
+  addedBy: {
+    type: DataTypes.UUID,
+    allowNull: false,
+  },
+}, {
+  tableName: 'assessment_distributions',
+  timestamps: true,
+  underscored: true,
+  indexes: [
+    { unique: true, fields: ['assessment_id', 'faculty_id'], name: 'ad_assessment_faculty_unique' },
+  ],
 });
 
 const AssessmentSubmission = sequelize.define('AssessmentSubmission', {
@@ -825,6 +861,13 @@ StudentSession.hasMany(AssessmentAssignment, { foreignKey: 'studentSessionId' })
 
 AssessmentAssignment.belongsTo(SessionCategory, { foreignKey: 'categoryId' });
 SessionCategory.hasMany(AssessmentAssignment, { foreignKey: 'categoryId' });
+
+AssessmentAssignment.belongsTo(User, { foreignKey: 'assignedBy', as: 'AssignedByUser' });
+
+Assessment.hasMany(AssessmentDistribution, { foreignKey: 'assessmentId', as: 'Distributions', onDelete: 'CASCADE' });
+AssessmentDistribution.belongsTo(Assessment, { foreignKey: 'assessmentId' });
+AssessmentDistribution.belongsTo(User, { foreignKey: 'facultyId', as: 'Faculty' });
+AssessmentDistribution.belongsTo(User, { foreignKey: 'addedBy', as: 'AddedByUser' });
 
 Assessment.hasMany(AssessmentSubmission, { foreignKey: 'assessmentId', onDelete: 'CASCADE' });
 AssessmentSubmission.belongsTo(Assessment, { foreignKey: 'assessmentId' });
@@ -2175,6 +2218,7 @@ module.exports = {
   Assessment,
   AssessmentQuestion,
   AssessmentAssignment,
+  AssessmentDistribution,
   AssessmentSubmission,
   AssessmentResponse,
   Rubric,

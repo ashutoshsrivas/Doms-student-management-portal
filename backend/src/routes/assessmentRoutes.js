@@ -190,6 +190,14 @@ router.delete(
   assessmentController.removeAssignment
 );
 
+// Add / remove faculty from the assessment's distribution list
+router.put(
+  '/:assessmentId/distributions',
+  authenticateToken,
+  canCreateAssessment,
+  assessmentController.updateDistributions
+);
+
 // Get assigned students
 router.get(
   '/:assessmentId/assigned-students',

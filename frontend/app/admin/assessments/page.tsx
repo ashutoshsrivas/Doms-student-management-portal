@@ -21,6 +21,13 @@ import apiClient from '@/app/lib/apiClient';
 import toast from 'react-hot-toast';
 import DashboardLayout from '@/app/components/DashboardLayout';
 
+interface DistributionRow {
+  id: string;
+  facultyId: string;
+  addedBy: string;
+  Faculty?: { id: string; firstName: string; lastName: string; email: string };
+}
+
 interface Assessment {
   id: string;
   title: string;
@@ -30,8 +37,6 @@ interface Assessment {
   assignmentScope: 'ALL_STUDENTS' | 'CATEGORY' | 'SPECIFIC_STUDENT';
   academicSessionId: string;
   createdBy: string;
-  designedBy?: string | null;
-  sourceAssessmentId?: string | null;
   deadline?: string;
   totalPoints: number;
   createdAt: string;
@@ -42,12 +47,7 @@ interface Assessment {
     lastName: string;
     email: string;
   };
-  Designer?: {
-    id: string;
-    firstName: string;
-    lastName: string;
-    email: string;
-  } | null;
+  Distributions?: DistributionRow[];
   AssessmentQuestions?: Array<{
     id: string;
     questionText: string;
@@ -74,7 +74,7 @@ interface FacultyUser {
 }
 
 const DISTRIBUTOR_ROLES = ['ADMIN', 'HOD', 'PLACEMENT_COORDINATOR'];
-const DISTRIBUTE_TARGET_ROLES = ['FACULTY', 'CHAIR_HEAD', 'MENTOR', 'HOD', 'ADMIN', 'PLACEMENT_COORDINATOR'];
+const DISTRIBUTE_TARGET_ROLES = ['FACULTY', 'CHAIR_HEAD', 'MENTOR', 'HOD', 'ADMIN', 'PLACEMENT_COORDINATOR', 'COORDINATOR', 'TRAINER'];
 
 const statusColors = {
   DRAFT: 'bg-yellow-100 text-yellow-800 border-yellow-300',
@@ -213,10 +213,9 @@ export default function AssessmentsPage() {
       );
       const seen = new Set<string>();
       const merged: FacultyUser[] = [];
-      const selfId = currentUser?.id;
       for (const users of rolePulls) {
         for (const u of users) {
-          if (!seen.has(u.id) && u.id !== selfId) {
+          if (!seen.has(u.id)) {
             seen.add(u.id);
             merged.push(u);
           }
@@ -231,7 +230,7 @@ export default function AssessmentsPage() {
     } finally {
       setFacultyLoading(false);
     }
-  }, [canDistribute, currentUser, facultyList.length, facultyLoading]);
+  }, [canDistribute, facultyList.length, facultyLoading]);
 
   const openCreateModal = () => {
     resetForm();
@@ -457,9 +456,14 @@ export default function AssessmentsPage() {
                             <StatusIcon size={14} />
                             {assessment.status}
                           </span>
-                          {assessment.Designer && (
+                          {currentUser && assessment.createdBy !== currentUser.id && assessment.Creator && (
                             <span className="px-2 py-0.5 rounded-full text-xs font-medium border bg-purple-50 text-purple-800 border-purple-200">
-                              Designed by {assessment.Designer.firstName} {assessment.Designer.lastName}
+                              Designed by {assessment.Creator.firstName} {assessment.Creator.lastName}
+                            </span>
+                          )}
+                          {currentUser && assessment.createdBy === currentUser.id && (assessment.Distributions?.length ?? 0) > 0 && (
+                            <span className="px-2 py-0.5 rounded-full text-xs font-medium border bg-indigo-50 text-indigo-800 border-indigo-200">
+                              Distributed to {assessment.Distributions?.length} faculty
                             </span>
                           )}
                         </div>

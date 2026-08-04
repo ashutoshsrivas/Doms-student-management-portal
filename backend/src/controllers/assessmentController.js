@@ -2,6 +2,7 @@ const {
   Assessment,
   AssessmentQuestion,
   AssessmentAssignment,
+  AssessmentDistribution,
   AssessmentSubmission,
   AssessmentResponse,
   AcademicSession,
@@ -12,13 +13,38 @@ const {
   RubricScore,
   RubricCriteria,
 } = require('../models');
+
+const DISTRIBUTOR_ROLES = new Set(['ADMIN', 'HOD', 'PLACEMENT_COORDINATOR']);
+const DISTRIBUTE_TARGET_ROLES = ['FACULTY', 'CHAIR_HEAD', 'MENTOR', 'HOD', 'ADMIN', 'PLACEMENT_COORDINATOR', 'COORDINATOR', 'TRAINER'];
+const ORG_ADMIN_ROLES = new Set(['ADMIN', 'HOD', 'PLACEMENT_COORDINATOR']);
+
+// Returns { isCreator, isAdmin, isDistributed } for the current user on the
+// given assessment. Distributed faculty can pick students + grade their own
+// students' submissions, but cannot edit questions/rubrics/publish.
+async function getAccess(assessment, req) {
+  const userId = req.user?.id;
+  const userRole = req.user?.role;
+  const isCreator = !!userId && assessment.createdBy === userId;
+  const isAdmin = ORG_ADMIN_ROLES.has(userRole);
+  let isDistributed = false;
+  if (!isCreator && !isAdmin && userId) {
+    const row = await AssessmentDistribution.findOne({
+      where: { assessmentId: assessment.id, facultyId: userId },
+    });
+    isDistributed = !!row;
+  }
+  return { isCreator, isAdmin, isDistributed };
+}
 const { Op } = require('sequelize');
 const { uploadToS3 } = require('../utils/s3Upload');
 
 const assessmentController = {
   // ============ ASSESSMENT CRUD ============
   
-  // Create assessment
+  // Create assessment. If distributeTo is a non-empty array AND the caller is
+  // ADMIN/HOD/PC, faculty are added as distribution rows — one shared
+  // assessment (single set of questions + rubric), each distributed faculty
+  // picks their own students via AssessmentAssignment.
   createAssessment: async (req, res) => {
     const {
       title,
@@ -39,87 +65,61 @@ const assessmentController = {
       });
     }
 
-    // Only org-wide roles are allowed to distribute a designed assessment to
-    // faculty. Others just get a normal self-owned assessment.
-    const DISTRIBUTOR_ROLES = new Set(['ADMIN', 'HOD', 'PLACEMENT_COORDINATOR']);
     const rawDistribute = Array.isArray(distributeTo) ? distributeTo : [];
-    const facultyIds = DISTRIBUTOR_ROLES.has(userRole)
+    const wantsDistribute = DISTRIBUTOR_ROLES.has(userRole) && rawDistribute.length > 0;
+    const facultyIds = wantsDistribute
       ? [...new Set(rawDistribute.map((id) => String(id).trim()).filter(Boolean))]
       : [];
 
     try {
-      // Non-distribution path — same behavior as before.
-      if (facultyIds.length === 0) {
-        const assessment = await Assessment.create({
-          title,
-          description,
-          type: type || 'MANUAL',
-          status: 'DRAFT',
-          assignmentScope,
-          academicSessionId,
-          createdBy: userId,
-          deadline: deadline ? new Date(deadline) : null,
-          totalPoints: totalPoints || 0,
+      let validRecipients = [];
+      if (facultyIds.length) {
+        const recipients = await User.findAll({
+          where: { id: { [Op.in]: facultyIds } },
+          attributes: ['id', 'firstName', 'lastName', 'approvedRole'],
         });
-
-        return res.status(201).json({
-          message: 'Assessment created successfully',
-          assessment,
-        });
+        if (recipients.length !== facultyIds.length) {
+          return res.status(400).json({
+            message: 'One or more selected faculty could not be found',
+          });
+        }
+        const badRole = recipients.find((u) => !DISTRIBUTE_TARGET_ROLES.includes(u.approvedRole));
+        if (badRole) {
+          return res.status(400).json({
+            message: `Cannot distribute to ${badRole.firstName} ${badRole.lastName} (role: ${badRole.approvedRole})`,
+          });
+        }
+        validRecipients = recipients;
       }
 
-      // Distribution path: validate every recipient exists and is a faculty-style
-      // role. Reject the whole request on any bad id so we don't create partial
-      // fan-out that's a pain to clean up.
-      const FACULTY_ROLES = ['FACULTY', 'CHAIR_HEAD', 'MENTOR', 'HOD', 'ADMIN', 'PLACEMENT_COORDINATOR', 'TRAINER', 'COORDINATOR'];
-      const recipients = await User.findAll({
-        where: { id: { [Op.in]: facultyIds } },
-        attributes: ['id', 'firstName', 'lastName', 'approvedRole', 'status'],
+      const assessment = await Assessment.create({
+        title,
+        description,
+        type: type || 'MANUAL',
+        status: 'DRAFT',
+        assignmentScope,
+        academicSessionId,
+        createdBy: userId,
+        deadline: deadline ? new Date(deadline) : null,
+        totalPoints: totalPoints || 0,
       });
-      if (recipients.length !== facultyIds.length) {
-        return res.status(400).json({
-          message: 'One or more selected faculty could not be found',
-        });
-      }
-      const badRole = recipients.find((u) => !FACULTY_ROLES.includes(u.approvedRole));
-      if (badRole) {
-        return res.status(400).json({
-          message: `Cannot distribute to ${badRole.firstName} ${badRole.lastName} (role: ${badRole.approvedRole})`,
-        });
-      }
 
-      // Create one copy per recipient. designedBy points back at the author,
-      // createdBy is the recipient so they own the copy (assign students, grade).
-      const created = [];
-      for (const recipient of recipients) {
-        const copy = await Assessment.create({
-          title,
-          description,
-          type: type || 'MANUAL',
-          status: 'DRAFT',
-          assignmentScope,
-          academicSessionId,
-          createdBy: recipient.id,
-          designedBy: userId,
-          deadline: deadline ? new Date(deadline) : null,
-          totalPoints: totalPoints || 0,
-        });
-        created.push(copy);
+      if (validRecipients.length) {
+        await AssessmentDistribution.bulkCreate(
+          validRecipients.map((r) => ({
+            assessmentId: assessment.id,
+            facultyId: r.id,
+            addedBy: userId,
+          }))
+        );
       }
-
-      // Wire every copy to the first as its source, so we can group them later
-      // if we ever want a "master" view. Cheap now, useful later.
-      const sourceId = created[0].id;
-      await Assessment.update(
-        { sourceAssessmentId: sourceId },
-        { where: { id: { [Op.in]: created.map((c) => c.id) } } },
-      );
 
       return res.status(201).json({
-        message: `Assessment distributed to ${created.length} faculty`,
-        assessment: created[0],
-        distributedCount: created.length,
-        assessmentIds: created.map((c) => c.id),
+        message: validRecipients.length
+          ? `Assessment created and distributed to ${validRecipients.length} faculty`
+          : 'Assessment created successfully',
+        assessment,
+        distributedCount: validRecipients.length,
       });
     } catch (error) {
       console.error('Create assessment error:', error);
@@ -169,12 +169,19 @@ const assessmentController = {
         }
       }
 
-      // FACULTY-style roles see only assessments they created themselves.
-      // ADMIN / HOD / PLACEMENT_COORDINATOR see everything (PC needs the
-      // org-wide view for placement analytics). STUDENT is handled above.
+      // FACULTY-style roles see assessments they created themselves OR
+      // that have been distributed to them. ADMIN / HOD / PC see everything.
       if (['FACULTY', 'CHAIR_HEAD', 'TRAINER'].includes(userRole)) {
-        where.createdBy = userId;
-        console.log('[getAssessments] Non-admin user filtered to own assessments:', userId);
+        const distributedRows = await AssessmentDistribution.findAll({
+          where: { facultyId: userId },
+          attributes: ['assessmentId'],
+        });
+        const distributedIds = distributedRows.map((r) => r.assessmentId);
+        where[Op.or] = [
+          { createdBy: userId },
+          ...(distributedIds.length ? [{ id: { [Op.in]: distributedIds } }] : []),
+        ];
+        console.log('[getAssessments] Faculty scope: own +', distributedIds.length, 'distributed');
       }
 
       // sessionId is optional for staff — no session filter means "all
@@ -202,14 +209,14 @@ const assessmentController = {
           as: 'Creator',
         },
         {
-          model: User,
-          attributes: ['id', 'firstName', 'lastName', 'email'],
-          as: 'Designer',
-          required: false,
-        },
-        {
           model: AssessmentQuestion,
           attributes: ['id', 'questionText', 'questionType', 'pointsValue'],
+        },
+        {
+          model: AssessmentDistribution,
+          as: 'Distributions',
+          required: false,
+          include: [{ model: User, as: 'Faculty', attributes: ['id', 'firstName', 'lastName', 'email'] }],
         },
       ];
 
@@ -347,12 +354,6 @@ const assessmentController = {
             as: 'Creator',
           },
           {
-            model: User,
-            attributes: ['id', 'firstName', 'lastName', 'email'],
-            as: 'Designer',
-            required: false,
-          },
-          {
             model: AssessmentQuestion,
             attributes: ['id', 'questionText', 'questionType', 'pointsValue', 'metadata'],
           },
@@ -425,10 +426,10 @@ const assessmentController = {
             as: 'Creator',
           },
           {
-            model: User,
-            attributes: ['id', 'firstName', 'lastName', 'email'],
-            as: 'Designer',
+            model: AssessmentDistribution,
+            as: 'Distributions',
             required: false,
+            include: [{ model: User, as: 'Faculty', attributes: ['id', 'firstName', 'lastName', 'email'] }],
           },
           {
             model: AssessmentQuestion,
@@ -814,8 +815,8 @@ const assessmentController = {
         return res.status(404).json({ message: 'Assessment not found' });
       }
 
-      // Check authorization
-      if (assessment.createdBy !== userId && userRole !== 'ADMIN') {
+      const { isCreator, isAdmin, isDistributed } = await getAccess(assessment, req);
+      if (!isCreator && !isAdmin && !isDistributed) {
         return res.status(403).json({ message: 'Not authorized to assign this assessment' });
       }
 
@@ -838,6 +839,7 @@ const assessmentController = {
             assessmentId,
             studentSessionId,
             categoryId: null,
+            assignedBy: userId,
           });
         }
       }
@@ -853,6 +855,7 @@ const assessmentController = {
             assessmentId,
             categoryId,
             studentSessionId: null,
+            assignedBy: userId,
           });
         }
       }
@@ -875,7 +878,6 @@ const assessmentController = {
   removeAssignment: async (req, res) => {
     const { assessmentId, assignmentId } = req.params;
     const userId = req.user?.id;
-    const userRole = req.user?.role;
 
     try {
       const assignment = await AssessmentAssignment.findByPk(assignmentId);
@@ -883,13 +885,16 @@ const assessmentController = {
         return res.status(404).json({ message: 'Assignment not found' });
       }
 
-      // Check authorization by verifying user owns the assessment
       const assessment = await Assessment.findByPk(assignment.assessmentId);
       if (!assessment) {
         return res.status(404).json({ message: 'Assessment not found' });
       }
 
-      if (assessment.createdBy !== userId && userRole !== 'ADMIN') {
+      const { isCreator, isAdmin, isDistributed } = await getAccess(assessment, req);
+      // Creator/admin can remove any assignment. Distributed faculty can only
+      // remove the ones they picked.
+      const canRemove = isCreator || isAdmin || (isDistributed && assignment.assignedBy === userId);
+      if (!canRemove) {
         return res.status(403).json({ message: 'Not authorized to remove this assignment' });
       }
 
@@ -908,7 +913,6 @@ const assessmentController = {
   getAssignedStudents: async (req, res) => {
     const { assessmentId } = req.params;
     const userId = req.user?.id;
-    const userRole = req.user?.role;
 
     try {
       const assessment = await Assessment.findByPk(assessmentId);
@@ -916,13 +920,19 @@ const assessmentController = {
         return res.status(404).json({ message: 'Assessment not found' });
       }
 
-      // Check authorization
-      if (assessment.createdBy !== userId && userRole !== 'ADMIN') {
+      const { isCreator, isAdmin, isDistributed } = await getAccess(assessment, req);
+      if (!isCreator && !isAdmin && !isDistributed) {
         return res.status(403).json({ message: 'Not authorized to view assignments for this assessment' });
       }
 
+      // Distributed faculty see only what they picked. Creator + admin see everything.
+      const where = { assessmentId };
+      if (isDistributed && !isCreator && !isAdmin) {
+        where.assignedBy = userId;
+      }
+
       const assignments = await AssessmentAssignment.findAll({
-        where: { assessmentId },
+        where,
         include: [
           {
             model: StudentSession,
@@ -937,6 +947,12 @@ const assessmentController = {
           },
           {
             model: SessionCategory,
+            required: false,
+          },
+          {
+            model: User,
+            attributes: ['id', 'firstName', 'lastName'],
+            as: 'AssignedByUser',
             required: false,
           },
         ],
@@ -1106,16 +1122,32 @@ const assessmentController = {
         return res.status(404).json({ message: 'Assessment not found' });
       }
 
-      // Only creator and admin can view submissions
-      if (assessment.createdBy !== userId && userRole !== 'ADMIN') {
+      const { isCreator, isAdmin, isDistributed } = await getAccess(assessment, req);
+      if (!isCreator && !isAdmin && !isDistributed) {
         return res.status(403).json({ message: 'Not authorized to view these submissions' });
       }
 
+      // Distributed faculty only see submissions from students they picked.
+      const submissionWhere = {
+        assessmentId,
+        status: { [Op.in]: ['SUBMITTED', 'GRADED'] },
+      };
+      if (isDistributed && !isCreator && !isAdmin) {
+        const myAssignments = await AssessmentAssignment.findAll({
+          where: { assessmentId, assignedBy: userId },
+          attributes: ['studentSessionId'],
+        });
+        const myStudentIds = myAssignments
+          .map((a) => a.studentSessionId)
+          .filter(Boolean);
+        if (myStudentIds.length === 0) {
+          return res.status(200).json({ message: 'Submissions retrieved', submissions: [] });
+        }
+        submissionWhere.studentSessionId = { [Op.in]: myStudentIds };
+      }
+
       const submissions = await AssessmentSubmission.findAll({
-        where: {
-          assessmentId,
-          status: { [Op.in]: ['SUBMITTED', 'GRADED'] },
-        },
+        where: submissionWhere,
         include: [
           {
             model: Assessment,
@@ -1817,6 +1849,73 @@ const assessmentController = {
         message: 'Failed to delete submission',
         error: error.message,
       });
+    }
+  },
+
+  // Add / remove faculty from an assessment's distribution list. Creator or
+  // an org admin (ADMIN/HOD/PC) may manage the list at any time — new faculty
+  // instantly see the shared assessment on their portal and can pick students.
+  updateDistributions: async (req, res) => {
+    const { assessmentId } = req.params;
+    const { addFacultyIds = [], removeFacultyIds = [] } = req.body;
+    const userId = req.user.id;
+
+    try {
+      const assessment = await Assessment.findByPk(assessmentId);
+      if (!assessment) {
+        return res.status(404).json({ message: 'Assessment not found' });
+      }
+      const { isCreator, isAdmin } = await getAccess(assessment, req);
+      if (!isCreator && !isAdmin) {
+        return res.status(403).json({ message: 'Not authorized to change distributions' });
+      }
+
+      const addIds = [...new Set((addFacultyIds || []).map((x) => String(x).trim()).filter(Boolean))];
+      const removeIds = [...new Set((removeFacultyIds || []).map((x) => String(x).trim()).filter(Boolean))];
+
+      if (addIds.length) {
+        const recipients = await User.findAll({
+          where: { id: { [Op.in]: addIds } },
+          attributes: ['id', 'firstName', 'lastName', 'approvedRole'],
+        });
+        if (recipients.length !== addIds.length) {
+          return res.status(400).json({ message: 'One or more faculty not found' });
+        }
+        const badRole = recipients.find((u) => !DISTRIBUTE_TARGET_ROLES.includes(u.approvedRole));
+        if (badRole) {
+          return res.status(400).json({
+            message: `Cannot distribute to ${badRole.firstName} ${badRole.lastName} (role: ${badRole.approvedRole})`,
+          });
+        }
+        // ignoreDuplicates so re-adding an already-distributed faculty is a no-op.
+        await AssessmentDistribution.bulkCreate(
+          recipients.map((r) => ({ assessmentId, facultyId: r.id, addedBy: userId })),
+          { ignoreDuplicates: true },
+        );
+      }
+
+      if (removeIds.length) {
+        // Removing a faculty leaves their existing student assignments intact —
+        // creator/admin still see them under the same assessment and can grade.
+        await AssessmentDistribution.destroy({
+          where: { assessmentId, facultyId: { [Op.in]: removeIds } },
+        });
+      }
+
+      const distributions = await AssessmentDistribution.findAll({
+        where: { assessmentId },
+        include: [{ model: User, as: 'Faculty', attributes: ['id', 'firstName', 'lastName', 'email'] }],
+      });
+
+      res.status(200).json({
+        message: 'Distributions updated',
+        added: addIds.length,
+        removed: removeIds.length,
+        distributions,
+      });
+    } catch (error) {
+      console.error('Update distributions error:', error);
+      res.status(500).json({ message: 'Failed to update distributions' });
     }
   },
 };

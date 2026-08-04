@@ -14,11 +14,20 @@ import {
   FiChevronUp,
   FiAlertCircle,
   FiTrendingUp,
+  FiSearch,
+  FiUserPlus,
 } from 'react-icons/fi';
 import useAuthStore from '@/app/store/authStore';
 import apiClient from '@/app/lib/apiClient';
 import toast from 'react-hot-toast';
 import DashboardLayout from '@/app/components/DashboardLayout';
+
+interface Distribution {
+  id: string;
+  facultyId: string;
+  addedBy: string;
+  Faculty?: { id: string; firstName: string; lastName: string; email: string };
+}
 
 interface Assessment {
   id: string;
@@ -29,8 +38,6 @@ interface Assessment {
   assignmentScope: 'ALL_STUDENTS' | 'CATEGORY' | 'SPECIFIC_STUDENT';
   academicSessionId: string;
   createdBy: string;
-  designedBy?: string | null;
-  sourceAssessmentId?: string | null;
   deadline?: string;
   totalPoints: number;
   createdAt: string;
@@ -41,12 +48,7 @@ interface Assessment {
     lastName: string;
     email: string;
   };
-  Designer?: {
-    id: string;
-    firstName: string;
-    lastName: string;
-    email: string;
-  } | null;
+  Distributions?: Distribution[];
   AssessmentQuestions?: AssessmentQuestion[];
 }
 
@@ -159,6 +161,15 @@ export default function AssessmentDetailsPage() {
   const [assignmentLoading, setAssignmentLoading] = useState(false);
   const [studentSearch, setStudentSearch] = useState('');
   const [categorySearch, setCategorySearch] = useState('');
+
+  // Distribution management
+  const DISTRIBUTE_TARGET_ROLES = ['FACULTY', 'CHAIR_HEAD', 'MENTOR', 'HOD', 'ADMIN', 'PLACEMENT_COORDINATOR', 'COORDINATOR', 'TRAINER'];
+  const [showDistributeModal, setShowDistributeModal] = useState(false);
+  const [facultyList, setFacultyList] = useState<Array<{ id: string; firstName: string; lastName: string; email: string; approvedRole: string }>>([]);
+  const [facultyLoading, setFacultyLoading] = useState(false);
+  const [facultySearch, setFacultySearch] = useState('');
+  const [distributeSelected, setDistributeSelected] = useState<string[]>([]);
+  const [distributeSaving, setDistributeSaving] = useState(false);
 
   // Fetch Assessment
   const fetchAssessment = useCallback(async () => {
@@ -369,6 +380,57 @@ export default function AssessmentDetailsPage() {
     }
   };
 
+  const loadFacultyList = async () => {
+    if (facultyList.length || facultyLoading) return;
+    try {
+      setFacultyLoading(true);
+      const rolePulls = await Promise.all(
+        DISTRIBUTE_TARGET_ROLES.map((role) =>
+          apiClient
+            .get(`/users/admin/filter?role=${role}&limit=500`)
+            .then((r) => (r.data?.users || []))
+            .catch(() => [])
+        )
+      );
+      const seen = new Set<string>();
+      const merged: typeof facultyList = [];
+      for (const users of rolePulls) {
+        for (const u of users) {
+          if (!seen.has(u.id)) { seen.add(u.id); merged.push(u); }
+        }
+      }
+      merged.sort((a, b) => `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`));
+      setFacultyList(merged);
+    } finally {
+      setFacultyLoading(false);
+    }
+  };
+
+  const openDistributeModal = () => {
+    setDistributeSelected([]);
+    setFacultySearch('');
+    setShowDistributeModal(true);
+    loadFacultyList();
+  };
+
+  const saveDistributions = async ({ addIds = [] as string[], removeIds = [] as string[] }) => {
+    try {
+      setDistributeSaving(true);
+      await apiClient.put(`/assessments/${assessmentId}/distributions`, {
+        addFacultyIds: addIds,
+        removeFacultyIds: removeIds,
+      });
+      await fetchAssessment();
+      toast.success('Distribution updated');
+      setShowDistributeModal(false);
+    } catch (error: unknown) {
+      const msg = (error as { response?: { data?: { message?: string } } }).response?.data?.message || 'Failed to update distribution';
+      toast.error(msg);
+    } finally {
+      setDistributeSaving(false);
+    }
+  };
+
   if (loading) {
     return (
       <DashboardLayout>
@@ -396,6 +458,10 @@ export default function AssessmentDetailsPage() {
   const isClosed = assessment.status === 'CLOSED';
   const isDraft = assessment.status === 'DRAFT';
   const canEdit = isDraft;
+  const ORG_ADMIN_ROLES = ['ADMIN', 'HOD', 'PLACEMENT_COORDINATOR'];
+  const canManageDistributions = !!currentUser && (
+    assessment.createdBy === currentUser.id || ORG_ADMIN_ROLES.includes(currentUser.role)
+  );
 
   return (
     <DashboardLayout>
@@ -411,9 +477,14 @@ export default function AssessmentDetailsPage() {
             </button>
             <div className="flex-1">
               <h1 className="text-3xl font-bold text-gray-900">{assessment.title}</h1>
-              {assessment.Designer && (
+              {currentUser && assessment.createdBy !== currentUser.id && assessment.Creator && (
                 <div className="mt-2 inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium border bg-purple-50 text-purple-800 border-purple-200">
-                  Designed by {assessment.Designer.firstName} {assessment.Designer.lastName}
+                  Designed by {assessment.Creator.firstName} {assessment.Creator.lastName}
+                </div>
+              )}
+              {currentUser && assessment.createdBy === currentUser.id && (assessment.Distributions?.length ?? 0) > 0 && (
+                <div className="mt-2 inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium border bg-indigo-50 text-indigo-800 border-indigo-200">
+                  Distributed to {assessment.Distributions?.length} faculty
                 </div>
               )}
               <p className="text-gray-600 mt-1">{assessment.description}</p>
@@ -478,6 +549,55 @@ export default function AssessmentDetailsPage() {
               Results
             </button>
           </div>
+
+          {/* Distribution Section — only for creator/admin */}
+          {canManageDistributions && (
+            <div className="mb-8 bg-white rounded-lg border border-gray-200 p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <h2 className="text-lg font-bold text-gray-900">Distributed to</h2>
+                  <p className="text-xs text-gray-600">
+                    Selected faculty share this assessment — same questions and rubric.
+                    Each faculty picks their own students on their portal.
+                  </p>
+                </div>
+                <button
+                  onClick={openDistributeModal}
+                  className="flex items-center gap-2 text-sm bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg"
+                >
+                  <FiUserPlus size={16} />
+                  Manage
+                </button>
+              </div>
+              {(assessment.Distributions?.length ?? 0) === 0 ? (
+                <p className="text-sm text-gray-500 py-2">
+                  Not distributed yet. Click <strong>Manage</strong> to add faculty.
+                </p>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {assessment.Distributions?.map((d) => (
+                    <span
+                      key={d.id}
+                      className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm bg-indigo-50 text-indigo-900 border border-indigo-200"
+                    >
+                      {d.Faculty?.firstName} {d.Faculty?.lastName}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          saveDistributions({ removeIds: [d.facultyId] })
+                        }
+                        disabled={distributeSaving}
+                        className="text-indigo-500 hover:text-red-600"
+                        title="Remove"
+                      >
+                        <FiX size={14} />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Questions Section */}
           <div className="mb-8">
@@ -1104,6 +1224,122 @@ export default function AssessmentDetailsPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Distribute Faculty Modal */}
+      {showDistributeModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center p-6 border-b border-gray-200 sticky top-0 bg-white z-10">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">Add faculty to distribution</h2>
+                <p className="text-sm text-gray-600 mt-1">
+                  Ticked faculty will get access — they can pick their own students and grade them.
+                </p>
+              </div>
+              <button
+                onClick={() => setShowDistributeModal(false)}
+                className="text-gray-600 hover:text-gray-800"
+              >
+                <FiX size={24} />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="relative">
+                <FiSearch className="absolute left-3 top-3 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search by name or email..."
+                  value={facultySearch}
+                  onChange={(e) => setFacultySearch(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                />
+              </div>
+              {distributeSelected.length > 0 && (
+                <div className="flex items-center justify-between text-xs text-gray-700">
+                  <span>{distributeSelected.length} selected</span>
+                  <button
+                    type="button"
+                    onClick={() => setDistributeSelected([])}
+                    className="text-blue-600 hover:underline"
+                  >
+                    Clear
+                  </button>
+                </div>
+              )}
+              <div className="max-h-[50vh] overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100">
+                {facultyLoading ? (
+                  <p className="text-center text-sm text-gray-500 py-6">Loading faculty...</p>
+                ) : facultyList.length === 0 ? (
+                  <p className="text-center text-sm text-gray-500 py-6">No faculty found</p>
+                ) : (
+                  facultyList
+                    .filter((f) => {
+                      const q = facultySearch.trim().toLowerCase();
+                      if (!q) return true;
+                      return (
+                        `${f.firstName} ${f.lastName}`.toLowerCase().includes(q) ||
+                        f.email.toLowerCase().includes(q)
+                      );
+                    })
+                    .map((f) => {
+                      const alreadyDistributed = assessment.Distributions?.some(
+                        (d) => d.facultyId === f.id
+                      );
+                      const checked = distributeSelected.includes(f.id);
+                      return (
+                        <label
+                          key={f.id}
+                          className={`flex items-center gap-3 px-3 py-2 hover:bg-gray-50 ${alreadyDistributed ? 'opacity-60' : 'cursor-pointer'}`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked || alreadyDistributed}
+                            disabled={alreadyDistributed}
+                            onChange={(e) => {
+                              setDistributeSelected((prev) =>
+                                e.target.checked
+                                  ? [...prev, f.id]
+                                  : prev.filter((id) => id !== f.id)
+                              );
+                            }}
+                            className="w-4 h-4 accent-blue-600"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm text-gray-900 truncate">
+                              {f.firstName} {f.lastName}
+                              <span className="ml-2 text-xs text-gray-500">{f.approvedRole}</span>
+                              {alreadyDistributed && (
+                                <span className="ml-2 text-xs text-indigo-700">(already distributed)</span>
+                              )}
+                            </p>
+                            <p className="text-xs text-gray-500 truncate">{f.email}</p>
+                          </div>
+                        </label>
+                      );
+                    })
+                )}
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowDistributeModal(false)}
+                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-900 rounded-lg hover:bg-gray-50 font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => saveDistributions({ addIds: distributeSelected })}
+                  disabled={distributeSaving || distributeSelected.length === 0}
+                  className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:bg-gray-400 font-medium"
+                >
+                  {distributeSaving ? 'Saving...' : `Add ${distributeSelected.length || ''}`}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

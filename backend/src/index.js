@@ -370,7 +370,10 @@ async function start() {
       }
     }
 
-    // Assessment distribution — designer + source pointer. Additive.
+    // Assessment distribution — designer + source pointer + assignedBy on
+    // assignments so we can attribute which faculty picked which student.
+    // Additive. The designed_by/source_assessment_id columns are legacy
+    // (the old per-faculty-copy model); kept nullable so old data survives.
     const assessmentColumns = [
       { name: 'designed_by', ddl: 'CHAR(36) NULL' },
       { name: 'source_assessment_id', ddl: 'CHAR(36) NULL' },
@@ -387,6 +390,18 @@ async function start() {
         } else {
           console.error(`Error adding ${col.name} to assessments:`, error.message);
         }
+      }
+    }
+    try {
+      await sequelize.query(`ALTER TABLE assessment_assignments ADD COLUMN assigned_by CHAR(36) NULL`);
+      console.log('Added assigned_by column to assessment_assignments');
+    } catch (error) {
+      if (error.message && error.message.includes('Duplicate column')) {
+        console.log('assigned_by column already exists on assessment_assignments');
+      } else if (error.message && error.message.includes("doesn't exist")) {
+        // fresh install — sync will create it
+      } else {
+        console.error('Error adding assigned_by to assessment_assignments:', error.message);
       }
     }
 
