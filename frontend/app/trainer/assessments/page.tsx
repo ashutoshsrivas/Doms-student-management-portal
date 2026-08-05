@@ -13,14 +13,8 @@ export default function TrainerAssessmentsPage() {
       return;
     }
 
-    // Verify user is TRAINER
-    if (user.role !== 'TRAINER') {
-      router.push('/unauthorized');
-      return;
-    }
-
-    // Redirect to admin assessments page
-    // The backend will filter to show only their assessments
+    // Trainer role is aliased to PLACEMENT_COORDINATOR at the auth boundary —
+    // always bounce to the shared /admin/assessments page.
     router.push('/admin/assessments');
   }, [user, router]);
 

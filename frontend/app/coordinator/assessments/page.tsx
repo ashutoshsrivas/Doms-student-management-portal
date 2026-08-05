@@ -13,14 +13,8 @@ export default function CoordinatorAssessmentsPage() {
       return;
     }
 
-    // Verify user is PLACEMENT_COORDINATOR
-    if (user.role !== 'PLACEMENT_COORDINATOR') {
-      router.push('/unauthorized');
-      return;
-    }
-
-    // Redirect to admin assessments page
-    // The backend will filter to show only their assessments
+    // Coordinator role is aliased to ADMIN at the auth boundary — always bounce
+    // to the shared /admin/assessments page, which enforces the real allowlist.
     router.push('/admin/assessments');
   }, [user, router]);
 

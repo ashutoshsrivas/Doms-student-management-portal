@@ -231,7 +231,7 @@ export default function AssessmentDetailsPage() {
 
   useEffect(() => {
     if (!currentUser) return;
-    const allowedRoles = ['ADMIN', 'HOD', 'MENTOR', 'FACULTY', 'PLACEMENT_COORDINATOR'];
+    const allowedRoles = ['ADMIN', 'HOD', 'MENTOR', 'FACULTY', 'CHAIR_HEAD', 'PLACEMENT_COORDINATOR'];
     if (!allowedRoles.includes(currentUser.role)) {
       router.push('/dashboard');
       return;
@@ -457,11 +457,14 @@ export default function AssessmentDetailsPage() {
   const isPublished = assessment.status === 'PUBLISHED';
   const isClosed = assessment.status === 'CLOSED';
   const isDraft = assessment.status === 'DRAFT';
-  const canEdit = isDraft;
   const ORG_ADMIN_ROLES = ['ADMIN', 'HOD', 'PLACEMENT_COORDINATOR'];
-  const canManageDistributions = !!currentUser && (
+  // Distributed faculty can pick students + grade, but never edit questions
+  // or rubric — those stay creator/admin-only on the backend too.
+  const isCreatorOrAdmin = !!currentUser && (
     assessment.createdBy === currentUser.id || ORG_ADMIN_ROLES.includes(currentUser.role)
   );
+  const canEdit = isDraft && isCreatorOrAdmin;
+  const canManageDistributions = isCreatorOrAdmin;
 
   return (
     <DashboardLayout>
