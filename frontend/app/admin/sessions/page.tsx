@@ -13,6 +13,10 @@ import {
   FiUpload,
   FiChevronLeft,
   FiChevronRight,
+  FiBarChart2,
+  FiX,
+  FiLogIn,
+  FiUserCheck,
 } from 'react-icons/fi';
 import useAuthStore from '@/app/store/authStore';
 import apiClient from '@/app/lib/apiClient';
@@ -52,6 +56,30 @@ export default function SessionsPage() {
   const [showStudentModal, setShowStudentModal] = useState(false);
   const [selectedSession, setSelectedSession] = useState<Session | null>(null);
   const [studentModalMode, setStudentModalMode] = useState<'manual' | 'excel' | 'link'>('manual');
+
+  // Session stats modal
+  const [showStatsModal, setShowStatsModal] = useState(false);
+  const [statsLoading, setStatsLoading] = useState(false);
+  interface StatsStudent {
+    studentSessionId: string;
+    userId: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    registrationNumber: string | null;
+    enrollmentStatus: string;
+    userStatus: string | null;
+    lastLogin: string | null;
+    hasLoggedIn: boolean;
+  }
+  interface StatsDomain { domain: string; count: number; students: StatsStudent[] }
+  interface StatsPayload {
+    session: { id: string; name: string; startDate: string; endDate: string; isActive: boolean };
+    totals: { total: number; regular: number; dropped: number; completed: number; pending: number; loggedIn: number; neverLoggedIn: number };
+    byDomain: StatsDomain[];
+  }
+  const [statsData, setStatsData] = useState<StatsPayload | null>(null);
+  const [statsExpanded, setStatsExpanded] = useState<string | null>(null);
 
   // Form states
   const [sessionForm, setSessionForm] = useState({
@@ -293,6 +321,24 @@ export default function SessionsPage() {
     }
   };
 
+  // Open the stats modal for a specific session and load its aggregates.
+  const openSessionStats = async (session: Session) => {
+    setSelectedSession(session);
+    setShowStatsModal(true);
+    setStatsData(null);
+    setStatsExpanded(null);
+    try {
+      setStatsLoading(true);
+      const res = await apiClient.get(`/sessions/${session.id}/stats`);
+      setStatsData(res.data as StatsPayload);
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { message?: string } } };
+      toast.error(err.response?.data?.message || 'Failed to load session stats');
+    } finally {
+      setStatsLoading(false);
+    }
+  };
+
   // Copy to clipboard
   const handleCopyLink = async () => {
     if (!shareableLink) return;
@@ -396,6 +442,13 @@ export default function SessionsPage() {
                           title="View Students"
                         >
                           <FiUsers className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => openSessionStats(session)}
+                          className="p-2 hover:bg-indigo-100 text-indigo-600 rounded transition"
+                          title="Session Stats"
+                        >
+                          <FiBarChart2 className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => {
@@ -744,6 +797,155 @@ export default function SessionsPage() {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Session Stats Modal */}
+      {showStatsModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[92vh] overflow-hidden flex flex-col">
+            <div className="flex justify-between items-start p-6 border-b border-gray-200">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">Session Stats</h2>
+                <p className="text-sm text-gray-600 mt-1">
+                  {selectedSession?.name || '—'}
+                </p>
+              </div>
+              <button
+                onClick={() => { setShowStatsModal(false); setStatsData(null); }}
+                className="text-gray-600 hover:text-gray-800"
+              >
+                <FiX className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto">
+              {statsLoading || !statsData ? (
+                <div className="py-12 text-center text-gray-600">
+                  <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-3" />
+                  <p className="text-sm">Loading stats...</p>
+                </div>
+              ) : (
+                <>
+                  {/* Totals */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+                    <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
+                      <div className="flex items-center gap-2 text-xs font-semibold uppercase text-blue-800">
+                        <FiUsers className="w-3.5 h-3.5" /> Total students
+                      </div>
+                      <p className="mt-1 text-3xl font-bold text-blue-900">{statsData.totals.total}</p>
+                    </div>
+                    <div className="rounded-lg border border-green-200 bg-green-50 p-4">
+                      <div className="flex items-center gap-2 text-xs font-semibold uppercase text-green-800">
+                        <FiUserCheck className="w-3.5 h-3.5" /> Regular
+                      </div>
+                      <p className="mt-1 text-3xl font-bold text-green-900">{statsData.totals.regular}</p>
+                      <p className="text-xs text-green-800 mt-1">Onboarded &amp; active</p>
+                    </div>
+                    <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-4">
+                      <div className="flex items-center gap-2 text-xs font-semibold uppercase text-indigo-800">
+                        <FiLogIn className="w-3.5 h-3.5" /> Logged in
+                      </div>
+                      <p className="mt-1 text-3xl font-bold text-indigo-900">{statsData.totals.loggedIn}</p>
+                      <p className="text-xs text-indigo-800 mt-1">Ever signed in</p>
+                    </div>
+                    <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                      <div className="text-xs font-semibold uppercase text-gray-700">Never logged in</div>
+                      <p className="mt-1 text-3xl font-bold text-gray-900">{statsData.totals.neverLoggedIn}</p>
+                    </div>
+                    {statsData.totals.dropped > 0 && (
+                      <div className="rounded-lg border border-red-200 bg-red-50 p-3">
+                        <div className="text-xs font-semibold uppercase text-red-800">Dropped</div>
+                        <p className="text-2xl font-bold text-red-900">{statsData.totals.dropped}</p>
+                      </div>
+                    )}
+                    {statsData.totals.completed > 0 && (
+                      <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+                        <div className="text-xs font-semibold uppercase text-emerald-800">Completed</div>
+                        <p className="text-2xl font-bold text-emerald-900">{statsData.totals.completed}</p>
+                      </div>
+                    )}
+                    {statsData.totals.pending > 0 && (
+                      <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-3">
+                        <div className="text-xs font-semibold uppercase text-yellow-800">Pending</div>
+                        <p className="text-2xl font-bold text-yellow-900">{statsData.totals.pending}</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* By domain */}
+                  <h3 className="text-lg font-bold text-gray-900 mb-3">By domain</h3>
+                  {statsData.byDomain.length === 0 ? (
+                    <p className="text-sm text-gray-500 py-6 text-center border border-gray-200 rounded-lg">
+                      No students enrolled in this session yet
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      {statsData.byDomain.map((d) => {
+                        const isOpen = statsExpanded === d.domain;
+                        const loggedInCount = d.students.filter((s) => s.hasLoggedIn).length;
+                        return (
+                          <div key={d.domain} className="border border-gray-200 rounded-lg overflow-hidden">
+                            <button
+                              type="button"
+                              onClick={() => setStatsExpanded(isOpen ? null : d.domain)}
+                              className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors"
+                            >
+                              <div className="text-left">
+                                <p className="text-sm font-semibold text-gray-900">{d.domain}</p>
+                                <p className="text-xs text-gray-600 mt-0.5">
+                                  {loggedInCount}/{d.count} logged in
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <span className="inline-flex items-center justify-center min-w-[2rem] h-7 px-2 rounded-full text-sm font-bold bg-indigo-100 text-indigo-800">
+                                  {d.count}
+                                </span>
+                                <FiChevronRight className={`w-4 h-4 text-gray-500 transition-transform ${isOpen ? 'rotate-90' : ''}`} />
+                              </div>
+                            </button>
+                            {isOpen && (
+                              <div className="border-t border-gray-100 divide-y divide-gray-100 max-h-[40vh] overflow-y-auto">
+                                {d.students.map((s) => (
+                                  <div key={s.studentSessionId} className="px-4 py-2 flex items-center justify-between gap-3">
+                                    <div className="min-w-0 flex-1">
+                                      <p className="text-sm text-gray-900 truncate">
+                                        {s.firstName} {s.lastName}
+                                        {s.registrationNumber && (
+                                          <span className="ml-2 text-xs text-gray-500">({s.registrationNumber})</span>
+                                        )}
+                                      </p>
+                                      <p className="text-xs text-gray-500 truncate">{s.email}</p>
+                                    </div>
+                                    <div className="flex items-center gap-2 shrink-0">
+                                      {s.hasLoggedIn ? (
+                                        <span className="inline-flex items-center gap-1 text-xs font-medium text-green-800 bg-green-50 border border-green-200 px-2 py-0.5 rounded-full">
+                                          <FiCheck className="w-3 h-3" /> Logged in
+                                        </span>
+                                      ) : (
+                                        <span className="inline-flex items-center text-xs font-medium text-gray-700 bg-gray-100 border border-gray-200 px-2 py-0.5 rounded-full">
+                                          Not yet
+                                        </span>
+                                      )}
+                                      {s.enrollmentStatus !== 'ONBOARDED' && (
+                                        <span className="text-xs font-medium text-red-700 bg-red-50 border border-red-200 px-2 py-0.5 rounded-full">
+                                          {s.enrollmentStatus}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
           </div>
         </div>
       )}

@@ -945,6 +945,85 @@ const sessionController = {
       res.status(500).json({ message: 'Failed to fetch student categories' });
     }
   },
+
+  // Aggregate stats for one academic session: enrolment counts by status,
+  // login coverage, and the domain (User.department) breakdown with each
+  // student listed. Used by the Session Stats modal on /admin/sessions.
+  getSessionStats: async (req, res) => {
+    const { id } = req.params;
+    try {
+      const session = await AcademicSession.findByPk(id, {
+        attributes: ['id', 'name', 'startDate', 'endDate', 'isActive'],
+      });
+      if (!session) return res.status(404).json({ message: 'Session not found' });
+
+      // Every enrolment for this session with its student's basic info.
+      const rows = await StudentSession.findAll({
+        where: { academicSessionId: id },
+        attributes: ['id', 'status', 'userId', 'enrollmentDate'],
+        include: [{
+          model: User,
+          as: 'Student',
+          attributes: ['id', 'firstName', 'lastName', 'email', 'registrationNumber', 'department', 'lastLogin', 'status'],
+        }],
+      });
+
+      const totals = {
+        total: rows.length,
+        regular: 0,      // ONBOARDED enrolments
+        dropped: 0,
+        completed: 0,
+        pending: 0,
+        loggedIn: 0,     // distinct students with a non-null lastLogin
+        neverLoggedIn: 0,
+      };
+      const domainMap = new Map(); // domainLabel -> { count, students: [...] }
+      const NO_DOMAIN = 'No domain set';
+
+      for (const r of rows) {
+        const s = r.Student;
+        const status = r.status || 'ONBOARDED';
+        if (status === 'ONBOARDED') totals.regular += 1;
+        else if (status === 'DROPPED') totals.dropped += 1;
+        else if (status === 'COMPLETED') totals.completed += 1;
+        else if (status === 'PENDING') totals.pending += 1;
+
+        const hasLoggedIn = !!s?.lastLogin;
+        if (hasLoggedIn) totals.loggedIn += 1;
+        else totals.neverLoggedIn += 1;
+
+        const domain = (s?.department || '').trim() || NO_DOMAIN;
+        if (!domainMap.has(domain)) domainMap.set(domain, { domain, count: 0, students: [] });
+        const bucket = domainMap.get(domain);
+        bucket.count += 1;
+        bucket.students.push({
+          studentSessionId: r.id,
+          userId: s?.id,
+          firstName: s?.firstName || '',
+          lastName: s?.lastName || '',
+          email: s?.email || '',
+          registrationNumber: s?.registrationNumber || null,
+          enrollmentStatus: status,
+          userStatus: s?.status || null,
+          lastLogin: s?.lastLogin || null,
+          hasLoggedIn,
+        });
+      }
+
+      const byDomain = Array.from(domainMap.values())
+        .sort((a, b) => b.count - a.count || a.domain.localeCompare(b.domain));
+      byDomain.forEach((d) => {
+        d.students.sort((a, b) =>
+          `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`)
+        );
+      });
+
+      res.json({ session, totals, byDomain });
+    } catch (error) {
+      console.error('getSessionStats error:', error);
+      res.status(500).json({ message: 'Failed to load session stats' });
+    }
+  },
 };
 
 module.exports = sessionController;

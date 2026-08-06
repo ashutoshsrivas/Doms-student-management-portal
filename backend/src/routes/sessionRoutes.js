@@ -126,6 +126,10 @@ router.get(
   sessionController.getStudentCategories
 );
 
+// Aggregate stats for one session — enrolment counts, login coverage,
+// domain breakdown. MUST be registered before the generic /:id route.
+router.get('/:id/stats', authenticateToken, sessionController.getSessionStats);
+
 // Generic session routes (MUST be last to avoid catching specific routes)
 router.get('/:id', authenticateToken, sessionController.getSessionById);
 
