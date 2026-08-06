@@ -8,6 +8,7 @@ import useAuthStore from '@/app/store/authStore';
 import apiClient from '@/app/lib/apiClient';
 import toast from 'react-hot-toast';
 import { FiCamera, FiSave, FiArrowLeft, FiLogOut, FiLock } from 'react-icons/fi';
+import { MBA_DOMAINS } from '@/app/lib/domains';
 
 interface UserProfile {
   id: string;
@@ -89,7 +90,7 @@ function ProfilePageContent() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({
       ...prev,
@@ -481,19 +482,27 @@ function ProfilePageContent() {
               )}
             </div>
 
-            {/* Department */}
+            {/* Domain */}
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Department
+                Domain
               </label>
-              <input
-                type="text"
+              <select
                 name="department"
                 value={formData.department}
                 onChange={handleInputChange}
-                className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 bg-white text-gray-900 placeholder-gray-700 text-base font-medium"
-                placeholder="Enter department"
-              />
+                className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 bg-white text-gray-900 text-base font-medium"
+              >
+                <option value="">Select a domain</option>
+                {MBA_DOMAINS.map((d) => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
+                {/* Preserve any legacy value not in the canonical list, so
+                    admin-supplied historical values don't silently blank. */}
+                {formData.department && !MBA_DOMAINS.includes(formData.department) && (
+                  <option value={formData.department}>{formData.department} (legacy)</option>
+                )}
+              </select>
             </div>
           </div>
 
