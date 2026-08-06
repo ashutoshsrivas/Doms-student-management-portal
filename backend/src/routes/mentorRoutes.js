@@ -35,6 +35,15 @@ router.get(
   mentorController.getMentorTeams
 );
 
+// Every mentee of the caller in a given session — union of teams where
+// they are the mentor (facultyId) AND teams they created. Used by the
+// "Select my mentees" quick-pick in the assessment assign modal.
+router.get(
+  '/teams/mine/mentees',
+  authenticateToken,
+  mentorController.getMyMentees
+);
+
 // Get single mentor team
 router.get(
   '/teams/:teamId',

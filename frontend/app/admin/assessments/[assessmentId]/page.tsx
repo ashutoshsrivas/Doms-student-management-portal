@@ -226,24 +226,16 @@ export default function AssessmentDetailsPage() {
   }, [sessionId]);
 
   // Fetch every studentSessionId in the caller's mentor teams within the
-  // assessment's session. Cached until the modal is reopened.
+  // assessment's session. Backend does the union of (mentor OR creator).
+  // Cached until the modal is reopened.
   const loadMyMentees = useCallback(async () => {
-    if (!sessionId || !currentUser) return [];
+    if (!sessionId) return [];
     if (myMenteeSessionIds !== null) return myMenteeSessionIds;
     try {
       setMyMenteesLoading(true);
-      const res = await apiClient.get(
-        `/mentor-teams?facultyId=${currentUser.id}&sessionId=${sessionId}`
-      );
-      const teams = res.data?.teams || [];
-      const ids: string[] = [];
-      const seen = new Set<string>();
-      for (const t of teams) {
-        for (const m of (t.MentorTeamMembers || [])) {
-          const sid = m.StudentSession?.id;
-          if (sid && !seen.has(sid)) { seen.add(sid); ids.push(sid); }
-        }
-      }
+      const res = await apiClient.get(`/mentor-teams/mine/mentees?sessionId=${sessionId}`);
+      const rows = res.data?.mentees || [];
+      const ids: string[] = rows.map((r: { studentSessionId: string }) => r.studentSessionId).filter(Boolean);
       setMyMenteeSessionIds(ids);
       return ids;
     } catch (error) {
@@ -252,7 +244,7 @@ export default function AssessmentDetailsPage() {
     } finally {
       setMyMenteesLoading(false);
     }
-  }, [sessionId, currentUser, myMenteeSessionIds]);
+  }, [sessionId, myMenteeSessionIds]);
 
   const handleSelectMyMentees = async () => {
     const menteeIds = await loadMyMentees();

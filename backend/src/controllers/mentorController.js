@@ -188,6 +188,64 @@ module.exports = {
     }
   },
 
+  // Every mentee of the caller in a given session. "Mine" = teams where I
+  // am the assigned mentor OR teams I created (covers CHAIR_HEAD and
+  // admins who create teams for other faculty but still consider those
+  // students their responsibility).
+  getMyMentees: async (req, res) => {
+    const userId = req.user?.id;
+    let { sessionId } = req.query;
+    try {
+      if (!sessionId) {
+        const activeSession = await AcademicSession.findOne({
+          where: { isActive: true },
+          order: [['startDate', 'DESC']],
+          attributes: ['id'],
+        });
+        if (activeSession) sessionId = activeSession.id;
+      }
+      const teamWhere = {
+        [Op.or]: [{ facultyId: userId }, { createdBy: userId }],
+      };
+      if (sessionId) teamWhere.sessionId = sessionId;
+
+      const teams = await MentorTeam.findAll({
+        where: teamWhere,
+        attributes: ['id', 'teamName', 'facultyId', 'createdBy', 'sessionId'],
+        include: [{
+          model: MentorTeamMember,
+          attributes: ['id', 'studentSessionId'],
+          include: [{
+            model: StudentSession,
+            attributes: ['id', 'userId'],
+            include: [{ model: User, as: 'Student', attributes: ['id', 'firstName', 'lastName', 'email'] }],
+          }],
+        }],
+      });
+
+      const seen = new Set();
+      const mentees = [];
+      for (const t of teams) {
+        for (const m of (t.MentorTeamMembers || [])) {
+          const ss = m.StudentSession;
+          if (!ss?.id || seen.has(ss.id)) continue;
+          seen.add(ss.id);
+          mentees.push({
+            studentSessionId: ss.id,
+            userId: ss.userId,
+            firstName: ss.Student?.firstName || null,
+            lastName: ss.Student?.lastName || null,
+            email: ss.Student?.email || null,
+          });
+        }
+      }
+      res.json({ sessionId: sessionId || null, count: mentees.length, mentees });
+    } catch (error) {
+      console.error('getMyMentees error:', error);
+      res.status(500).json({ message: 'Failed to load mentees' });
+    }
+  },
+
   // Get single mentor team
   getMentorTeam: async (req, res) => {
     const { teamId } = req.params;
