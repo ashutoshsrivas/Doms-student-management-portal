@@ -233,7 +233,7 @@ export default function AssessmentDetailsPage() {
     if (myMenteeSessionIds !== null) return myMenteeSessionIds;
     try {
       setMyMenteesLoading(true);
-      const res = await apiClient.get(`/mentor-teams/mine/mentees?sessionId=${sessionId}`);
+      const res = await apiClient.get(`/mentor/teams/mine/mentees?sessionId=${sessionId}`);
       const rows = res.data?.mentees || [];
       const ids: string[] = rows.map((r: { studentSessionId: string }) => r.studentSessionId).filter(Boolean);
       setMyMenteeSessionIds(ids);
