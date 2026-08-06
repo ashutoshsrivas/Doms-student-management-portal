@@ -161,6 +161,11 @@ export default function AssessmentDetailsPage() {
   const [assignmentLoading, setAssignmentLoading] = useState(false);
   const [studentSearch, setStudentSearch] = useState('');
   const [categorySearch, setCategorySearch] = useState('');
+  // Cached studentSessionIds for "my mentees" quick-pick inside the assign
+  // modal. Loaded lazily on first click, scoped to the assessment's session
+  // so old-cohort mentees don't leak in.
+  const [myMenteeSessionIds, setMyMenteeSessionIds] = useState<string[] | null>(null);
+  const [myMenteesLoading, setMyMenteesLoading] = useState(false);
 
   // Distribution management
   const DISTRIBUTE_TARGET_ROLES = ['FACULTY', 'CHAIR_HEAD', 'MENTOR', 'HOD', 'ADMIN', 'PLACEMENT_COORDINATOR', 'COORDINATOR', 'TRAINER'];
@@ -219,6 +224,53 @@ export default function AssessmentDetailsPage() {
       console.error('Failed to fetch categories:', error);
     }
   }, [sessionId]);
+
+  // Fetch every studentSessionId in the caller's mentor teams within the
+  // assessment's session. Cached until the modal is reopened.
+  const loadMyMentees = useCallback(async () => {
+    if (!sessionId || !currentUser) return [];
+    if (myMenteeSessionIds !== null) return myMenteeSessionIds;
+    try {
+      setMyMenteesLoading(true);
+      const res = await apiClient.get(
+        `/mentor-teams?facultyId=${currentUser.id}&sessionId=${sessionId}`
+      );
+      const teams = res.data?.teams || [];
+      const ids: string[] = [];
+      const seen = new Set<string>();
+      for (const t of teams) {
+        for (const m of (t.MentorTeamMembers || [])) {
+          const sid = m.StudentSession?.id;
+          if (sid && !seen.has(sid)) { seen.add(sid); ids.push(sid); }
+        }
+      }
+      setMyMenteeSessionIds(ids);
+      return ids;
+    } catch (error) {
+      console.error('Failed to load mentees:', error);
+      return [];
+    } finally {
+      setMyMenteesLoading(false);
+    }
+  }, [sessionId, currentUser, myMenteeSessionIds]);
+
+  const handleSelectMyMentees = async () => {
+    const menteeIds = await loadMyMentees();
+    if (menteeIds.length === 0) {
+      toast('You have no mentees in this session', { icon: 'ℹ️' });
+      return;
+    }
+    // Only tick students actually available in this session's roster.
+    const availableIds = new Set(availableStudents.map((s) => s.id));
+    const picks = menteeIds.filter((id) => availableIds.has(id));
+    const merged = Array.from(new Set([...assignmentForm.studentSessionIds, ...picks]));
+    setAssignmentForm({ ...assignmentForm, studentSessionIds: merged });
+    if (picks.length < menteeIds.length) {
+      toast.success(`Selected ${picks.length} of your mentees (${menteeIds.length - picks.length} not in this session's roster)`);
+    } else {
+      toast.success(`Selected ${picks.length} of your mentees`);
+    }
+  };
 
   // Filter functions
   const filteredStudents = availableStudents.filter(student =>
@@ -748,6 +800,7 @@ export default function AssessmentDetailsPage() {
                 <button
                   onClick={() => {
                     setShowAssignModal(true);
+                    setMyMenteeSessionIds(null);
                     fetchAvailableStudents();
                     fetchAvailableCategories();
                   }}
@@ -1039,7 +1092,19 @@ export default function AssessmentDetailsPage() {
             <form onSubmit={handleAssignStudents} className="p-6 space-y-6">
               {/* Assign to Specific Students */}
               <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-3">Specific Students</h3>
+                <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
+                  <h3 className="text-lg font-semibold text-gray-900">Specific Students</h3>
+                  <button
+                    type="button"
+                    onClick={handleSelectMyMentees}
+                    disabled={myMenteesLoading}
+                    className="flex items-center gap-2 bg-purple-50 text-purple-800 border border-purple-200 hover:bg-purple-100 disabled:opacity-60 text-sm font-medium px-3 py-1.5 rounded-lg transition-colors"
+                    title="Add every student in your mentor team(s) for this session"
+                  >
+                    <FiUsers size={14} />
+                    {myMenteesLoading ? 'Loading...' : 'Select my mentees'}
+                  </button>
+                </div>
                 <input
                   type="text"
                   placeholder="Search by name or email..."
