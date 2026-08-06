@@ -1532,18 +1532,39 @@ const assessmentController = {
         return res.status(404).json({ message: 'Assessment not found' });
       }
 
-      // Check authorization
-      if (assessment.createdBy !== userId && !['ADMIN', 'HOD', 'PLACEMENT_COORDINATOR'].includes(req.user.role)) {
-        return res.status(403).json({
-          message: 'Only creator and admin can view results',
+      // Creator / admin see every submission. Distributed faculty see only
+      // submissions from the students they themselves assigned — mirrors
+      // getAssessmentSubmissions.
+      const { isCreator, isAdmin, isDistributed } = await getAccess(assessment, req);
+      if (!isCreator && !isAdmin && !isDistributed) {
+        return res.status(403).json({ message: 'Not authorized to view these results' });
+      }
+
+      const where = {
+        assessmentId,
+        status: { [Op.in]: ['SUBMITTED', 'GRADED'] },
+      };
+      if (isDistributed && !isCreator && !isAdmin) {
+        const myAssignments = await AssessmentAssignment.findAll({
+          where: { assessmentId, assignedBy: userId },
+          attributes: ['studentSessionId'],
         });
+        const myStudentIds = myAssignments
+          .map((a) => a.studentSessionId)
+          .filter(Boolean);
+        if (myStudentIds.length === 0) {
+          return res.status(200).json({
+            message: 'Results retrieved',
+            assessment,
+            submissions: [],
+            totalSubmissions: 0,
+          });
+        }
+        where.studentSessionId = { [Op.in]: myStudentIds };
       }
 
       const submissions = await AssessmentSubmission.findAll({
-        where: { 
-          assessmentId,
-          status: { [Op.in]: ['SUBMITTED', 'GRADED'] }, // Only show submitted or graded, not in-progress
-        },
+        where,
         include: [
           {
             model: StudentSession,
