@@ -13,6 +13,7 @@ import {
 } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 import useAuthStore from '@/app/store/authStore';
+import useSessionStore from '@/app/store/sessionStore';
 import apiClient from '@/app/lib/apiClient';
 import DashboardLayout from '@/app/components/DashboardLayout';
 
@@ -73,7 +74,11 @@ export default function MentorMonitoringPage() {
   const [rows, setRows] = useState<MTeamRow[]>([]);
   const [sessions, setSessions] = useState<SessionOpt[]>([]);
   const [chairHeads, setChairHeads] = useState<ChairHeadOpt[]>([]);
-  const [sessionId, setSessionId] = useState<string>('');
+  const { activeSessionId, setActiveSessionId } = useSessionStore();
+  // Reads and writes the global session store so the topbar selector and
+  // this page's dropdown stay in sync.
+  const sessionId = activeSessionId || '';
+  const setSessionId = (id: string) => setActiveSessionId(id || null);
   const [chairHeadId, setChairHeadId] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');

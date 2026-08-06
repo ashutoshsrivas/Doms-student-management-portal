@@ -17,6 +17,7 @@ import {
   FiChevronRight,
 } from 'react-icons/fi';
 import useAuthStore from '@/app/store/authStore';
+import useSessionStore from '@/app/store/sessionStore';
 import apiClient from '@/app/lib/apiClient';
 import toast from 'react-hot-toast';
 import DashboardLayout from '@/app/components/DashboardLayout';
@@ -91,12 +92,16 @@ const statusIcons = {
 export default function AssessmentsPage() {
   const router = useRouter();
   const { user: currentUser } = useAuthStore();
+  const { activeSessionId, setActiveSessionId } = useSessionStore();
   const [assessments, setAssessments] = useState<Assessment[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
-  const [sessionFilter, setSessionFilter] = useState('');
+  // Session filter is driven by the topbar's global session selector.
+  // Local dropdown edits update the same store so every page stays in sync.
+  const sessionFilter = activeSessionId || '';
+  const setSessionFilter = (id: string) => setActiveSessionId(id || null);
 
   const [showModal, setShowModal] = useState(false);
   const [modalMode, setModalMode] = useState<'create' | 'edit'>('create');

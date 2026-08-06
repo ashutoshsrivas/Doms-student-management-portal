@@ -16,6 +16,7 @@ import {
   FiUsers,
 } from 'react-icons/fi';
 import apiClient from '@/app/lib/apiClient';
+import useSessionStore from '@/app/store/sessionStore';
 import DashboardLayout from '@/app/components/DashboardLayout';
 import ProtectedRoute from '@/app/components/ProtectedRoute';
 
@@ -395,7 +396,9 @@ function Content() {
   const [data, setData] = useState<MonitorResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [sessionId, setSessionId] = useState<string>('');
+  const { activeSessionId, setActiveSessionId } = useSessionStore();
+  const sessionId = activeSessionId || '';
+  const setSessionId = (id: string) => setActiveSessionId(id || null);
   const [chairHeadId, setChairHeadId] = useState<string>('');
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<ComplianceFilter>('all');

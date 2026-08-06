@@ -23,6 +23,7 @@ import {
   FiClipboard,
 } from 'react-icons/fi';
 import useAuthStore from '@/app/store/authStore';
+import SessionSelector from '@/app/components/SessionSelector';
 import apiClient from '@/app/lib/apiClient';
 import toast from 'react-hot-toast';
 
@@ -451,6 +452,10 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
             )}
           </div>
 
+          {/* Right side: session selector + profile */}
+          <div className="flex items-center gap-3">
+            <SessionSelector />
+
           {/* Profile Dropdown */}
           <div className="relative">
             <button
@@ -501,6 +506,7 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
                 </button>
               </div>
             )}
+          </div>
           </div>
         </header>
 
