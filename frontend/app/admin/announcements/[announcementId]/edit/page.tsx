@@ -21,10 +21,12 @@ function EditAnnouncementContent() {
   const getBackUrl = () => '/admin/announcements';
 
 
+  const [sessions, setSessions] = useState<Array<{ id: string; name: string }>>([]);
   const [formData, setFormData] = useState({
     title: '',
     content: '',
     type: 'PUBLIC',
+    sessionId: '',
   });
   const [file, setFile] = useState<File | null>(null);
   const [filePreview, setFilePreview] = useState<string | null>(null);
@@ -62,6 +64,7 @@ function EditAnnouncementContent() {
             title: announcement.title,
             content: announcement.content,
             type: announcement.type,
+            sessionId: announcement.sessionId || '',
           });
           if (announcement.fileUrl) {
             setExistingFileUrl(announcement.fileUrl);
@@ -83,6 +86,16 @@ function EditAnnouncementContent() {
 
     fetchAnnouncement();
   }, [user, token, announcementId, authLoading, router]);
+
+  useEffect(() => {
+    if (!token) return;
+    fetch(`${API_BASE}/sessions?limit=100`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => r.json())
+      .then((d) => setSessions(d?.sessions || []))
+      .catch(() => setSessions([]));
+  }, [token]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -137,6 +150,7 @@ function EditAnnouncementContent() {
       submitData.append('title', formData.title);
       submitData.append('content', formData.content);
       submitData.append('type', formData.type);
+      submitData.append('sessionId', formData.sessionId || '');
       
       if (fileRemoved) {
         submitData.append('removeFile', 'true');
@@ -272,6 +286,29 @@ function EditAnnouncementContent() {
                 {formData.type === 'PUBLIC'
                   ? 'This announcement will be visible on the homepage and to all users'
                   : 'This announcement will only be visible to logged-in users in their dashboard'}
+              </p>
+            </div>
+
+            {/* Session Scope */}
+            <div>
+              <label htmlFor="sessionId" className="block text-sm font-medium text-gray-900 mb-2">
+                Session Scope
+              </label>
+              <select
+                id="sessionId"
+                name="sessionId"
+                value={formData.sessionId}
+                onChange={handleInputChange}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+              >
+                <option value="">All sessions (visible to every student cohort)</option>
+                {sessions.map((s) => (
+                  <option key={s.id} value={s.id}>Only {s.name}</option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-500 mt-2">
+                Pick a session to limit this announcement to students of that cohort. Staff always
+                see every announcement.
               </p>
             </div>
 

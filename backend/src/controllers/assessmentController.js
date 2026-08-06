@@ -184,6 +184,21 @@ const assessmentController = {
         console.log('[getAssessments] Faculty scope: own +', distributedIds.length, 'distributed');
       }
 
+      // If any staff hits this without a session filter, default to the
+      // currently-active academic session so dashboards don't mix cohorts
+      // after a rollover. They can still pass academicSessionId to override.
+      if (!sessionId && userRole !== 'STUDENT') {
+        const activeSession = await AcademicSession.findOne({
+          where: { isActive: true },
+          order: [['startDate', 'DESC']],
+          attributes: ['id'],
+        });
+        if (activeSession) {
+          sessionId = activeSession.id;
+          console.log('[getAssessments] Defaulted to active session:', sessionId);
+        }
+      }
+
       // sessionId is optional for staff — no session filter means "all
       // sessions". Only students require it (already handled above).
       if (sessionId) {
@@ -824,6 +839,37 @@ const assessmentController = {
         return res.status(400).json({
           message: 'Assessment must be in DRAFT or PUBLISHED status',
         });
+      }
+
+      // Session-isolation guard: every student and category attached to this
+      // assessment MUST belong to the same academic session as the assessment
+      // itself. Prevents a faculty from accidentally attaching a student
+      // enrolled in a different cohort.
+      if (studentSessionIds.length > 0) {
+        const validStudents = await StudentSession.count({
+          where: {
+            id: { [Op.in]: studentSessionIds },
+            academicSessionId: assessment.academicSessionId,
+          },
+        });
+        if (validStudents !== studentSessionIds.length) {
+          return res.status(400).json({
+            message: 'One or more selected students do not belong to this assessment\'s session',
+          });
+        }
+      }
+      if (categoryIds.length > 0) {
+        const validCategories = await SessionCategory.count({
+          where: {
+            id: { [Op.in]: categoryIds },
+            academicSessionId: assessment.academicSessionId,
+          },
+        });
+        if (validCategories !== categoryIds.length) {
+          return res.status(400).json({
+            message: 'One or more selected categories do not belong to this assessment\'s session',
+          });
+        }
       }
 
       const assignments = [];

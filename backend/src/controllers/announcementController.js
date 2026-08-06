@@ -1,17 +1,51 @@
-const { Announcement, User } = require('../models');
+const { Announcement, User, AcademicSession, StudentSession } = require('../models');
 const { uploadToS3, deleteFromS3 } = require('../utils/s3Upload');
+const { Op } = require('sequelize');
 const path = require('path');
+
+// Build a WHERE clause that hides session-scoped announcements from students
+// who aren't in that session. Staff always see everything.
+async function scopeForCaller(baseWhere, req) {
+  if (!req.user || req.user.role !== 'STUDENT') return baseWhere;
+  const enrolments = await StudentSession.findAll({
+    where: { userId: req.user.id },
+    attributes: ['academicSessionId'],
+  });
+  const mySessionIds = [...new Set(enrolments.map((e) => e.academicSessionId).filter(Boolean))];
+  return {
+    ...baseWhere,
+    [Op.and]: [
+      {
+        [Op.or]: [
+          { sessionId: null },
+          ...(mySessionIds.length ? [{ sessionId: { [Op.in]: mySessionIds } }] : []),
+        ],
+      },
+    ],
+  };
+}
+
+const SESSION_INCLUDE = {
+  model: AcademicSession,
+  as: 'Session',
+  required: false,
+  attributes: ['id', 'name'],
+};
 
 // Get all public announcements
 exports.getPublicAnnouncements = async (req, res) => {
   try {
+    const where = await scopeForCaller({ type: 'PUBLIC', status: 'ACTIVE' }, req);
     const announcements = await Announcement.findAll({
-      where: { type: 'PUBLIC', status: 'ACTIVE' },
-      include: {
-        model: User,
-        as: 'Creator',
-        attributes: ['id', 'firstName', 'lastName', 'email', 'profileImage', 'approvedRole']
-      },
+      where,
+      include: [
+        {
+          model: User,
+          as: 'Creator',
+          attributes: ['id', 'firstName', 'lastName', 'email', 'profileImage', 'approvedRole']
+        },
+        SESSION_INCLUDE,
+      ],
       order: [['createdAt', 'DESC']]
     });
 
@@ -32,13 +66,17 @@ exports.getPublicAnnouncements = async (req, res) => {
 // Get all announcements (private + public) - requires authentication
 exports.getAllAnnouncements = async (req, res) => {
   try {
+    const where = await scopeForCaller({ status: 'ACTIVE' }, req);
     const announcements = await Announcement.findAll({
-      where: { status: 'ACTIVE' },
-      include: {
-        model: User,
-        as: 'Creator',
-        attributes: ['id', 'firstName', 'lastName', 'email', 'profileImage', 'approvedRole']
-      },
+      where,
+      include: [
+        {
+          model: User,
+          as: 'Creator',
+          attributes: ['id', 'firstName', 'lastName', 'email', 'profileImage', 'approvedRole']
+        },
+        SESSION_INCLUDE,
+      ],
       order: [['createdAt', 'DESC']]
     });
 
@@ -61,11 +99,14 @@ exports.getAnnouncementById = async (req, res) => {
   try {
     const { id } = req.params;
     const announcement = await Announcement.findByPk(id, {
-      include: {
-        model: User,
-        as: 'Creator',
-        attributes: ['id', 'firstName', 'lastName', 'email', 'profileImage', 'approvedRole']
-      }
+      include: [
+        {
+          model: User,
+          as: 'Creator',
+          attributes: ['id', 'firstName', 'lastName', 'email', 'profileImage', 'approvedRole']
+        },
+        SESSION_INCLUDE,
+      ]
     });
 
     if (!announcement) {
@@ -82,6 +123,20 @@ exports.getAnnouncementById = async (req, res) => {
         success: false,
         message: 'You do not have access to this announcement'
       });
+    }
+
+    // Session-scoped announcement: hide it from students not in that session.
+    if (req.user && req.user.role === 'STUDENT' && announcement.sessionId) {
+      const inSession = await StudentSession.findOne({
+        where: { userId: req.user.id, academicSessionId: announcement.sessionId },
+        attributes: ['id'],
+      });
+      if (!inSession) {
+        return res.status(403).json({
+          success: false,
+          message: 'You do not have access to this announcement'
+        });
+      }
     }
 
     res.json({
@@ -101,7 +156,7 @@ exports.getAnnouncementById = async (req, res) => {
 // Create announcement - only Admin, HOD, Placement Coordinator
 exports.createAnnouncement = async (req, res) => {
   try {
-    const { title, content, type } = req.body;
+    const { title, content, type, sessionId } = req.body;
     const userId = req.user.id;
     const userRole = req.user.role;
 
@@ -122,12 +177,23 @@ exports.createAnnouncement = async (req, res) => {
       });
     }
 
+    // Validate optional session pointer
+    let scopedSessionId = null;
+    if (sessionId) {
+      const session = await AcademicSession.findByPk(sessionId, { attributes: ['id'] });
+      if (!session) {
+        return res.status(400).json({ success: false, message: 'Invalid sessionId' });
+      }
+      scopedSessionId = sessionId;
+    }
+
     const announcementData = {
       title,
       content,
       type: type || 'PUBLIC',
       createdBy: userId,
-      status: 'ACTIVE'
+      status: 'ACTIVE',
+      sessionId: scopedSessionId,
     };
 
     // Handle file upload if present
@@ -200,7 +266,7 @@ exports.createAnnouncement = async (req, res) => {
 exports.updateAnnouncement = async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, content, type } = req.body;
+    const { title, content, type, sessionId } = req.body;
     const userId = req.user.id;
     const userRole = req.user.role;
 
@@ -225,6 +291,18 @@ exports.updateAnnouncement = async (req, res) => {
     if (title) updateData.title = title;
     if (content) updateData.content = content;
     if (type) updateData.type = type;
+    // sessionId is nullable — allow explicit ""/null to clear scoping.
+    if (sessionId !== undefined) {
+      if (sessionId === null || sessionId === '') {
+        updateData.sessionId = null;
+      } else {
+        const session = await AcademicSession.findByPk(sessionId, { attributes: ['id'] });
+        if (!session) {
+          return res.status(400).json({ success: false, message: 'Invalid sessionId' });
+        }
+        updateData.sessionId = sessionId;
+      }
+    }
 
     // Handle file removal
     const removeFile = req.body.removeFile === 'true';

@@ -12,17 +12,28 @@ const isAdmin = (role) => isSupervisor(role);
 
 // Confirm the (mentor, student) pair actually shares an active mentor
 // team. Prevents random users from posting into someone else's thread.
-async function areLinked(mentorId, studentId) {
+// Returns the session id of the currently-active link (most-recent team)
+// so new messages can be stamped with it.
+async function linkInfo(mentorId, studentId) {
   const rows = await sequelize.query(
-    `SELECT 1 FROM mentor_team_members m
+    `SELECT t.session_id AS session_id
+       FROM mentor_team_members m
        JOIN mentor_teams t ON t.id = m.mentor_team_id
        JOIN student_sessions ss ON ss.id = m.student_session_id
       WHERE t.faculty_id = :m AND t.status = 'ACTIVE'
         AND ss.user_id = :s
+      ORDER BY t.created_at DESC
       LIMIT 1`,
     { replacements: { m: mentorId, s: studentId }, type: QueryTypes.SELECT },
   );
-  return rows.length > 0;
+  return {
+    linked: rows.length > 0,
+    sessionId: rows.length > 0 ? rows[0].session_id : null,
+  };
+}
+async function areLinked(mentorId, studentId) {
+  const { linked } = await linkInfo(mentorId, studentId);
+  return linked;
 }
 
 function canAccess(user, mentorId, studentId) {
@@ -41,8 +52,17 @@ exports.list = async (req, res) => {
     const linked = isAdmin(req.user.role) || await areLinked(mentorId, studentId);
     if (!linked) return res.status(404).json({ message: 'No active mentor–mentee link' });
 
+    // Optionally scope to a single session (?sessionId=…). When omitted,
+    // returns every message (each row carries its own sessionId so the UI
+    // can group). Legacy rows have sessionId=NULL — kept in-line so pre-
+    // rollover history stays visible.
+    const scopeSession = req.query.sessionId || null;
+    const where = { mentorUserId: mentorId, studentUserId: studentId };
+    if (scopeSession) {
+      where.sessionId = scopeSession === 'legacy' ? null : scopeSession;
+    }
     const messages = await MentorFeedbackMessage.findAll({
-      where: { mentorUserId: mentorId, studentUserId: studentId },
+      where,
       order: [['createdAt', 'ASC']],
       include: [{
         model: User,
@@ -68,7 +88,8 @@ exports.post = async (req, res) => {
     if (!canAccess(req.user, mentorId, studentId)) {
       return res.status(403).json({ message: 'Forbidden' });
     }
-    const linked = isAdmin(req.user.role) || await areLinked(mentorId, studentId);
+    const info = await linkInfo(mentorId, studentId);
+    const linked = isAdmin(req.user.role) || info.linked;
     if (!linked) return res.status(404).json({ message: 'No active mentor–mentee link' });
 
     const row = await MentorFeedbackMessage.create({
@@ -76,6 +97,9 @@ exports.post = async (req, res) => {
       studentUserId: studentId,
       authorUserId: req.user.id,
       body: text,
+      // Stamp with the session the pair are currently linked in, so per-
+      // session threads stay separate after a rollover.
+      sessionId: info.sessionId || null,
     });
     const withAuthor = await MentorFeedbackMessage.findByPk(row.id, {
       include: [{

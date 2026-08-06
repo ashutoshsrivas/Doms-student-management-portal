@@ -62,13 +62,34 @@ const shareLinkController = {
   // POST /api/share-links  { userId, sections?, label?, expiresAt? }
   create: async (req, res) => {
     try {
-      const { userId, sections, label, expiresAt } = req.body || {};
+      const { userId, sections, label, expiresAt, studentSessionId } = req.body || {};
       if (!userId) return res.status(400).json({ message: 'userId is required' });
 
       const student = await User.findByPk(userId);
       if (!student) return res.status(404).json({ message: 'User not found' });
       if (student.approvedRole !== 'STUDENT') {
         return res.status(400).json({ message: 'Share links can only be created for student accounts' });
+      }
+
+      // Pin to a specific student session so the public page doesn't
+      // silently swap to the next cohort when the student re-enrols. If
+      // the caller didn't specify one, default to the student's most-recent
+      // enrolment at creation time.
+      let pinnedStudentSessionId = null;
+      if (studentSessionId) {
+        const ss = await StudentSession.findOne({
+          where: { id: studentSessionId, userId },
+          attributes: ['id'],
+        });
+        if (!ss) return res.status(400).json({ message: 'Invalid studentSessionId for this student' });
+        pinnedStudentSessionId = studentSessionId;
+      } else {
+        const latest = await StudentSession.findOne({
+          where: { userId },
+          order: [['createdAt', 'DESC']],
+          attributes: ['id'],
+        });
+        pinnedStudentSessionId = latest ? latest.id : null;
       }
 
       const link = await ShareLink.create({
@@ -78,6 +99,7 @@ const shareLinkController = {
         sections: normaliseSections(sections),
         label: label ? String(label).slice(0, 120) : null,
         expiresAt: expiresAt ? new Date(expiresAt) : null,
+        studentSessionId: pinnedStudentSessionId,
       });
 
       res.status(201).json({
@@ -152,24 +174,36 @@ const shareLinkController = {
       }
 
       const profile = await StudentProfile.findOne({ where: { userId: link.userId } });
-      const studentSession = await StudentSession.findOne({
-        where: { userId: link.userId },
-        include: [{ model: AcademicSession, attributes: ['id', 'name', 'startDate', 'endDate'] }],
-        order: [['createdAt', 'DESC']],
-      });
+      // Prefer the pinned StudentSession (new links) — falls back to the
+      // student's most-recent enrolment for legacy links that predate the
+      // pin field.
+      const studentSession = link.studentSessionId
+        ? await StudentSession.findOne({
+            where: { id: link.studentSessionId },
+            include: [{ model: AcademicSession, attributes: ['id', 'name', 'startDate', 'endDate'] }],
+          })
+        : await StudentSession.findOne({
+            where: { userId: link.userId },
+            include: [{ model: AcademicSession, attributes: ['id', 'name', 'startDate', 'endDate'] }],
+            order: [['createdAt', 'DESC']],
+          });
 
       // Sections == null  -> all SECTION_KEYS visible
       // Sections == []    -> identity-only (no toggleable sections shown)
       // Sections == [...] -> only those keys visible
       const allowedSections = link.sections == null ? SECTION_KEYS : link.sections;
 
-      // Optional: assessment report (only fetched if section is allowed)
+      // Optional: assessment report (only fetched if section is allowed).
+      // Scope to the pinned session's enrolment if one exists; otherwise
+      // fall back to every enrolment (legacy links without a pin).
       let assessmentRows = null;
       if (allowedSections.includes('assessmentReport')) {
-        const ss = await StudentSession.findAll({
-          where: { userId: link.userId },
-          attributes: ['id'],
-        });
+        const ss = link.studentSessionId
+          ? [{ id: link.studentSessionId }]
+          : await StudentSession.findAll({
+              where: { userId: link.userId },
+              attributes: ['id'],
+            });
         const ssIds = ss.map((s) => s.id);
         if (ssIds.length > 0) {
           const subs = await AssessmentSubmission.findAll({

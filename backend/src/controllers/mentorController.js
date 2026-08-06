@@ -10,6 +10,37 @@ const {
 const s3Upload = require('../utils/s3Upload');
 const { Op } = require('sequelize');
 
+const ADMIN_ROLES = new Set(['ADMIN', 'HOD', 'PLACEMENT_COORDINATOR', 'COORDINATOR']);
+const STAFF_ROLES = new Set(['ADMIN', 'HOD', 'PLACEMENT_COORDINATOR', 'COORDINATOR', 'FACULTY', 'CHAIR_HEAD', 'MENTOR', 'TRAINER']);
+
+// Authorises a caller to view a specific student's mentor data.
+// - Admin-ish roles can view anyone.
+// - The student themselves (owning `studentSessionId`) can view own data.
+// - Faculty/mentor roles can view any student in a team they mentor.
+// Returns null on success, or an object { status, message } on failure.
+async function ensureCanReadStudent(req, studentSessionId) {
+  if (!studentSessionId) return { status: 400, message: 'studentSessionId required' };
+  const userId = req.user?.id;
+  const role = req.user?.role;
+  if (!userId) return { status: 401, message: 'Unauthorized' };
+  if (ADMIN_ROLES.has(role)) return null;
+  const ss = await StudentSession.findByPk(studentSessionId, { attributes: ['id', 'userId'] });
+  if (!ss) return { status: 404, message: 'Student session not found' };
+  if (ss.userId === userId) return null;
+  if (!STAFF_ROLES.has(role)) {
+    return { status: 403, message: 'Not authorized to view this student' };
+  }
+  // Faculty/mentor must actually mentor this student in some team.
+  const memberOfMineTeam = await MentorTeamMember.findOne({
+    where: { studentSessionId },
+    include: [{ model: MentorTeam, where: { facultyId: userId }, attributes: ['id'] }],
+  });
+  if (!memberOfMineTeam) {
+    return { status: 403, message: 'Not authorized to view this student' };
+  }
+  return null;
+}
+
 module.exports = {
   // ============ MENTOR TEAM MANAGEMENT (ADMIN) ============
 
@@ -93,7 +124,18 @@ module.exports = {
 
     try {
       let where = {};
-      if (sessionId) where.sessionId = sessionId;
+      // Default to the active session when the caller doesn't specify one,
+      // so dashboards don't mix old and new cohorts after a rollover.
+      let effectiveSessionId = sessionId;
+      if (!effectiveSessionId) {
+        const activeSession = await AcademicSession.findOne({
+          where: { isActive: true },
+          order: [['startDate', 'DESC']],
+          attributes: ['id'],
+        });
+        if (activeSession) effectiveSessionId = activeSession.id;
+      }
+      if (effectiveSessionId) where.sessionId = effectiveSessionId;
       if (facultyId) where.facultyId = facultyId;
 
       // Non-admin faculty can only see their own teams (where they're the
@@ -652,6 +694,8 @@ module.exports = {
     const { studentSessionId } = req.query;
 
     try {
+      const gate = await ensureCanReadStudent(req, studentSessionId);
+      if (gate) return res.status(gate.status).json({ message: gate.message });
       const responses = await MentorResponse.findAll({
         where: { studentSessionId },
         include: [
@@ -736,6 +780,8 @@ module.exports = {
     const { studentSessionId } = req.query;
 
     try {
+      const gate = await ensureCanReadStudent(req, studentSessionId);
+      if (gate) return res.status(gate.status).json({ message: gate.message });
       const mentorTeams = await MentorTeamMember.findAll({
         where: { studentSessionId },
         include: [
@@ -775,6 +821,8 @@ module.exports = {
     const { studentSessionId } = req.query;
 
     try {
+      const gate = await ensureCanReadStudent(req, studentSessionId);
+      if (gate) return res.status(gate.status).json({ message: gate.message });
       console.log('[getStudentRequirements] Fetching for student session:', studentSessionId);
       
       // Get all mentor teams for this student
@@ -847,8 +895,18 @@ module.exports = {
   // response stats. Used by the /admin/mentor-monitoring page.
   getMonitoring: async (req, res) => {
     try {
-      const sessionId = req.query.sessionId || null;
+      let sessionId = req.query.sessionId || null;
       const chairHeadId = req.query.chairHeadId || null;
+
+      // Default to active session when the caller didn't pick one.
+      if (!sessionId) {
+        const activeSession = await AcademicSession.findOne({
+          where: { isActive: true },
+          order: [['startDate', 'DESC']],
+          attributes: ['id'],
+        });
+        if (activeSession) sessionId = activeSession.id;
+      }
 
       const teamWhere = {};
       if (sessionId) teamWhere.sessionId = sessionId;

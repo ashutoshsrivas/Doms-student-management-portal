@@ -1210,6 +1210,13 @@ const Announcement = sequelize.define('Announcement', {
     defaultValue: 'ACTIVE',
     allowNull: false,
   },
+  // Nullable so existing rows and cross-session announcements ("visible to
+  // every cohort") keep working. Non-null scopes the announcement to a
+  // single AcademicSession, mirroring NotificationPrompt.
+  sessionId: {
+    type: DataTypes.UUID,
+    allowNull: true,
+  },
 }, {
   tableName: 'announcements',
   timestamps: true,
@@ -1220,6 +1227,9 @@ const Announcement = sequelize.define('Announcement', {
 
 Announcement.belongsTo(User, { foreignKey: 'createdBy', as: 'Creator' });
 User.hasMany(Announcement, { foreignKey: 'createdBy' });
+
+Announcement.belongsTo(AcademicSession, { foreignKey: 'sessionId', as: 'Session' });
+AcademicSession.hasMany(Announcement, { foreignKey: 'sessionId' });
 
 // ============ SIP (INTERNSHIP) MODELS ============
 
@@ -1579,6 +1589,13 @@ const ShareLink = sequelize.define('ShareLink', {
     type: DataTypes.DATE,
     allowNull: true,
   },
+  // Nullable so legacy links keep working (they resolve to the student's
+  // latest enrolment). New links pin a specific StudentSession so the
+  // public page doesn't silently change cohorts.
+  studentSessionId: {
+    type: DataTypes.UUID,
+    allowNull: true,
+  },
 }, {
   tableName: 'share_links',
   timestamps: true,
@@ -1589,6 +1606,7 @@ const ShareLink = sequelize.define('ShareLink', {
 ShareLink.belongsTo(User, { foreignKey: 'userId', as: 'Student' });
 User.hasMany(ShareLink, { foreignKey: 'userId', as: 'ProfileShareLinks' });
 ShareLink.belongsTo(User, { foreignKey: 'createdBy', as: 'Creator' });
+ShareLink.belongsTo(StudentSession, { foreignKey: 'studentSessionId', as: 'StudentSession' });
 
 // ============ FACULTY TASK MODELS ============
 // Admin assigns a task to a faculty (or HOD / mentor / coordinator / trainer).
@@ -2115,6 +2133,10 @@ const MentorFeedbackMessage = sequelize.define('MentorFeedbackMessage', {
   studentUserId: { type: DataTypes.UUID, allowNull: false },
   authorUserId: { type: DataTypes.UUID, allowNull: false },
   body: { type: DataTypes.TEXT, allowNull: false },
+  // Nullable so historical rows keep working. New rows carry the session in
+  // which the mentor-student pair is currently active, so re-enrolling a
+  // student under the same mentor gives a fresh thread per session.
+  sessionId: { type: DataTypes.UUID, allowNull: true },
 }, {
   tableName: 'mentor_feedback_messages',
   timestamps: true,
@@ -2128,6 +2150,7 @@ const MentorFeedbackMessage = sequelize.define('MentorFeedbackMessage', {
 MentorFeedbackMessage.belongsTo(User, { foreignKey: 'mentorUserId', as: 'Mentor' });
 MentorFeedbackMessage.belongsTo(User, { foreignKey: 'studentUserId', as: 'Student' });
 MentorFeedbackMessage.belongsTo(User, { foreignKey: 'authorUserId', as: 'Author' });
+MentorFeedbackMessage.belongsTo(AcademicSession, { foreignKey: 'sessionId', as: 'Session' });
 
 // Actionable notifications for students — a "notification prompt" is a
 // message that requires either an acknowledgement (ACK) or a short

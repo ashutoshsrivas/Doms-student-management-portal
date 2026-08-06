@@ -23,7 +23,9 @@ function CreateAnnouncementContent() {
     title: '',
     content: '',
     type: 'PUBLIC',
+    sessionId: '',
   });
+  const [sessions, setSessions] = useState<Array<{ id: string; name: string }>>([]);
   const [file, setFile] = useState<File | null>(null);
   const [filePreview, setFilePreview] = useState<string | null>(null);
   const [imageLoaded, setImageLoaded] = useState(false);
@@ -34,6 +36,16 @@ function CreateAnnouncementContent() {
       router.push('/auth/login');
     }
   }, [user, authLoading, router]);
+
+  useEffect(() => {
+    if (!token) return;
+    fetch(`${API_BASE}/sessions?limit=100`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => r.json())
+      .then((d) => setSessions(d?.sessions || []))
+      .catch(() => setSessions([]));
+  }, [token]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -84,6 +96,7 @@ function CreateAnnouncementContent() {
       submitData.append('title', formData.title);
       submitData.append('content', formData.content);
       submitData.append('type', formData.type);
+      if (formData.sessionId) submitData.append('sessionId', formData.sessionId);
 
       if (file) {
         submitData.append('file', file);
@@ -216,6 +229,29 @@ function CreateAnnouncementContent() {
                 {formData.type === 'PUBLIC'
                   ? 'This announcement will be visible on the homepage and to all users'
                   : 'This announcement will only be visible to logged-in users in their dashboard'}
+              </p>
+            </div>
+
+            {/* Session Scope */}
+            <div>
+              <label htmlFor="sessionId" className="block text-sm font-medium text-gray-900 mb-2">
+                Session Scope
+              </label>
+              <select
+                id="sessionId"
+                name="sessionId"
+                value={formData.sessionId}
+                onChange={handleInputChange}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+              >
+                <option value="">All sessions (visible to every student cohort)</option>
+                {sessions.map((s) => (
+                  <option key={s.id} value={s.id}>Only {s.name}</option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-500 mt-2">
+                Pick a session to limit this announcement to students of that cohort. Staff always
+                see every announcement.
               </p>
             </div>
 

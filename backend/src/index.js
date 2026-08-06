@@ -405,6 +405,52 @@ async function start() {
       }
     }
 
+    // Announcement: optional academic session scoping. Null = visible to all
+    // sessions (existing rows). Non-null = only shown to students enrolled
+    // in that session.
+    try {
+      await sequelize.query(`ALTER TABLE announcements ADD COLUMN session_id CHAR(36) NULL`);
+      console.log('Added session_id column to announcements');
+    } catch (error) {
+      if (error.message && error.message.includes('Duplicate column')) {
+        console.log('session_id column already exists on announcements');
+      } else if (error.message && error.message.includes("doesn't exist")) {
+        // fresh install — sync will create it
+      } else {
+        console.error('Error adding session_id to announcements:', error.message);
+      }
+    }
+
+    // MentorFeedbackMessage: optional session scoping so re-enrolled
+    // mentor-student pairs get a fresh thread per session.
+    try {
+      await sequelize.query(`ALTER TABLE mentor_feedback_messages ADD COLUMN session_id CHAR(36) NULL`);
+      console.log('Added session_id column to mentor_feedback_messages');
+    } catch (error) {
+      if (error.message && error.message.includes('Duplicate column')) {
+        console.log('session_id column already exists on mentor_feedback_messages');
+      } else if (error.message && error.message.includes("doesn't exist")) {
+        // fresh install — sync will create it
+      } else {
+        console.error('Error adding session_id to mentor_feedback_messages:', error.message);
+      }
+    }
+
+    // ShareLink: pin to a specific student session so the public profile
+    // doesn't silently switch to the newest enrolment.
+    try {
+      await sequelize.query(`ALTER TABLE share_links ADD COLUMN student_session_id CHAR(36) NULL`);
+      console.log('Added student_session_id column to share_links');
+    } catch (error) {
+      if (error.message && error.message.includes('Duplicate column')) {
+        console.log('student_session_id column already exists on share_links');
+      } else if (error.message && error.message.includes("doesn't exist")) {
+        // fresh install — sync will create it
+      } else {
+        console.error('Error adding student_session_id to share_links:', error.message);
+      }
+    }
+
     // Add CHAIR_HEAD to the users.requested_role and users.approved_role
     // ENUMs if it isn't already a member. Safe to re-run: MySQL silently
     // succeeds when the new ENUM list already contains every existing value.
