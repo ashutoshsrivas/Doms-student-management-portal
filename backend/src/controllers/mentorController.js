@@ -124,18 +124,10 @@ module.exports = {
 
     try {
       let where = {};
-      // Default to the active session when the caller doesn't specify one,
-      // so dashboards don't mix old and new cohorts after a rollover.
-      let effectiveSessionId = sessionId;
-      if (!effectiveSessionId) {
-        const activeSession = await AcademicSession.findOne({
-          where: { isActive: true },
-          order: [['startDate', 'DESC']],
-          attributes: ['id'],
-        });
-        if (activeSession) effectiveSessionId = activeSession.id;
-      }
-      if (effectiveSessionId) where.sessionId = effectiveSessionId;
+      // Staff see teams across every session unless they narrow with
+      // ?sessionId=… (UI dropdown). No default filter so old cohorts stay
+      // reachable after a rollover.
+      if (sessionId) where.sessionId = sessionId;
       if (facultyId) where.facultyId = facultyId;
 
       // Non-admin faculty can only see their own teams (where they're the
@@ -953,18 +945,8 @@ module.exports = {
   // response stats. Used by the /admin/mentor-monitoring page.
   getMonitoring: async (req, res) => {
     try {
-      let sessionId = req.query.sessionId || null;
+      const sessionId = req.query.sessionId || null;
       const chairHeadId = req.query.chairHeadId || null;
-
-      // Default to active session when the caller didn't pick one.
-      if (!sessionId) {
-        const activeSession = await AcademicSession.findOne({
-          where: { isActive: true },
-          order: [['startDate', 'DESC']],
-          attributes: ['id'],
-        });
-        if (activeSession) sessionId = activeSession.id;
-      }
 
       const teamWhere = {};
       if (sessionId) teamWhere.sessionId = sessionId;

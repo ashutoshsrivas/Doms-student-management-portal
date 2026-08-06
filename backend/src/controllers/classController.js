@@ -60,20 +60,7 @@ module.exports = {
     try {
       const userId = req.user.id;
       const role = req.user.role;
-      let { sessionId } = req.query;
-
-      // Default to the active session for coordinator / CR-student views so
-      // classes from a previous cohort don't pollute the new session's UI.
-      // Org-wide admins keep the "all sessions" behaviour when they omit
-      // the filter, since they might genuinely want an aggregate view.
-      if (!sessionId && (COORDINATOR_ROLES.includes(role) || role === 'STUDENT')) {
-        const activeSession = await AcademicSession.findOne({
-          where: { isActive: true },
-          order: [['startDate', 'DESC']],
-          attributes: ['id'],
-        });
-        if (activeSession) sessionId = activeSession.id;
-      }
+      const { sessionId } = req.query;
 
       const where = {};
       if (sessionId) where.sessionId = sessionId;

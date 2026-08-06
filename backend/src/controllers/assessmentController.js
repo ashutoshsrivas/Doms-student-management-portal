@@ -184,20 +184,9 @@ const assessmentController = {
         console.log('[getAssessments] Faculty scope: own +', distributedIds.length, 'distributed');
       }
 
-      // If any staff hits this without a session filter, default to the
-      // currently-active academic session so dashboards don't mix cohorts
-      // after a rollover. They can still pass academicSessionId to override.
-      if (!sessionId && userRole !== 'STUDENT') {
-        const activeSession = await AcademicSession.findOne({
-          where: { isActive: true },
-          order: [['startDate', 'DESC']],
-          attributes: ['id'],
-        });
-        if (activeSession) {
-          sessionId = activeSession.id;
-          console.log('[getAssessments] Defaulted to active session:', sessionId);
-        }
-      }
+      // Staff can see across sessions by default (they explicitly pick a
+      // session from the UI dropdown when they want to narrow). Students
+      // are already scoped strictly to their own enrolment above.
 
       // sessionId is optional for staff — no session filter means "all
       // sessions". Only students require it (already handled above).

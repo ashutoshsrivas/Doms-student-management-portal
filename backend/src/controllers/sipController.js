@@ -626,20 +626,10 @@ const sipController = {
       const orgWide = ['ADMIN', 'HOD', 'PLACEMENT_COORDINATOR'].includes(userRole);
       const forceMine = req.query.scope === 'mine';
 
-      // Default to the active session when not specified, so faculty don't
-      // see last year's mentees mixed with the new cohort.
-      let sessionFilterId = req.query.sessionId || null;
-      if (!sessionFilterId) {
-        const activeSession = await AcademicSession.findOne({
-          where: { isActive: true },
-          order: [['startDate', 'DESC']],
-          attributes: ['id'],
-        });
-        if (activeSession) sessionFilterId = activeSession.id;
-      }
-
       const teamWhere = orgWide && !forceMine ? {} : { facultyId: userId };
-      if (sessionFilterId) teamWhere.sessionId = sessionFilterId;
+      // Optional narrow via UI dropdown. No default so old-cohort mentee
+      // data stays visible after a rollover.
+      if (req.query.sessionId) teamWhere.sessionId = req.query.sessionId;
 
       const teams = await MentorTeam.findAll({
         where: teamWhere,
