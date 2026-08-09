@@ -4,11 +4,52 @@ const {
   RubricScore,
   Assessment,
   AssessmentSubmission,
+  AssessmentAssignment,
+  AssessmentDistribution,
   User,
   AssessmentQuestion,
   AssessmentResponse,
 } = require('../models');
 const { Op } = require('sequelize');
+
+// Org-level roles that can view/grade any assessment's rubrics.
+const ORG_ADMIN_ROLES = new Set(['ADMIN', 'HOD', 'PLACEMENT_COORDINATOR']);
+
+// Mirrors assessmentController.getAccess. A "distributed" faculty is one an
+// admin/HOD handed the assessment to (an AssessmentDistribution row). Such a
+// faculty may view the admin-created rubrics and grade the submissions of the
+// students they themselves assigned — but only those.
+async function getAssessmentAccess(assessment, req) {
+  const userId = req.user?.id;
+  const userRole = req.user?.role;
+  const isCreator = !!userId && assessment.createdBy === userId;
+  const isAdmin = ORG_ADMIN_ROLES.has(userRole);
+  let isDistributed = false;
+  if (!isCreator && !isAdmin && userId) {
+    const row = await AssessmentDistribution.findOne({
+      where: { assessmentId: assessment.id, facultyId: userId },
+    });
+    isDistributed = !!row;
+  }
+  return { isCreator, isAdmin, isDistributed };
+}
+
+// Whether the current user may act on one specific submission. Creator + org
+// admins may act on any; a distributed faculty only on submissions from a
+// student they assigned (AssessmentAssignment.assignedBy === them).
+async function canAccessSubmission(submission, access, userId) {
+  const { isCreator, isAdmin, isDistributed } = access;
+  if (isCreator || isAdmin) return true;
+  if (!isDistributed) return false;
+  const assignment = await AssessmentAssignment.findOne({
+    where: {
+      assessmentId: submission.assessmentId,
+      studentSessionId: submission.studentSessionId,
+      assignedBy: userId,
+    },
+  });
+  return !!assignment;
+}
 
 module.exports = {
   // Create a new rubric for an assessment
@@ -86,8 +127,9 @@ module.exports = {
         return res.status(404).json({ message: 'Assessment not found' });
       }
 
-      // Check authorization
-      if (assessment.createdBy !== userId && userRole !== 'ADMIN') {
+      // Creator, org admins, and distributed faculty may view the rubrics.
+      const { isCreator, isAdmin, isDistributed } = await getAssessmentAccess(assessment, req);
+      if (!isCreator && !isAdmin && !isDistributed) {
         return res.status(403).json({ message: 'Not authorized to view rubrics for this assessment' });
       }
 
@@ -397,8 +439,11 @@ module.exports = {
         return res.status(404).json({ message: 'Submission not found' });
       }
 
-      // Check authorization - only assessment creator or admin can grade
-      if (submission.Assessment.createdBy !== userId && !['ADMIN', 'HOD'].includes(req.user.role)) {
+      // Creator + org admins grade any submission; distributed faculty grade
+      // only their own students' submissions.
+      const access = await getAssessmentAccess(submission.Assessment, req);
+      const allowed = await canAccessSubmission(submission, access, userId);
+      if (!allowed) {
         return res.status(403).json({ message: 'Not authorized to grade this submission' });
       }
 
@@ -492,8 +537,14 @@ module.exports = {
         return res.status(404).json({ message: 'Submission not found' });
       }
 
-      // Check authorization
-      if (submission.Assessment && submission.Assessment.createdBy !== userId && userRole !== 'ADMIN') {
+      // Creator + org admins see any; distributed faculty see only their own
+      // students' scores.
+      if (!submission.Assessment) {
+        return res.status(404).json({ message: 'Assessment not found' });
+      }
+      const access = await getAssessmentAccess(submission.Assessment, req);
+      const allowed = await canAccessSubmission(submission, access, userId);
+      if (!allowed) {
         return res.status(403).json({ message: 'Not authorized to view these scores' });
       }
 
