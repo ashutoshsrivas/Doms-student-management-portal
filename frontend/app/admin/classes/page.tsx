@@ -61,6 +61,7 @@ function Content() {
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [editingClass, setEditingClass] = useState<ClassRow | null>(null);
   const [editingCRs, setEditingCRs] = useState<string | null>(null);
 
   useEffect(() => {
@@ -188,17 +189,28 @@ function Content() {
                       </span>
                     </div>
                   </div>
-                  {isAdmin && (
+                  {(isAdmin || c.coordinatorId === user?.id) && (
                     <div className="flex items-center gap-1 shrink-0">
                       <span
                         role="button"
                         tabIndex={0}
-                        onClick={(e) => { e.stopPropagation(); handleDelete(c.id, c.name); }}
-                        className="rounded p-1.5 text-red-600 hover:bg-red-50"
-                        title="Delete class"
+                        onClick={(e) => { e.stopPropagation(); setEditingClass(c); }}
+                        className="rounded p-1.5 text-blue-600 hover:bg-blue-50"
+                        title="Edit class"
                       >
-                        <FiTrash2 className="h-4 w-4" />
+                        <FiEdit2 className="h-4 w-4" />
                       </span>
+                      {isAdmin && (
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          onClick={(e) => { e.stopPropagation(); handleDelete(c.id, c.name); }}
+                          className="rounded p-1.5 text-red-600 hover:bg-red-50"
+                          title="Delete class"
+                        >
+                          <FiTrash2 className="h-4 w-4" />
+                        </span>
+                      )}
                     </div>
                   )}
                 </button>
@@ -234,6 +246,18 @@ function Content() {
           onClose={() => setCreating(false)}
           onCreated={async () => {
             setCreating(false);
+            await refresh();
+          }}
+        />
+      )}
+
+      {editingClass && (
+        <EditClassModal
+          cls={editingClass}
+          canChangeCoordinator={isAdmin}
+          onClose={() => setEditingClass(null)}
+          onSaved={async () => {
+            setEditingClass(null);
             await refresh();
           }}
         />
@@ -609,6 +633,114 @@ function CreateClassModal({
           <button type="button" onClick={onClose} className="rounded border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">Cancel</button>
           <button type="button" onClick={save} disabled={saving} className="rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60">
             {saving ? 'Creating…' : 'Create'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EditClassModal({
+  cls, canChangeCoordinator, onClose, onSaved,
+}: {
+  cls: ClassRow;
+  canChangeCoordinator: boolean;
+  onClose: () => void;
+  onSaved: () => void | Promise<void>;
+}) {
+  const [name, setName] = useState(cls.name);
+  const [description, setDescription] = useState(cls.description || '');
+  const [status, setStatus] = useState(cls.status || 'ACTIVE');
+  const [coordinatorId, setCoordinatorId] = useState(cls.coordinatorId);
+  const [coords, setCoords] = useState<Coordinator[]>([]);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!canChangeCoordinator) return;
+    (async () => {
+      try {
+        const res = await apiClient.get('/classes/eligible-coordinators');
+        const list = (res.data.users || []) as Coordinator[];
+        // Keep the current coordinator selectable even if they no longer show
+        // up in the eligible list (e.g. role changed).
+        if (cls.Coordinator && !list.some((u) => u.id === cls.Coordinator!.id)) {
+          list.unshift(cls.Coordinator as Coordinator);
+        }
+        setCoords(list);
+      } catch (e: any) {
+        toast.error(e?.response?.data?.message || 'Failed to load coordinators');
+      }
+    })();
+  }, [canChangeCoordinator, cls.Coordinator]);
+
+  const save = async () => {
+    if (!name.trim()) {
+      toast.error('Class name is required');
+      return;
+    }
+    if (canChangeCoordinator && !coordinatorId) {
+      toast.error('A coordinator is required');
+      return;
+    }
+    try {
+      setSaving(true);
+      const body: Record<string, unknown> = {
+        name: name.trim(),
+        description: description.trim() || null,
+        status,
+      };
+      // Only ADMIN/HOD may send coordinatorId — the backend rejects it otherwise.
+      if (canChangeCoordinator) body.coordinatorId = coordinatorId;
+      await apiClient.patch(`/classes/${cls.id}`, body);
+      toast.success('Class updated');
+      await onSaved();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Failed to update');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div className="w-full max-w-lg rounded-xl bg-white p-5 shadow-2xl">
+        <h2 className="text-lg font-bold text-gray-900">Edit Class / Section</h2>
+        <p className="text-xs text-gray-500 mt-1">
+          Session: <span className="font-semibold">{cls.Session?.name || '—'}</span> · CRs are managed from the class panel.
+        </p>
+        <div className="mt-4 space-y-3">
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 mb-1">Class name *</label>
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. MBA Marketing — Section A" className="w-full rounded border border-gray-300 px-3 py-2 text-sm text-gray-900" />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 mb-1">Description</label>
+            <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} className="w-full rounded border border-gray-300 px-3 py-2 text-sm text-gray-900" />
+          </div>
+          {canChangeCoordinator && (
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">Class coordinator *</label>
+              <select value={coordinatorId} onChange={(e) => setCoordinatorId(e.target.value)} className="w-full rounded border border-gray-300 px-3 py-2 text-sm text-gray-900">
+                <option value="">Select coordinator</option>
+                {coords.map((c) => (
+                  <option key={c.id} value={c.id}>{nameOf(c)}{c.approvedRole ? ` — ${c.approvedRole}` : ''}</option>
+                ))}
+              </select>
+              <p className="mt-1 text-[11px] text-gray-500">Eligible: FACULTY, CHAIR_HEAD, PLACEMENT_COORDINATOR, COORDINATOR.</p>
+            </div>
+          )}
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 mb-1">Status</label>
+            <select value={status} onChange={(e) => setStatus(e.target.value)} className="w-full rounded border border-gray-300 px-3 py-2 text-sm text-gray-900">
+              <option value="ACTIVE">Active</option>
+              <option value="ARCHIVED">Archived</option>
+            </select>
+          </div>
+        </div>
+        <div className="mt-5 flex justify-end gap-2">
+          <button type="button" onClick={onClose} className="rounded border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">Cancel</button>
+          <button type="button" onClick={save} disabled={saving} className="rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60">
+            {saving ? 'Saving…' : 'Save changes'}
           </button>
         </div>
       </div>
