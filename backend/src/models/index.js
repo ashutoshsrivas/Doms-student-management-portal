@@ -2063,9 +2063,11 @@ const ClassAttendance = sequelize.define('ClassAttendance', {
   tableName: 'class_attendance',
   timestamps: true,
   underscored: true,
-  // One entry per class, per date, per class timing. Legacy untimed entries
-  // use class_timing = '' so at most one untimed row per date is preserved.
-  indexes: [{ unique: true, fields: ['class_id', 'date', 'class_timing'] }],
+  // Uniqueness is (class_id, date, class_timing): one entry per class, per
+  // date, per class timing (legacy untimed rows use class_timing = ''). This
+  // index is created/managed by the inline migration in index.js rather than
+  // declared here — sync() runs before that migration and would otherwise try
+  // to add the index before the class_timing column exists.
 });
 
 Class.belongsTo(AcademicSession, { foreignKey: 'sessionId', as: 'Session' });
