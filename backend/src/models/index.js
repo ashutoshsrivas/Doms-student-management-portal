@@ -2052,6 +2052,8 @@ const ClassAttendance = sequelize.define('ClassAttendance', {
   // Optional student-entered class timing / period (e.g. "10:00–11:00" or
   // "Period 1"). Empty string means an untimed daily entry (legacy behaviour).
   classTiming: { type: DataTypes.STRING(100), allowNull: false, defaultValue: '' },
+  // Optional free-text note the CR can add alongside a punch.
+  additionalInfo: { type: DataTypes.TEXT, allowNull: true },
   submittedBy: { type: DataTypes.UUID, allowNull: false },
   submittedAt: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
   // Coordinator-only field. Response strips this out for non-admin/HOD

@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import {
   FiPlus, FiSearch, FiUsers, FiUser, FiCalendar, FiChevronDown, FiChevronUp,
@@ -31,6 +31,7 @@ type AttendanceRow = {
   classId: string;
   date: string;
   classTiming?: string;
+  additionalInfo?: string;
   presentCount: number;
   bunkedCount: number;
   leaveCount: number;
@@ -461,6 +462,18 @@ function AttendancePanel({ cls, canWriteATR }: { cls: ClassRow; canWriteATR: boo
     }
   };
 
+  // Group by date, newest date first, then by class timing within a date.
+  const grouped = (() => {
+    const map = new Map<string, AttendanceRow[]>();
+    for (const r of rows) {
+      if (!map.has(r.date)) map.set(r.date, []);
+      map.get(r.date)!.push(r);
+    }
+    return Array.from(map.entries())
+      .sort((a, b) => (a[0] < b[0] ? 1 : a[0] > b[0] ? -1 : 0))
+      .map(([d, list]) => [d, [...list].sort((x, y) => (x.classTiming || '').localeCompare(y.classTiming || ''))] as const);
+  })();
+
   return (
     <div className="rounded-lg border border-gray-200 bg-white p-3">
       <div className="mb-2 flex items-center justify-between">
@@ -476,79 +489,88 @@ function AttendancePanel({ cls, canWriteATR }: { cls: ClassRow; canWriteATR: boo
       ) : rows.length === 0 ? (
         <div className="py-4 text-center text-sm text-gray-500 italic">No attendance punched yet.</div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="min-w-[720px] w-full text-sm">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-3 py-2 text-left font-semibold text-gray-700">Date</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-700">Class Timing</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-700">Present</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-700">Skipped</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-700">Leave</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-700">Submitted by</th>
-                {canWriteATR && <th className="px-3 py-2 text-left font-semibold text-gray-700">ATR</th>}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {rows.map((r) => {
-                const isEditing = editingATR === r.id;
-                return (
-                  <Fragment key={r.id}>
-                    <tr className="align-top">
-                      <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap">{fmt(r.date)}</td>
-                      <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{r.classTiming?.trim() ? r.classTiming : <span className="text-gray-400 italic">—</span>}</td>
-                      <td className="px-3 py-2 text-emerald-700 font-semibold">{r.presentCount}</td>
-                      <td className="px-3 py-2 text-red-700 font-semibold">{r.bunkedCount}</td>
-                      <td className="px-3 py-2 text-amber-700 font-semibold">{r.leaveCount}</td>
-                      <td className="px-3 py-2 text-xs text-gray-600">
-                        {r.submitter?.name || '—'}
-                        <div className="text-[10px] text-gray-400">{fmt(r.submittedAt)}</div>
-                      </td>
-                      {canWriteATR && (
-                        <td className="px-3 py-2">
-                          {isEditing ? (
-                            <div className="space-y-1.5">
-                              <textarea
-                                value={atrDraft}
-                                onChange={(e) => setATRDraft(e.target.value)}
-                                rows={3}
-                                placeholder="Describe the action taken…"
-                                className="w-full rounded border border-gray-300 px-2 py-1 text-xs focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-200"
-                              />
-                              <div className="flex gap-1">
-                                <button type="button" onClick={() => saveATR(r.id)} className="inline-flex items-center gap-1 rounded bg-blue-600 px-2 py-0.5 text-[11px] font-semibold text-white hover:bg-blue-700">
-                                  <FiCheck className="h-3 w-3" /> Save
-                                </button>
-                                <button type="button" onClick={() => { setEditingATR(null); setATRDraft(''); }} className="inline-flex items-center gap-1 rounded border border-gray-200 px-2 py-0.5 text-[11px] font-semibold text-gray-700 hover:bg-gray-50">
-                                  <FiX className="h-3 w-3" /> Cancel
-                                </button>
-                              </div>
-                            </div>
-                          ) : r.actionTakenReport ? (
-                            <div className="max-w-md">
-                              <div className="whitespace-pre-wrap rounded border border-indigo-100 bg-indigo-50 px-2 py-1.5 text-xs text-indigo-900">
-                                {r.actionTakenReport}
-                              </div>
-                              <div className="mt-1 flex items-center justify-between text-[10px] text-gray-500">
-                                <span>by {r.atrAuthor?.name || '—'} · {fmt(r.atrAt)}</span>
-                                <button type="button" onClick={() => { setEditingATR(r.id); setATRDraft(r.actionTakenReport || ''); }} className="text-blue-700 hover:text-blue-900 font-semibold">
-                                  Edit
-                                </button>
-                              </div>
-                            </div>
-                          ) : (
-                            <button type="button" onClick={() => { setEditingATR(r.id); setATRDraft(''); }} className="inline-flex items-center gap-1 rounded border border-dashed border-gray-300 px-2 py-1 text-[11px] font-semibold text-gray-600 hover:bg-gray-50">
-                              <FiFileText className="h-3 w-3" /> Add ATR
-                            </button>
-                          )}
-                        </td>
-                      )}
+        <div className="space-y-3">
+          {grouped.map(([d, list]) => (
+            <div key={d} className="rounded-lg border border-gray-200 overflow-hidden">
+              <div className="flex items-center gap-2 bg-gray-50 px-3 py-2 border-b border-gray-100">
+                <FiCalendar className="h-3.5 w-3.5 text-gray-400" />
+                <span className="text-sm font-semibold text-gray-900">{fmt(d)}</span>
+                <span className="text-[11px] text-gray-500">· {list.length} {list.length === 1 ? 'entry' : 'entries'}</span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="min-w-[760px] w-full text-sm">
+                  <thead className="bg-white">
+                    <tr>
+                      <th className="px-3 py-2 text-left font-semibold text-gray-700">Class Timing</th>
+                      <th className="px-3 py-2 text-left font-semibold text-gray-700">Present</th>
+                      <th className="px-3 py-2 text-left font-semibold text-gray-700">Skipped</th>
+                      <th className="px-3 py-2 text-left font-semibold text-gray-700">Leave</th>
+                      <th className="px-3 py-2 text-left font-semibold text-gray-700">Info</th>
+                      <th className="px-3 py-2 text-left font-semibold text-gray-700">Submitted by</th>
+                      {canWriteATR && <th className="px-3 py-2 text-left font-semibold text-gray-700">ATR</th>}
                     </tr>
-                  </Fragment>
-                );
-              })}
-            </tbody>
-          </table>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {list.map((r) => {
+                      const isEditing = editingATR === r.id;
+                      return (
+                        <tr key={r.id} className="align-top">
+                          <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{r.classTiming?.trim() ? r.classTiming : <span className="text-gray-400 italic">—</span>}</td>
+                          <td className="px-3 py-2 text-emerald-700 font-semibold">{r.presentCount}</td>
+                          <td className="px-3 py-2 text-red-700 font-semibold">{r.bunkedCount}</td>
+                          <td className="px-3 py-2 text-amber-700 font-semibold">{r.leaveCount}</td>
+                          <td className="px-3 py-2 text-xs text-gray-600 max-w-[220px] whitespace-pre-wrap break-words">{r.additionalInfo?.trim() ? r.additionalInfo : <span className="text-gray-400 italic">—</span>}</td>
+                          <td className="px-3 py-2 text-xs text-gray-600">
+                            {r.submitter?.name || '—'}
+                            <div className="text-[10px] text-gray-400">{fmt(r.submittedAt)}</div>
+                          </td>
+                          {canWriteATR && (
+                            <td className="px-3 py-2">
+                              {isEditing ? (
+                                <div className="space-y-1.5">
+                                  <textarea
+                                    value={atrDraft}
+                                    onChange={(e) => setATRDraft(e.target.value)}
+                                    rows={3}
+                                    placeholder="Describe the action taken…"
+                                    className="w-full rounded border border-gray-300 px-2 py-1 text-xs focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-200"
+                                  />
+                                  <div className="flex gap-1">
+                                    <button type="button" onClick={() => saveATR(r.id)} className="inline-flex items-center gap-1 rounded bg-blue-600 px-2 py-0.5 text-[11px] font-semibold text-white hover:bg-blue-700">
+                                      <FiCheck className="h-3 w-3" /> Save
+                                    </button>
+                                    <button type="button" onClick={() => { setEditingATR(null); setATRDraft(''); }} className="inline-flex items-center gap-1 rounded border border-gray-200 px-2 py-0.5 text-[11px] font-semibold text-gray-700 hover:bg-gray-50">
+                                      <FiX className="h-3 w-3" /> Cancel
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : r.actionTakenReport ? (
+                                <div className="max-w-md">
+                                  <div className="whitespace-pre-wrap rounded border border-indigo-100 bg-indigo-50 px-2 py-1.5 text-xs text-indigo-900">
+                                    {r.actionTakenReport}
+                                  </div>
+                                  <div className="mt-1 flex items-center justify-between text-[10px] text-gray-500">
+                                    <span>by {r.atrAuthor?.name || '—'} · {fmt(r.atrAt)}</span>
+                                    <button type="button" onClick={() => { setEditingATR(r.id); setATRDraft(r.actionTakenReport || ''); }} className="text-blue-700 hover:text-blue-900 font-semibold">
+                                      Edit
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <button type="button" onClick={() => { setEditingATR(r.id); setATRDraft(''); }} className="inline-flex items-center gap-1 rounded border border-dashed border-gray-300 px-2 py-1 text-[11px] font-semibold text-gray-600 hover:bg-gray-50">
+                                  <FiFileText className="h-3 w-3" /> Add ATR
+                                </button>
+                              )}
+                            </td>
+                          )}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>

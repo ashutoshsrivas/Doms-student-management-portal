@@ -510,6 +510,18 @@ async function start() {
         console.error('Error dropping old class_attendance index:', error.message);
       }
     }
+    try {
+      await sequelize.query(`ALTER TABLE class_attendance ADD COLUMN additional_info TEXT NULL`);
+      console.log('Added additional_info column to class_attendance');
+    } catch (error) {
+      if (error.message && error.message.includes('Duplicate column')) {
+        console.log('additional_info column already exists on class_attendance');
+      } else if (error.message && error.message.includes("doesn't exist")) {
+        // fresh install — sync already created it
+      } else {
+        console.error('Error adding additional_info to class_attendance:', error.message);
+      }
+    }
 
     // Bootstrap default admin user
     await bootstrap();

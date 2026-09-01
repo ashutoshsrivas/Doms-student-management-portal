@@ -21,6 +21,7 @@ type AttendanceRow = {
   id: string;
   date: string;
   classTiming?: string;
+  additionalInfo?: string;
   presentCount: number;
   bunkedCount: number;
   leaveCount: number;
@@ -97,6 +98,7 @@ function ClassCard({ cls }: { cls: ClassRow }) {
   const [present, setPresent] = useState('');
   const [bunked, setBunked] = useState('');
   const [leave, setLeave] = useState('');
+  const [info, setInfo] = useState('');
   const [saving, setSaving] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
 
@@ -121,10 +123,12 @@ function ClassCard({ cls }: { cls: ClassRow }) {
       setPresent(String(existing.presentCount));
       setBunked(String(existing.bunkedCount));
       setLeave(String(existing.leaveCount));
+      setInfo(existing.additionalInfo || '');
     } else {
       setPresent('');
       setBunked('');
       setLeave('');
+      setInfo('');
     }
   }, [rows, date, timing]);
 
@@ -138,9 +142,11 @@ function ClassCard({ cls }: { cls: ClassRow }) {
       setSaving(true);
       await apiClient.post(`/classes/${cls.id}/attendance`, {
         date, classTiming: timing.trim(), presentCount: p, bunkedCount: b, leaveCount: l,
+        additionalInfo: info.trim(),
       });
       toast.success('Attendance submitted');
       setTiming('');
+      setInfo('');
       await load();
     } catch (e: any) {
       toast.error(e?.response?.data?.message || 'Failed to submit');
@@ -199,6 +205,11 @@ function ClassCard({ cls }: { cls: ClassRow }) {
           </div>
         </div>
 
+        <div>
+          <label className="block text-xs font-semibold text-gray-700 mb-1">Additional info <span className="font-normal text-gray-400">(optional)</span></label>
+          <textarea value={info} onChange={(e) => setInfo(e.target.value)} rows={2} placeholder="Anything worth noting — e.g. reason for skips, guest lecture, exam…" className="w-full rounded border border-gray-300 px-3 py-2 text-sm text-gray-900" />
+        </div>
+
         <button type="button" onClick={() => setShowHistory((v) => !v)} className="inline-flex items-center gap-1 text-xs font-semibold text-gray-600 hover:text-gray-900">
           {showHistory ? <FiChevronUp className="h-3.5 w-3.5" /> : <FiChevronDown className="h-3.5 w-3.5" />}
           History ({rows.length})
@@ -219,13 +230,14 @@ function ClassCard({ cls }: { cls: ClassRow }) {
                     <span className="text-[11px] text-gray-500">· {list.length} {list.length === 1 ? 'entry' : 'entries'}</span>
                   </div>
                   <div className="overflow-x-auto">
-                    <table className="min-w-[520px] w-full text-sm">
+                    <table className="min-w-[640px] w-full text-sm">
                       <thead className="bg-white">
                         <tr>
                           <th className="px-3 py-2 text-left font-semibold text-gray-700">Class Timing</th>
                           <th className="px-3 py-2 text-left font-semibold text-gray-700">Present</th>
                           <th className="px-3 py-2 text-left font-semibold text-gray-700">Skipped</th>
                           <th className="px-3 py-2 text-left font-semibold text-gray-700">Leave</th>
+                          <th className="px-3 py-2 text-left font-semibold text-gray-700">Info</th>
                           <th className="px-3 py-2 text-left font-semibold text-gray-700">By</th>
                         </tr>
                       </thead>
@@ -236,6 +248,7 @@ function ClassCard({ cls }: { cls: ClassRow }) {
                             <td className="px-3 py-2 text-emerald-700 font-semibold">{r.presentCount}</td>
                             <td className="px-3 py-2 text-red-700 font-semibold">{r.bunkedCount}</td>
                             <td className="px-3 py-2 text-amber-700 font-semibold">{r.leaveCount}</td>
+                            <td className="px-3 py-2 text-xs text-gray-600 max-w-[220px] whitespace-pre-wrap break-words">{r.additionalInfo?.trim() ? r.additionalInfo : <span className="text-gray-400 italic">—</span>}</td>
                             <td className="px-3 py-2 text-xs text-gray-600">{r.submitter?.name || '—'}</td>
                           </tr>
                         ))}
