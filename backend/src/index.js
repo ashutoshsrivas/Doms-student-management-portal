@@ -463,6 +463,54 @@ async function start() {
       console.error('Error extending users role ENUMs:', e.message);
     }
 
+    // Class attendance: add an optional student-entered class timing, and
+    // widen the (class_id, date) uniqueness to (class_id, date, class_timing)
+    // so a class can log multiple periods on the same day. Non-destructive:
+    // the new unique index is created before the old one is dropped, and no
+    // rows are modified (existing rows default class_timing to '').
+    try {
+      await sequelize.query(
+        `ALTER TABLE class_attendance ADD COLUMN class_timing VARCHAR(100) NOT NULL DEFAULT ''`
+      );
+      console.log('Added class_timing column to class_attendance');
+    } catch (error) {
+      if (error.message && error.message.includes('Duplicate column')) {
+        console.log('class_timing column already exists on class_attendance');
+      } else if (error.message && error.message.includes("doesn't exist")) {
+        // fresh install — sync already created it
+      } else {
+        console.error('Error adding class_timing to class_attendance:', error.message);
+      }
+    }
+    try {
+      // Same name Sequelize would generate for the 3-column model index, so a
+      // fresh install (where sync already made it) hits "Duplicate key name".
+      await sequelize.query(
+        `CREATE UNIQUE INDEX class_attendance_class_id_date_class_timing ` +
+        `ON class_attendance (class_id, date, class_timing)`
+      );
+      console.log('Created (class_id, date, class_timing) unique index on class_attendance');
+    } catch (error) {
+      if (error.message && (error.message.includes('Duplicate key name') || error.message.includes('already exists'))) {
+        console.log('class_attendance timing unique index already exists');
+      } else if (error.message && error.message.includes("doesn't exist")) {
+        // fresh install — sync will create it
+      } else {
+        console.error('Error creating class_attendance timing index:', error.message);
+      }
+    }
+    try {
+      // Drop the old 2-column unique index now that the wider one guards uniqueness.
+      await sequelize.query(`DROP INDEX class_attendance_class_id_date ON class_attendance`);
+      console.log('Dropped old (class_id, date) unique index on class_attendance');
+    } catch (error) {
+      if (error.message && (error.message.includes("check that column/key exists") || error.message.includes("doesn't exist") || error.message.includes('Can\'t DROP'))) {
+        console.log('old class_attendance (class_id, date) index already absent');
+      } else {
+        console.error('Error dropping old class_attendance index:', error.message);
+      }
+    }
+
     // Bootstrap default admin user
     await bootstrap();
 

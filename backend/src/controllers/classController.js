@@ -34,6 +34,7 @@ function shapeAttendanceRow(row, includeATR) {
     presentCount: plain.presentCount,
     bunkedCount: plain.bunkedCount,
     leaveCount: plain.leaveCount,
+    classTiming: plain.classTiming || '',
     submittedBy: plain.submittedBy,
     submittedAt: plain.submittedAt,
     submitter: plain.Submitter
@@ -269,7 +270,7 @@ module.exports = {
           { model: User, as: 'Submitter', attributes: ['id', 'firstName', 'lastName'] },
           { model: User, as: 'ATRAuthor', attributes: ['id', 'firstName', 'lastName'] },
         ],
-        order: [['date', 'DESC']],
+        order: [['date', 'DESC'], ['classTiming', 'ASC']],
       });
       // The coordinator wrote the ATR, so they can see their own writes.
       const includeATR = isAdmin || isCoord;
@@ -293,13 +294,16 @@ module.exports = {
       const isCR = role === 'STUDENT' ? await isCROfClass(cls.id, userId) : false;
       if (!isAdmin && !isCoord && !isCR) return res.status(403).json({ message: 'Not authorized' });
 
-      const { date, presentCount, bunkedCount, leaveCount } = req.body;
+      const { date, presentCount, bunkedCount, leaveCount, classTiming } = req.body;
       if (!date) return res.status(400).json({ message: 'date is required (YYYY-MM-DD)' });
       const p = Math.max(0, parseInt(presentCount, 10) || 0);
       const b = Math.max(0, parseInt(bunkedCount, 10) || 0);
       const l = Math.max(0, parseInt(leaveCount, 10) || 0);
+      // Optional class timing / period. Empty string = untimed daily entry.
+      const timing = typeof classTiming === 'string' ? classTiming.trim().slice(0, 100) : '';
 
-      const existing = await ClassAttendance.findOne({ where: { classId: cls.id, date } });
+      // Upsert per (class, date, timing) so multiple periods can be logged per day.
+      const existing = await ClassAttendance.findOne({ where: { classId: cls.id, date, classTiming: timing } });
       if (existing) {
         await existing.update({
           presentCount: p, bunkedCount: b, leaveCount: l,
@@ -308,7 +312,7 @@ module.exports = {
         return res.json({ attendance: shapeAttendanceRow(existing, isAdmin || isCoord) });
       }
       const created = await ClassAttendance.create({
-        classId: cls.id, date,
+        classId: cls.id, date, classTiming: timing,
         presentCount: p, bunkedCount: b, leaveCount: l,
         submittedBy: userId, submittedAt: new Date(),
       });

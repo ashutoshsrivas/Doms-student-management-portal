@@ -2049,6 +2049,9 @@ const ClassAttendance = sequelize.define('ClassAttendance', {
   presentCount: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
   bunkedCount: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
   leaveCount: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+  // Optional student-entered class timing / period (e.g. "10:00–11:00" or
+  // "Period 1"). Empty string means an untimed daily entry (legacy behaviour).
+  classTiming: { type: DataTypes.STRING(100), allowNull: false, defaultValue: '' },
   submittedBy: { type: DataTypes.UUID, allowNull: false },
   submittedAt: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
   // Coordinator-only field. Response strips this out for non-admin/HOD
@@ -2060,7 +2063,9 @@ const ClassAttendance = sequelize.define('ClassAttendance', {
   tableName: 'class_attendance',
   timestamps: true,
   underscored: true,
-  indexes: [{ unique: true, fields: ['class_id', 'date'] }],
+  // One entry per class, per date, per class timing. Legacy untimed entries
+  // use class_timing = '' so at most one untimed row per date is preserved.
+  indexes: [{ unique: true, fields: ['class_id', 'date', 'class_timing'] }],
 });
 
 Class.belongsTo(AcademicSession, { foreignKey: 'sessionId', as: 'Session' });

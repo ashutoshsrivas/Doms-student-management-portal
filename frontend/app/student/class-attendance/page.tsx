@@ -20,6 +20,7 @@ type ClassRow = {
 type AttendanceRow = {
   id: string;
   date: string;
+  classTiming?: string;
   presentCount: number;
   bunkedCount: number;
   leaveCount: number;
@@ -69,7 +70,7 @@ function Content() {
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Class Attendance</h1>
         <p className="mt-1 text-sm text-gray-500">
-          As a Class Representative, punch daily present / bunked / leave counts for your class.
+          As a Class Representative, punch present / skipped / leave counts for your class — per class timing.
         </p>
       </div>
 
@@ -92,6 +93,7 @@ function ClassCard({ cls }: { cls: ClassRow }) {
   const [rows, setRows] = useState<AttendanceRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [date, setDate] = useState(todayISO());
+  const [timing, setTiming] = useState('');
   const [present, setPresent] = useState('');
   const [bunked, setBunked] = useState('');
   const [leave, setLeave] = useState('');
@@ -111,10 +113,10 @@ function ClassCard({ cls }: { cls: ClassRow }) {
   };
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [cls.id]);
 
-  // Pre-fill from any existing record for the chosen date so editing today's
-  // numbers doesn't clobber the previous entry accidentally.
+  // Pre-fill from any existing record for the chosen date + timing so editing
+  // an entry doesn't clobber a previous one accidentally.
   useEffect(() => {
-    const existing = rows.find((r) => r.date === date);
+    const existing = rows.find((r) => r.date === date && (r.classTiming || '') === timing.trim());
     if (existing) {
       setPresent(String(existing.presentCount));
       setBunked(String(existing.bunkedCount));
@@ -124,7 +126,7 @@ function ClassCard({ cls }: { cls: ClassRow }) {
       setBunked('');
       setLeave('');
     }
-  }, [rows, date]);
+  }, [rows, date, timing]);
 
   const punch = async () => {
     if (!date) { toast.error('Pick a date'); return; }
@@ -135,9 +137,10 @@ function ClassCard({ cls }: { cls: ClassRow }) {
     try {
       setSaving(true);
       await apiClient.post(`/classes/${cls.id}/attendance`, {
-        date, presentCount: p, bunkedCount: b, leaveCount: l,
+        date, classTiming: timing.trim(), presentCount: p, bunkedCount: b, leaveCount: l,
       });
       toast.success('Attendance submitted');
+      setTiming('');
       await load();
     } catch (e: any) {
       toast.error(e?.response?.data?.message || 'Failed to submit');
@@ -145,6 +148,18 @@ function ClassCard({ cls }: { cls: ClassRow }) {
       setSaving(false);
     }
   };
+
+  // Group history by date, newest date first, then by class timing within a date.
+  const grouped = (() => {
+    const map = new Map<string, AttendanceRow[]>();
+    for (const r of rows) {
+      if (!map.has(r.date)) map.set(r.date, []);
+      map.get(r.date)!.push(r);
+    }
+    return Array.from(map.entries())
+      .sort((a, b) => (a[0] < b[0] ? 1 : a[0] > b[0] ? -1 : 0))
+      .map(([d, list]) => [d, [...list].sort((x, y) => (x.classTiming || '').localeCompare(y.classTiming || ''))] as const);
+  })();
 
   return (
     <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
@@ -156,17 +171,21 @@ function ClassCard({ cls }: { cls: ClassRow }) {
       </div>
 
       <div className="p-4 space-y-3">
-        <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-6 gap-3">
           <div>
             <label className="block text-xs font-semibold text-gray-700 mb-1">Date</label>
             <input type="date" value={date} onChange={(e) => setDate(e.target.value)} max={todayISO()} className="w-full rounded border border-gray-300 px-3 py-2 text-sm text-gray-900" />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 mb-1">Class Timing</label>
+            <input type="text" value={timing} onChange={(e) => setTiming(e.target.value)} placeholder="e.g. 10–11 AM" className="w-full rounded border border-gray-300 px-3 py-2 text-sm text-gray-900" />
           </div>
           <div>
             <label className="block text-xs font-semibold text-emerald-700 mb-1">Present</label>
             <input type="number" min={0} value={present} onChange={(e) => setPresent(e.target.value)} placeholder="0" className="w-full rounded border border-gray-300 px-3 py-2 text-sm text-gray-900" />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-red-700 mb-1">Bunked</label>
+            <label className="block text-xs font-semibold text-red-700 mb-1">Skipped</label>
             <input type="number" min={0} value={bunked} onChange={(e) => setBunked(e.target.value)} placeholder="0" className="w-full rounded border border-gray-300 px-3 py-2 text-sm text-gray-900" />
           </div>
           <div>
@@ -191,29 +210,40 @@ function ClassCard({ cls }: { cls: ClassRow }) {
           ) : rows.length === 0 ? (
             <div className="py-4 text-center text-sm text-gray-500 italic">No entries yet.</div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-[500px] w-full text-sm">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-3 py-2 text-left font-semibold text-gray-700">Date</th>
-                    <th className="px-3 py-2 text-left font-semibold text-gray-700">Present</th>
-                    <th className="px-3 py-2 text-left font-semibold text-gray-700">Bunked</th>
-                    <th className="px-3 py-2 text-left font-semibold text-gray-700">Leave</th>
-                    <th className="px-3 py-2 text-left font-semibold text-gray-700">By</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {rows.map((r) => (
-                    <tr key={r.id}>
-                      <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap">{fmt(r.date)}</td>
-                      <td className="px-3 py-2 text-emerald-700 font-semibold">{r.presentCount}</td>
-                      <td className="px-3 py-2 text-red-700 font-semibold">{r.bunkedCount}</td>
-                      <td className="px-3 py-2 text-amber-700 font-semibold">{r.leaveCount}</td>
-                      <td className="px-3 py-2 text-xs text-gray-600">{r.submitter?.name || '—'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="space-y-3">
+              {grouped.map(([d, list]) => (
+                <div key={d} className="rounded-lg border border-gray-200 overflow-hidden">
+                  <div className="flex items-center gap-2 bg-gray-50 px-3 py-2 border-b border-gray-100">
+                    <FiCalendar className="h-3.5 w-3.5 text-gray-400" />
+                    <span className="text-sm font-semibold text-gray-900">{fmt(d)}</span>
+                    <span className="text-[11px] text-gray-500">· {list.length} {list.length === 1 ? 'entry' : 'entries'}</span>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-[520px] w-full text-sm">
+                      <thead className="bg-white">
+                        <tr>
+                          <th className="px-3 py-2 text-left font-semibold text-gray-700">Class Timing</th>
+                          <th className="px-3 py-2 text-left font-semibold text-gray-700">Present</th>
+                          <th className="px-3 py-2 text-left font-semibold text-gray-700">Skipped</th>
+                          <th className="px-3 py-2 text-left font-semibold text-gray-700">Leave</th>
+                          <th className="px-3 py-2 text-left font-semibold text-gray-700">By</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {list.map((r) => (
+                          <tr key={r.id}>
+                            <td className="px-3 py-2 text-gray-900 whitespace-nowrap">{r.classTiming?.trim() ? r.classTiming : <span className="text-gray-400 italic">—</span>}</td>
+                            <td className="px-3 py-2 text-emerald-700 font-semibold">{r.presentCount}</td>
+                            <td className="px-3 py-2 text-red-700 font-semibold">{r.bunkedCount}</td>
+                            <td className="px-3 py-2 text-amber-700 font-semibold">{r.leaveCount}</td>
+                            <td className="px-3 py-2 text-xs text-gray-600">{r.submitter?.name || '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ))}
             </div>
           )
         )}

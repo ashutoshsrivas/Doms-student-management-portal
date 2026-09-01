@@ -30,6 +30,7 @@ type AttendanceRow = {
   id: string;
   classId: string;
   date: string;
+  classTiming?: string;
   presentCount: number;
   bunkedCount: number;
   leaveCount: number;
@@ -480,8 +481,9 @@ function AttendancePanel({ cls, canWriteATR }: { cls: ClassRow; canWriteATR: boo
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-3 py-2 text-left font-semibold text-gray-700">Date</th>
+                <th className="px-3 py-2 text-left font-semibold text-gray-700">Class Timing</th>
                 <th className="px-3 py-2 text-left font-semibold text-gray-700">Present</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-700">Bunked</th>
+                <th className="px-3 py-2 text-left font-semibold text-gray-700">Skipped</th>
                 <th className="px-3 py-2 text-left font-semibold text-gray-700">Leave</th>
                 <th className="px-3 py-2 text-left font-semibold text-gray-700">Submitted by</th>
                 {canWriteATR && <th className="px-3 py-2 text-left font-semibold text-gray-700">ATR</th>}
@@ -494,6 +496,7 @@ function AttendancePanel({ cls, canWriteATR }: { cls: ClassRow; canWriteATR: boo
                   <Fragment key={r.id}>
                     <tr className="align-top">
                       <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap">{fmt(r.date)}</td>
+                      <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{r.classTiming?.trim() ? r.classTiming : <span className="text-gray-400 italic">—</span>}</td>
                       <td className="px-3 py-2 text-emerald-700 font-semibold">{r.presentCount}</td>
                       <td className="px-3 py-2 text-red-700 font-semibold">{r.bunkedCount}</td>
                       <td className="px-3 py-2 text-amber-700 font-semibold">{r.leaveCount}</td>
