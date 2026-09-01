@@ -14,6 +14,7 @@ type Coordinator = { id: string; firstName: string | null; lastName: string | nu
 type ClassRow = {
   id: string;
   name: string;
+  totalStrength?: number | null;
   Session: Session | null;
   Coordinator: Coordinator | null;
 };
@@ -23,6 +24,7 @@ type AttendanceRow = {
   classTiming?: string;
   additionalInfo?: string;
   presentCount: number;
+  absentCount?: number;
   bunkedCount: number;
   leaveCount: number;
   submittedAt: string;
@@ -96,10 +98,18 @@ function ClassCard({ cls }: { cls: ClassRow }) {
   const [date, setDate] = useState(todayISO());
   const [timing, setTiming] = useState('');
   const [present, setPresent] = useState('');
+  const [absent, setAbsent] = useState('');
   const [bunked, setBunked] = useState('');
   const [leave, setLeave] = useState('');
   const [info, setInfo] = useState('');
   const [saving, setSaving] = useState(false);
+
+  const hasStrength = cls.totalStrength !== null && cls.totalStrength !== undefined;
+  // When the class strength is known, absent is auto-derived from present.
+  const autoAbsent = hasStrength
+    ? Math.max(0, (cls.totalStrength as number) - (parseInt(present, 10) || 0))
+    : null;
+  const absentValue = hasStrength ? String(autoAbsent) : absent;
   const [showHistory, setShowHistory] = useState(false);
 
   const load = async () => {
@@ -121,11 +131,13 @@ function ClassCard({ cls }: { cls: ClassRow }) {
     const existing = rows.find((r) => r.date === date && (r.classTiming || '') === timing.trim());
     if (existing) {
       setPresent(String(existing.presentCount));
+      setAbsent(String(existing.absentCount ?? ''));
       setBunked(String(existing.bunkedCount));
       setLeave(String(existing.leaveCount));
       setInfo(existing.additionalInfo || '');
     } else {
       setPresent('');
+      setAbsent('');
       setBunked('');
       setLeave('');
       setInfo('');
@@ -135,18 +147,20 @@ function ClassCard({ cls }: { cls: ClassRow }) {
   const punch = async () => {
     if (!date) { toast.error('Pick a date'); return; }
     const p = parseInt(present, 10) || 0;
+    const a = hasStrength ? (autoAbsent as number) : (parseInt(absent, 10) || 0);
     const b = parseInt(bunked, 10) || 0;
     const l = parseInt(leave, 10) || 0;
-    if (p + b + l === 0) { toast.error('Enter at least one count'); return; }
+    if (p + a + b + l === 0) { toast.error('Enter at least one count'); return; }
     try {
       setSaving(true);
       await apiClient.post(`/classes/${cls.id}/attendance`, {
-        date, classTiming: timing.trim(), presentCount: p, bunkedCount: b, leaveCount: l,
+        date, classTiming: timing.trim(), presentCount: p, absentCount: a, bunkedCount: b, leaveCount: l,
         additionalInfo: info.trim(),
       });
       toast.success('Attendance submitted');
       setTiming('');
       setInfo('');
+      setAbsent('');
       await load();
     } catch (e: any) {
       toast.error(e?.response?.data?.message || 'Failed to submit');
@@ -173,11 +187,12 @@ function ClassCard({ cls }: { cls: ClassRow }) {
         <h2 className="text-base font-bold text-gray-900">{cls.name}</h2>
         <div className="mt-0.5 text-xs text-gray-600">
           {cls.Session?.name || '—'} · Coordinator: {nameOf(cls.Coordinator)}
+          {hasStrength && <> · Total strength: <span className="font-semibold text-gray-800">{cls.totalStrength}</span></>}
         </div>
       </div>
 
       <div className="p-4 space-y-3">
-        <div className="grid grid-cols-2 sm:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
           <div>
             <label className="block text-xs font-semibold text-gray-700 mb-1">Date</label>
             <input type="date" value={date} onChange={(e) => setDate(e.target.value)} max={todayISO()} className="w-full rounded border border-gray-300 px-3 py-2 text-sm text-gray-900" />
@@ -188,7 +203,20 @@ function ClassCard({ cls }: { cls: ClassRow }) {
           </div>
           <div>
             <label className="block text-xs font-semibold text-emerald-700 mb-1">Present</label>
-            <input type="number" min={0} value={present} onChange={(e) => setPresent(e.target.value)} placeholder="0" className="w-full rounded border border-gray-300 px-3 py-2 text-sm text-gray-900" />
+            <input type="number" min={0} max={hasStrength ? (cls.totalStrength as number) : undefined} value={present} onChange={(e) => setPresent(e.target.value)} placeholder="0" className="w-full rounded border border-gray-300 px-3 py-2 text-sm text-gray-900" />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 mb-1">Absent{hasStrength && <span className="font-normal text-gray-400"> (auto)</span>}</label>
+            <input
+              type="number"
+              min={0}
+              value={absentValue}
+              onChange={(e) => setAbsent(e.target.value)}
+              readOnly={hasStrength}
+              placeholder="0"
+              title={hasStrength ? 'Auto-calculated from total strength − present' : undefined}
+              className={`w-full rounded border border-gray-300 px-3 py-2 text-sm text-gray-900 ${hasStrength ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+            />
           </div>
           <div>
             <label className="block text-xs font-semibold text-red-700 mb-1">Skipped</label>
@@ -230,11 +258,12 @@ function ClassCard({ cls }: { cls: ClassRow }) {
                     <span className="text-[11px] text-gray-500">· {list.length} {list.length === 1 ? 'entry' : 'entries'}</span>
                   </div>
                   <div className="overflow-x-auto">
-                    <table className="min-w-[640px] w-full text-sm">
+                    <table className="min-w-[720px] w-full text-sm">
                       <thead className="bg-white">
                         <tr>
                           <th className="px-3 py-2 text-left font-semibold text-gray-700">Class Timing</th>
                           <th className="px-3 py-2 text-left font-semibold text-gray-700">Present</th>
+                          <th className="px-3 py-2 text-left font-semibold text-gray-700">Absent</th>
                           <th className="px-3 py-2 text-left font-semibold text-gray-700">Skipped</th>
                           <th className="px-3 py-2 text-left font-semibold text-gray-700">Leave</th>
                           <th className="px-3 py-2 text-left font-semibold text-gray-700">Info</th>
@@ -246,6 +275,7 @@ function ClassCard({ cls }: { cls: ClassRow }) {
                           <tr key={r.id}>
                             <td className="px-3 py-2 text-gray-900 whitespace-nowrap">{r.classTiming?.trim() ? r.classTiming : <span className="text-gray-400 italic">—</span>}</td>
                             <td className="px-3 py-2 text-emerald-700 font-semibold">{r.presentCount}</td>
+                            <td className="px-3 py-2 text-gray-700 font-semibold">{r.absentCount ?? 0}</td>
                             <td className="px-3 py-2 text-red-700 font-semibold">{r.bunkedCount}</td>
                             <td className="px-3 py-2 text-amber-700 font-semibold">{r.leaveCount}</td>
                             <td className="px-3 py-2 text-xs text-gray-600 max-w-[220px] whitespace-pre-wrap break-words">{r.additionalInfo?.trim() ? r.additionalInfo : <span className="text-gray-400 italic">—</span>}</td>

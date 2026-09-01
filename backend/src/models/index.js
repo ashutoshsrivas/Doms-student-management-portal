@@ -2019,6 +2019,9 @@ const Class = sequelize.define('Class', {
   description: { type: DataTypes.TEXT, allowNull: true },
   coordinatorId: { type: DataTypes.UUID, allowNull: false },
   createdBy: { type: DataTypes.UUID, allowNull: true },
+  // Total number of students in the class. Used to auto-derive the absent
+  // count on attendance (absent = totalStrength - present).
+  totalStrength: { type: DataTypes.INTEGER, allowNull: true },
   status: {
     type: DataTypes.ENUM('ACTIVE', 'ARCHIVED'),
     defaultValue: 'ACTIVE',
@@ -2047,6 +2050,9 @@ const ClassAttendance = sequelize.define('ClassAttendance', {
   classId: { type: DataTypes.UUID, allowNull: false },
   date: { type: DataTypes.DATEONLY, allowNull: false },
   presentCount: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+  // Auto-derived from the class total strength (totalStrength - present),
+  // clamped at 0. Stored per row so history is stable if strength changes.
+  absentCount: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
   bunkedCount: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
   leaveCount: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
   // Optional student-entered class timing / period (e.g. "10:00–11:00" or

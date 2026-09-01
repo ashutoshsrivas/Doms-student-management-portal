@@ -522,6 +522,30 @@ async function start() {
         console.error('Error adding additional_info to class_attendance:', error.message);
       }
     }
+    try {
+      await sequelize.query(`ALTER TABLE classes ADD COLUMN total_strength INT NULL`);
+      console.log('Added total_strength column to classes');
+    } catch (error) {
+      if (error.message && error.message.includes('Duplicate column')) {
+        console.log('total_strength column already exists on classes');
+      } else if (error.message && error.message.includes("doesn't exist")) {
+        // fresh install — sync already created it
+      } else {
+        console.error('Error adding total_strength to classes:', error.message);
+      }
+    }
+    try {
+      await sequelize.query(`ALTER TABLE class_attendance ADD COLUMN absent_count INT NOT NULL DEFAULT 0`);
+      console.log('Added absent_count column to class_attendance');
+    } catch (error) {
+      if (error.message && error.message.includes('Duplicate column')) {
+        console.log('absent_count column already exists on class_attendance');
+      } else if (error.message && error.message.includes("doesn't exist")) {
+        // fresh install — sync already created it
+      } else {
+        console.error('Error adding absent_count to class_attendance:', error.message);
+      }
+    }
 
     // Bootstrap default admin user
     await bootstrap();

@@ -32,6 +32,7 @@ function shapeAttendanceRow(row, includeATR) {
     classId: plain.classId,
     date: plain.date,
     presentCount: plain.presentCount,
+    absentCount: plain.absentCount ?? 0,
     bunkedCount: plain.bunkedCount,
     leaveCount: plain.leaveCount,
     classTiming: plain.classTiming || '',
@@ -109,7 +110,7 @@ module.exports = {
   create: async (req, res) => {
     const t = await sequelize.transaction();
     try {
-      const { sessionId, name, description, coordinatorId, crStudentIds } = req.body;
+      const { sessionId, name, description, coordinatorId, crStudentIds, totalStrength } = req.body;
       if (!sessionId || !name || !coordinatorId) {
         await t.rollback();
         return res.status(400).json({ message: 'sessionId, name, coordinatorId are required' });
@@ -130,8 +131,11 @@ module.exports = {
           return res.status(400).json({ message: `CR ${bad.email} is not a student` });
         }
       }
+      const strength = (totalStrength === undefined || totalStrength === null || totalStrength === '')
+        ? null : Math.max(0, parseInt(totalStrength, 10) || 0);
       const cls = await Class.create({
         sessionId, name, description, coordinatorId,
+        totalStrength: strength,
         createdBy: req.user.id,
       }, { transaction: t });
       if (crs.length) {
@@ -175,6 +179,10 @@ module.exports = {
       if (req.body.name !== undefined) patch.name = req.body.name;
       if (req.body.description !== undefined) patch.description = req.body.description;
       if (req.body.status !== undefined) patch.status = req.body.status;
+      if (req.body.totalStrength !== undefined) {
+        const v = req.body.totalStrength;
+        patch.totalStrength = (v === null || v === '') ? null : Math.max(0, parseInt(v, 10) || 0);
+      }
       if (req.body.coordinatorId !== undefined) {
         if (!ORG_WIDE_ROLES.includes(req.user.role)) {
           return res.status(403).json({ message: 'Only ADMIN/HOD can change the coordinator' });
@@ -295,11 +303,17 @@ module.exports = {
       const isCR = role === 'STUDENT' ? await isCROfClass(cls.id, userId) : false;
       if (!isAdmin && !isCoord && !isCR) return res.status(403).json({ message: 'Not authorized' });
 
-      const { date, presentCount, bunkedCount, leaveCount, classTiming, additionalInfo } = req.body;
+      const { date, presentCount, absentCount, bunkedCount, leaveCount, classTiming, additionalInfo } = req.body;
       if (!date) return res.status(400).json({ message: 'date is required (YYYY-MM-DD)' });
       const p = Math.max(0, parseInt(presentCount, 10) || 0);
       const b = Math.max(0, parseInt(bunkedCount, 10) || 0);
       const l = Math.max(0, parseInt(leaveCount, 10) || 0);
+      // Absent is auto-derived from the class total strength when it's set
+      // (absent = strength - present, clamped at 0); otherwise fall back to any
+      // value the client sent.
+      const a = (cls.totalStrength !== null && cls.totalStrength !== undefined)
+        ? Math.max(0, cls.totalStrength - p)
+        : Math.max(0, parseInt(absentCount, 10) || 0);
       // Optional class timing / period. Empty string = untimed daily entry.
       const timing = typeof classTiming === 'string' ? classTiming.trim().slice(0, 100) : '';
       // Optional free-text note.
@@ -309,14 +323,14 @@ module.exports = {
       const existing = await ClassAttendance.findOne({ where: { classId: cls.id, date, classTiming: timing } });
       if (existing) {
         await existing.update({
-          presentCount: p, bunkedCount: b, leaveCount: l, additionalInfo: info,
+          presentCount: p, absentCount: a, bunkedCount: b, leaveCount: l, additionalInfo: info,
           submittedBy: userId, submittedAt: new Date(),
         });
         return res.json({ attendance: shapeAttendanceRow(existing, isAdmin || isCoord) });
       }
       const created = await ClassAttendance.create({
         classId: cls.id, date, classTiming: timing, additionalInfo: info,
-        presentCount: p, bunkedCount: b, leaveCount: l,
+        presentCount: p, absentCount: a, bunkedCount: b, leaveCount: l,
         submittedBy: userId, submittedAt: new Date(),
       });
       res.status(201).json({ attendance: shapeAttendanceRow(created, isAdmin || isCoord) });

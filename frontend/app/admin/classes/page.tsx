@@ -21,6 +21,7 @@ type ClassRow = {
   name: string;
   description: string | null;
   coordinatorId: string;
+  totalStrength: number | null;
   status: string;
   Session: Session | null;
   Coordinator: Coordinator | null;
@@ -33,6 +34,7 @@ type AttendanceRow = {
   classTiming?: string;
   additionalInfo?: string;
   presentCount: number;
+  absentCount?: number;
   bunkedCount: number;
   leaveCount: number;
   submittedAt: string;
@@ -498,11 +500,12 @@ function AttendancePanel({ cls, canWriteATR }: { cls: ClassRow; canWriteATR: boo
                 <span className="text-[11px] text-gray-500">· {list.length} {list.length === 1 ? 'entry' : 'entries'}</span>
               </div>
               <div className="overflow-x-auto">
-                <table className="min-w-[760px] w-full text-sm">
+                <table className="min-w-[840px] w-full text-sm">
                   <thead className="bg-white">
                     <tr>
                       <th className="px-3 py-2 text-left font-semibold text-gray-700">Class Timing</th>
                       <th className="px-3 py-2 text-left font-semibold text-gray-700">Present</th>
+                      <th className="px-3 py-2 text-left font-semibold text-gray-700">Absent</th>
                       <th className="px-3 py-2 text-left font-semibold text-gray-700">Skipped</th>
                       <th className="px-3 py-2 text-left font-semibold text-gray-700">Leave</th>
                       <th className="px-3 py-2 text-left font-semibold text-gray-700">Info</th>
@@ -517,6 +520,7 @@ function AttendancePanel({ cls, canWriteATR }: { cls: ClassRow; canWriteATR: boo
                         <tr key={r.id} className="align-top">
                           <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{r.classTiming?.trim() ? r.classTiming : <span className="text-gray-400 italic">—</span>}</td>
                           <td className="px-3 py-2 text-emerald-700 font-semibold">{r.presentCount}</td>
+                          <td className="px-3 py-2 text-gray-700 font-semibold">{r.absentCount ?? 0}</td>
                           <td className="px-3 py-2 text-red-700 font-semibold">{r.bunkedCount}</td>
                           <td className="px-3 py-2 text-amber-700 font-semibold">{r.leaveCount}</td>
                           <td className="px-3 py-2 text-xs text-gray-600 max-w-[220px] whitespace-pre-wrap break-words">{r.additionalInfo?.trim() ? r.additionalInfo : <span className="text-gray-400 italic">—</span>}</td>
@@ -587,6 +591,7 @@ function CreateClassModal({
 }) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [totalStrength, setTotalStrength] = useState('');
   const [sessionId, setSessionId] = useState(defaultSessionId || sessions[0]?.id || '');
   const [coordinatorId, setCoordinatorId] = useState('');
   const [coords, setCoords] = useState<Coordinator[]>([]);
@@ -612,6 +617,7 @@ function CreateClassModal({
       setSaving(true);
       await apiClient.post('/classes', {
         sessionId, name: name.trim(), description: description.trim() || null, coordinatorId,
+        totalStrength: totalStrength.trim() === '' ? null : Math.max(0, parseInt(totalStrength, 10) || 0),
       });
       toast.success('Class created');
       await onCreated();
@@ -642,6 +648,11 @@ function CreateClassModal({
           <div>
             <label className="block text-xs font-semibold text-gray-700 mb-1">Description</label>
             <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} className="w-full rounded border border-gray-300 px-3 py-2 text-sm text-gray-900" />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 mb-1">Total strength</label>
+            <input type="number" min={0} value={totalStrength} onChange={(e) => setTotalStrength(e.target.value)} placeholder="e.g. 60" className="w-full rounded border border-gray-300 px-3 py-2 text-sm text-gray-900" />
+            <p className="mt-1 text-[11px] text-gray-500">Total students. Absent is auto-calculated on attendance (strength − present).</p>
           </div>
           <div>
             <label className="block text-xs font-semibold text-gray-700 mb-1">Class coordinator *</label>
@@ -675,6 +686,9 @@ function EditClassModal({
 }) {
   const [name, setName] = useState(cls.name);
   const [description, setDescription] = useState(cls.description || '');
+  const [totalStrength, setTotalStrength] = useState(
+    cls.totalStrength === null || cls.totalStrength === undefined ? '' : String(cls.totalStrength)
+  );
   const [status, setStatus] = useState(cls.status || 'ACTIVE');
   const [coordinatorId, setCoordinatorId] = useState(cls.coordinatorId);
   const [coords, setCoords] = useState<Coordinator[]>([]);
@@ -712,6 +726,7 @@ function EditClassModal({
       const body: Record<string, unknown> = {
         name: name.trim(),
         description: description.trim() || null,
+        totalStrength: totalStrength.trim() === '' ? null : Math.max(0, parseInt(totalStrength, 10) || 0),
         status,
       };
       // Only ADMIN/HOD may send coordinatorId — the backend rejects it otherwise.
@@ -741,6 +756,11 @@ function EditClassModal({
           <div>
             <label className="block text-xs font-semibold text-gray-700 mb-1">Description</label>
             <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} className="w-full rounded border border-gray-300 px-3 py-2 text-sm text-gray-900" />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 mb-1">Total strength</label>
+            <input type="number" min={0} value={totalStrength} onChange={(e) => setTotalStrength(e.target.value)} placeholder="e.g. 60" className="w-full rounded border border-gray-300 px-3 py-2 text-sm text-gray-900" />
+            <p className="mt-1 text-[11px] text-gray-500">Total students. Absent is auto-calculated on attendance (strength − present).</p>
           </div>
           {canChangeCoordinator && (
             <div>
