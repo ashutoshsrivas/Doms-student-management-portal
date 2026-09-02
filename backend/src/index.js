@@ -27,6 +27,7 @@ const eventRoutes = require('./routes/eventRoutes');
 const landingRoutes = require('./routes/landingRoutes');
 const classRoutes = require('./routes/classRoutes');
 const certificationRoutes = require('./routes/certificationRoutes');
+const certificationPublicRoutes = require('./routes/certificationPublicRoutes');
 const scheduleRoutes = require('./routes/scheduleRoutes');
 const mentorReportRoutes = require('./routes/mentorReportRoutes');
 const mentorFeedbackRoutes = require('./routes/mentorFeedbackRoutes');
@@ -82,6 +83,7 @@ app.use('/api/events', eventRoutes);
 app.use('/api/landing', landingRoutes);
 app.use('/api/classes', classRoutes);
 app.use('/api/certifications', certificationRoutes);
+app.use('/api/verify', certificationPublicRoutes); // public, no auth
 app.use('/api/schedule', scheduleRoutes);
 app.use('/api/mentor-report', mentorReportRoutes);
 app.use('/api/mentor-feedback', mentorFeedbackRoutes);

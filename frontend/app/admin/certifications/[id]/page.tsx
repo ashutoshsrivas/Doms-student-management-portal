@@ -4,12 +4,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import {
-  FiArrowLeft, FiUploadCloud, FiSave, FiPlus, FiTrash2, FiUsers, FiX, FiSearch, FiCheck,
+  FiArrowLeft, FiUploadCloud, FiSave, FiPlus, FiTrash2, FiUsers, FiX, FiSearch, FiCheck, FiEye,
 } from 'react-icons/fi';
 import apiClient from '@/app/lib/apiClient';
 import DashboardLayout from '@/app/components/DashboardLayout';
 import ProtectedRoute from '@/app/components/ProtectedRoute';
-import { CertField } from '@/app/components/Certificates/CertificateView';
+import CertificateView, { CertField } from '@/app/components/Certificates/CertificateView';
 
 type Certification = {
   id: string;
@@ -26,6 +26,7 @@ type Assignment = {
   id: string;
   certificateNumber: string;
   issuedAt: string;
+  fieldValues?: Record<string, string>;
   Student: Recipient | null;
   IssuedByUser: { firstName: string | null; lastName: string | null } | null;
 };
@@ -37,7 +38,9 @@ const FIELD_TYPES: { type: string; label: string }[] = [
   { type: 'ISSUE_DATE', label: 'Issue date' },
   { type: 'CERTIFICATE_ID', label: 'Certificate ID' },
   { type: 'CUSTOM_TEXT', label: 'Custom text' },
+  { type: 'VERIFY_QR', label: 'Verify QR' },
 ];
+const GRID_STEP = 2.5; // percent — snap granularity
 const typeLabel = (t: string) => FIELD_TYPES.find((x) => x.type === t)?.label || t;
 const nameOf = (u: Recipient | null) => (u ? `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email : '—');
 
@@ -68,9 +71,13 @@ function Builder() {
   const [uploading, setUploading] = useState(false);
   const [showAssign, setShowAssign] = useState(false);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [snap, setSnap] = useState(true);
+  const [viewing, setViewing] = useState<Assignment | null>(null);
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const draggingId = useRef<string | null>(null);
+  const snapRef = useRef(snap);
+  useEffect(() => { snapRef.current = snap; }, [snap]);
 
   const load = useCallback(async () => {
     try {
@@ -106,6 +113,10 @@ function Builder() {
     let y = ((e.clientY - rect.top) / rect.height) * 100;
     x = Math.min(100, Math.max(0, x));
     y = Math.min(100, Math.max(0, y));
+    if (snapRef.current) {
+      x = Math.round(x / GRID_STEP) * GRID_STEP;
+      y = Math.round(y / GRID_STEP) * GRID_STEP;
+    }
     setFields((prev) => prev.map((f) => (f.id === fid ? { ...f, xPct: Math.round(x * 10) / 10, yPct: Math.round(y * 10) / 10 } : f)));
   }, []);
   const onPointerUp = useCallback(() => {
@@ -228,10 +239,15 @@ function Builder() {
         <div className="lg:col-span-2 space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Template</span>
-            <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-200">
-              <FiUploadCloud className="h-3.5 w-3.5" /> {uploading ? 'Uploading…' : cert.templateImageUrl ? 'Replace image' : 'Upload image'}
-              <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) onUpload(f); e.currentTarget.value = ''; }} />
-            </label>
+            <div className="flex items-center gap-2">
+              <label className="inline-flex cursor-pointer select-none items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-100">
+                <input type="checkbox" checked={snap} onChange={(e) => setSnap(e.target.checked)} /> Grid &amp; snap
+              </label>
+              <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-200">
+                <FiUploadCloud className="h-3.5 w-3.5" /> {uploading ? 'Uploading…' : cert.templateImageUrl ? 'Replace image' : 'Upload image'}
+                <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) onUpload(f); e.currentTarget.value = ''; }} />
+              </label>
+            </div>
           </div>
 
           {cert.templateImageUrl ? (
@@ -239,9 +255,27 @@ function Builder() {
               style={{ aspectRatio: aspect, containerType: 'size' }}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={cert.templateImageUrl} alt="template" draggable={false} className="pointer-events-none absolute inset-0 h-full w-full object-contain" />
+              {snap && (
+                <div className="pointer-events-none absolute inset-0" style={{
+                  backgroundImage: 'linear-gradient(to right, rgba(59,130,246,0.15) 1px, transparent 1px), linear-gradient(to bottom, rgba(59,130,246,0.15) 1px, transparent 1px)',
+                  backgroundSize: `${GRID_STEP}% ${GRID_STEP}%`,
+                }} />
+              )}
               {fields.map((f) => {
-                const anchor = f.align === 'left' ? 'translate(0,-50%)' : f.align === 'right' ? 'translate(-100%,-50%)' : 'translate(-50%,-50%)';
                 const isSel = f.id === selectedId;
+                if (f.type === 'VERIFY_QR') {
+                  return (
+                    <div
+                      key={f.id}
+                      onPointerDown={(e) => startDrag(e, f.id)}
+                      className={`absolute flex cursor-move items-center justify-center rounded bg-white/80 text-[8px] font-semibold text-gray-500 ${isSel ? 'outline outline-2 outline-blue-500' : 'outline outline-1 outline-dashed outline-gray-400 hover:outline-blue-300'}`}
+                      style={{ left: `${f.xPct}%`, top: `${f.yPct}%`, transform: 'translate(-50%,-50%)', width: `${f.fontPct}cqh`, height: `${f.fontPct}cqh` }}
+                    >
+                      QR
+                    </div>
+                  );
+                }
+                const anchor = f.align === 'left' ? 'translate(0,-50%)' : f.align === 'right' ? 'translate(-100%,-50%)' : 'translate(-50%,-50%)';
                 return (
                   <div
                     key={f.id}
@@ -307,35 +341,44 @@ function Builder() {
               )}
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-[11px] font-semibold text-gray-600 mb-0.5">Font size</label>
-                  <input type="range" min={2} max={20} step={0.5} value={selected.fontPct} onChange={(e) => updateField(selected.id, { fontPct: parseFloat(e.target.value) })} className="w-full" />
+                  <label className="block text-[11px] font-semibold text-gray-600 mb-0.5">{selected.type === 'VERIFY_QR' ? 'QR size' : 'Font size'}</label>
+                  <input type="range" min={selected.type === 'VERIFY_QR' ? 5 : 2} max={selected.type === 'VERIFY_QR' ? 40 : 20} step={0.5} value={selected.fontPct} onChange={(e) => updateField(selected.id, { fontPct: parseFloat(e.target.value) })} className="w-full" />
                 </div>
-                <div>
-                  <label className="block text-[11px] font-semibold text-gray-600 mb-0.5">Color</label>
-                  <input type="color" value={selected.color} onChange={(e) => updateField(selected.id, { color: e.target.value })} className="h-8 w-full rounded border border-gray-300" />
-                </div>
+                {selected.type !== 'VERIFY_QR' && (
+                  <div>
+                    <label className="block text-[11px] font-semibold text-gray-600 mb-0.5">Color</label>
+                    <input type="color" value={selected.color} onChange={(e) => updateField(selected.id, { color: e.target.value })} className="h-8 w-full rounded border border-gray-300" />
+                  </div>
+                )}
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-[11px] font-semibold text-gray-600 mb-0.5">Font</label>
-                  <select value={selected.fontFamily || 'helvetica'} onChange={(e) => updateField(selected.id, { fontFamily: e.target.value })} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm text-gray-900">
-                    <option value="helvetica">Sans (Helvetica)</option>
-                    <option value="times">Serif (Times)</option>
-                    <option value="courier">Mono (Courier)</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[11px] font-semibold text-gray-600 mb-0.5">Align</label>
-                  <select value={selected.align || 'center'} onChange={(e) => updateField(selected.id, { align: e.target.value as CertField['align'] })} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm text-gray-900">
-                    <option value="left">Left</option>
-                    <option value="center">Center</option>
-                    <option value="right">Right</option>
-                  </select>
-                </div>
-              </div>
-              <label className="flex items-center gap-2 text-sm text-gray-700">
-                <input type="checkbox" checked={!!selected.bold} onChange={(e) => updateField(selected.id, { bold: e.target.checked })} /> Bold
-              </label>
+              {selected.type !== 'VERIFY_QR' && (
+                <>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-gray-600 mb-0.5">Font</label>
+                      <select value={selected.fontFamily || 'helvetica'} onChange={(e) => updateField(selected.id, { fontFamily: e.target.value })} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm text-gray-900">
+                        <option value="helvetica">Sans (Helvetica)</option>
+                        <option value="times">Serif (Times)</option>
+                        <option value="courier">Mono (Courier)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-gray-600 mb-0.5">Align</label>
+                      <select value={selected.align || 'center'} onChange={(e) => updateField(selected.id, { align: e.target.value as CertField['align'] })} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm text-gray-900">
+                        <option value="left">Left</option>
+                        <option value="center">Center</option>
+                        <option value="right">Right</option>
+                      </select>
+                    </div>
+                  </div>
+                  <label className="flex items-center gap-2 text-sm text-gray-700">
+                    <input type="checkbox" checked={!!selected.bold} onChange={(e) => updateField(selected.id, { bold: e.target.checked })} /> Bold
+                  </label>
+                </>
+              )}
+              {selected.type === 'VERIFY_QR' && (
+                <p className="text-[11px] text-gray-400">Scans to the public verification page for this certificate.</p>
+              )}
               <div className="text-[11px] text-gray-400">Position: {selected.xPct}%, {selected.yPct}% — drag on the preview to move.</div>
             </div>
           )}
@@ -370,13 +413,18 @@ function Builder() {
                     <td className="px-3 py-2 text-xs text-gray-700">{a.certificateNumber}</td>
                     <td className="px-3 py-2 text-xs text-gray-600">{new Date(a.issuedAt).toLocaleDateString()}</td>
                     <td className="px-3 py-2 text-right">
-                      <button type="button" onClick={async () => {
-                        if (!confirm(`Revoke this certificate from ${nameOf(a.Student)}?`)) return;
-                        try { await apiClient.delete(`/certifications/assignments/${a.id}`); toast.success('Revoked'); await loadAssignments(); }
-                        catch (e: any) { toast.error(e?.response?.data?.message || 'Failed to revoke'); }
-                      }} className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50">
-                        <FiTrash2 className="h-3 w-3" /> Revoke
-                      </button>
+                      <div className="flex items-center justify-end gap-1">
+                        <button type="button" onClick={() => setViewing(a)} className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50">
+                          <FiEye className="h-3 w-3" /> View
+                        </button>
+                        <button type="button" onClick={async () => {
+                          if (!confirm(`Revoke this certificate from ${nameOf(a.Student)}?`)) return;
+                          try { await apiClient.delete(`/certifications/assignments/${a.id}`); toast.success('Revoked'); await loadAssignments(); }
+                          catch (e: any) { toast.error(e?.response?.data?.message || 'Failed to revoke'); }
+                        }} className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50">
+                          <FiTrash2 className="h-3 w-3" /> Revoke
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -392,6 +440,29 @@ function Builder() {
           onClose={() => setShowAssign(false)}
           onAssigned={async () => { setShowAssign(false); await loadAssignments(); await load(); }}
         />
+      )}
+
+      {viewing && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setViewing(null)}>
+          <div className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-xl bg-white p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-3 flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">{nameOf(viewing.Student)}</h3>
+                <p className="text-xs text-gray-500">Certificate No. {viewing.certificateNumber}</p>
+              </div>
+              <button type="button" onClick={() => setViewing(null)} className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100"><FiX className="h-5 w-5" /></button>
+            </div>
+            <CertificateView
+              certificationId={id}
+              title={title}
+              templateWidth={cert.templateWidth}
+              templateHeight={cert.templateHeight}
+              fields={fields}
+              values={viewing.fieldValues}
+              certificateNumber={viewing.certificateNumber}
+            />
+          </div>
+        </div>
       )}
     </div>
   );

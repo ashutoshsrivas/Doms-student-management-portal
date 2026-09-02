@@ -65,9 +65,33 @@ export default function CertificateView({
   certificationId, title, templateWidth, templateHeight, fields, values, certificateNumber, showDownload = true,
 }: Props) {
   const [imgUrl, setImgUrl] = useState<string | null>(null);
+  const [qrMap, setQrMap] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
+
+  const verifyUrl = typeof window !== 'undefined'
+    ? `${window.location.origin}/verify/${certificateNumber || 'PREVIEW'}`
+    : `/verify/${certificateNumber || 'PREVIEW'}`;
+
+  // Generate QR data-URLs for any VERIFY_QR fields (all encode the same
+  // verification URL for this certificate).
+  useEffect(() => {
+    const hasQr = fields.some((f) => f.type === 'VERIFY_QR');
+    if (!hasQr) { setQrMap({}); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const QR = (await import('qrcode')).default;
+        const dataUrl = await QR.toDataURL(verifyUrl, { margin: 1, width: 512 });
+        if (cancelled) return;
+        const map: Record<string, string> = {};
+        fields.forEach((f) => { if (f.type === 'VERIFY_QR') map[f.id] = dataUrl; });
+        setQrMap(map);
+      } catch { /* ignore */ }
+    })();
+    return () => { cancelled = true; };
+  }, [fields, verifyUrl]);
 
   const aspect = templateWidth && templateHeight ? `${templateWidth} / ${templateHeight}` : '1.414 / 1';
 
@@ -110,6 +134,13 @@ export default function CertificateView({
       const doc = new jsPDF({ orientation, unit: 'pt', format: [W, H] });
       doc.addImage(img, 'PNG', 0, 0, W, H);
       for (const f of fields) {
+        if (f.type === 'VERIFY_QR') {
+          const qr = qrMap[f.id];
+          if (!qr) continue;
+          const size = (f.fontPct / 100) * H;
+          doc.addImage(qr, 'PNG', (f.xPct / 100) * W - size / 2, (f.yPct / 100) * H - size / 2, size, size);
+          continue;
+        }
         const text = displayValue(f, values);
         if (!text) continue;
         doc.setFont(pdfFontFor(f.fontFamily), f.bold ? 'bold' : 'normal');
@@ -149,6 +180,17 @@ export default function CertificateView({
           <div className="absolute inset-0 flex items-center justify-center text-sm text-gray-400">No template image</div>
         )}
         {imgUrl && fields.map((f) => {
+          if (f.type === 'VERIFY_QR') {
+            return (
+              <img
+                key={f.id}
+                src={qrMap[f.id] || undefined}
+                alt="Verification QR"
+                className="pointer-events-none absolute"
+                style={{ left: `${f.xPct}%`, top: `${f.yPct}%`, transform: 'translate(-50%,-50%)', width: `${f.fontPct}cqh`, height: `${f.fontPct}cqh` }}
+              />
+            );
+          }
           const anchor = f.align === 'left' ? 'translate(0,-50%)' : f.align === 'right' ? 'translate(-100%,-50%)' : 'translate(-50%,-50%)';
           return (
             <div

@@ -31,6 +31,17 @@ function resolveField(field, student, certificateNumber, issueDateStr) {
   }
 }
 
+// Re-resolve a certification's CURRENT field definitions against a student at
+// read time. Design/field edits therefore reflect on already-issued
+// certificates, while the certificate number and issue date stay stable.
+function resolvedValuesFor(certification, assignment, student) {
+  const fields = shapeCertification(certification).fields;
+  const issueDateStr = new Date(assignment.issuedAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
+  const map = {};
+  for (const f of fields) map[f.id] = resolveField(f, student || {}, assignment.certificateNumber, issueDateStr);
+  return map;
+}
+
 function genCertificateNumber() {
   const year = new Date().getFullYear();
   const rand = crypto.randomBytes(4).toString('hex').toUpperCase(); // 8 hex chars
@@ -302,7 +313,12 @@ module.exports = {
         ],
         order: [['issuedAt', 'DESC']],
       });
-      res.json({ assignments: rows.map(shapeAssignment) });
+      const shaped = rows.map((r) => {
+        const a = shapeAssignment(r);
+        a.fieldValues = resolvedValuesFor(cert, a, a.Student); // reflect current design
+        return a;
+      });
+      res.json({ assignments: shaped });
     } catch (err) {
       console.error('certification.listAssignments error:', err);
       res.status(500).json({ message: 'Failed to list recipients' });
@@ -327,6 +343,9 @@ module.exports = {
   // GET /api/certifications/my — current user's issued certificates
   myCertificates: async (req, res) => {
     try {
+      const student = await User.findByPk(req.user.id, {
+        attributes: ['id', 'firstName', 'lastName', 'email', 'registrationNumber'],
+      });
       const rows = await CertificateAssignment.findAll({
         where: { studentId: req.user.id, status: 'ISSUED' },
         include: [{ model: Certification, as: 'Certification' }],
@@ -334,7 +353,10 @@ module.exports = {
       });
       const shaped = rows.map((r) => {
         const a = shapeAssignment(r);
-        if (a.Certification) a.Certification = shapeCertification(a.Certification);
+        if (a.Certification) {
+          a.Certification = shapeCertification(a.Certification);
+          a.fieldValues = resolvedValuesFor(a.Certification, a, student); // reflect current design
+        }
         return a;
       });
       res.json({ certificates: shaped });
@@ -353,6 +375,9 @@ module.exports = {
       if (!isSelf && !STAFF_VIEW_ROLES.includes(req.user.role)) {
         return res.status(403).json({ message: 'Not authorized' });
       }
+      const student = await User.findByPk(studentId, {
+        attributes: ['id', 'firstName', 'lastName', 'email', 'registrationNumber'],
+      });
       const rows = await CertificateAssignment.findAll({
         where: { studentId, status: 'ISSUED' },
         include: [{ model: Certification, as: 'Certification' }],
@@ -360,13 +385,45 @@ module.exports = {
       });
       const shaped = rows.map((r) => {
         const a = shapeAssignment(r);
-        if (a.Certification) a.Certification = shapeCertification(a.Certification);
+        if (a.Certification) {
+          a.Certification = shapeCertification(a.Certification);
+          a.fieldValues = resolvedValuesFor(a.Certification, a, student); // reflect current design
+        }
         return a;
       });
       res.json({ certificates: shaped });
     } catch (err) {
       console.error('certification.studentCertificates error:', err);
       res.status(500).json({ message: 'Failed to load certificates' });
+    }
+  },
+
+  // ── Public verification (NO AUTH) ─────────────────────────────
+  // GET /api/verify/:number — returns minimal, non-sensitive proof.
+  verify: async (req, res) => {
+    try {
+      const number = String(req.params.number || '').trim();
+      const row = await CertificateAssignment.findOne({
+        where: { certificateNumber: number },
+        include: [
+          { model: Certification, as: 'Certification', attributes: ['id', 'title', 'description'] },
+          { model: User, as: 'Student', attributes: ['firstName', 'lastName'] },
+        ],
+      });
+      if (!row || row.status !== 'ISSUED') {
+        return res.status(404).json({ valid: false, message: 'Certificate not found or has been revoked' });
+      }
+      res.json({
+        valid: true,
+        certificateNumber: row.certificateNumber,
+        title: row.Certification?.title || 'Certificate',
+        description: row.Certification?.description || null,
+        recipientName: fullName(row.Student),
+        issuedAt: row.issuedAt,
+      });
+    } catch (err) {
+      console.error('certification.verify error:', err);
+      res.status(500).json({ valid: false, message: 'Verification failed' });
     }
   },
 };
