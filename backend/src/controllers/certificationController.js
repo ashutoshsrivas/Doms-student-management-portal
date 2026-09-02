@@ -1,8 +1,10 @@
 const crypto = require('crypto');
+const XLSX = require('xlsx');
 const {
   sequelize,
   Certification,
   CertificateAssignment,
+  StudentSession,
   User,
 } = require('../models');
 const { Op } = require('sequelize');
@@ -46,6 +48,53 @@ function genCertificateNumber() {
   const year = new Date().getFullYear();
   const rand = crypto.randomBytes(4).toString('hex').toUpperCase(); // 8 hex chars
   return `GESoM-${year}-${rand}`;
+}
+
+// Issue `cert` to each student (idempotent per student), snapshotting field
+// values. Returns { created, skipped }. Shared by the manual and Excel flows.
+async function issueCertificatesTo(cert, students, issuedById) {
+  const fields = shapeCertification(cert).fields;
+  const issueDateStr = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
+  let created = 0;
+  let skipped = 0;
+  for (const student of students) {
+    const existing = await CertificateAssignment.findOne({
+      where: { certificationId: cert.id, studentId: student.id },
+    });
+    if (existing) { skipped += 1; continue; }
+
+    let certificateNumber = genCertificateNumber();
+    const fieldValues = {};
+    for (const f of fields) fieldValues[f.id] = resolveField(f, student, certificateNumber, issueDateStr);
+
+    let attempts = 0;
+    while (attempts < 5) {
+      try {
+        await CertificateAssignment.create({
+          certificationId: cert.id,
+          studentId: student.id,
+          certificateNumber,
+          fieldValues,
+          issuedBy: issuedById,
+          issuedAt: new Date(),
+        });
+        created += 1;
+        break;
+      } catch (e) {
+        // (cert, student) is pre-checked, so a unique violation is almost
+        // always the certificate number — retry with a fresh one.
+        if (e.name === 'SequelizeUniqueConstraintError') {
+          attempts += 1;
+          if (attempts >= 5) { skipped += 1; break; }
+          certificateNumber = genCertificateNumber();
+          for (const f of fields) if (f.type === 'CERTIFICATE_ID') fieldValues[f.id] = certificateNumber;
+          continue;
+        }
+        throw e;
+      }
+    }
+  }
+  return { created, skipped };
 }
 
 // Shape a certification for API responses (parse fields defensively).
@@ -243,51 +292,7 @@ module.exports = {
       if (!studentIds.length) return res.status(400).json({ message: 'Select at least one recipient' });
 
       const students = await User.findAll({ where: { id: { [Op.in]: studentIds }, approvedRole: 'STUDENT' } });
-      const fields = shapeCertification(cert).fields;
-      const issueDateStr = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
-
-      let created = 0;
-      let skipped = 0;
-      for (const student of students) {
-        const existing = await CertificateAssignment.findOne({
-          where: { certificationId: cert.id, studentId: student.id },
-        });
-        if (existing) { skipped += 1; continue; }
-
-        // Generate a unique certificate number (retry on the rare collision).
-        let certificateNumber = genCertificateNumber();
-        const fieldValues = {};
-        // Resolve field values (CERTIFICATE_ID depends on the number).
-        for (const f of fields) fieldValues[f.id] = resolveField(f, student, certificateNumber, issueDateStr);
-
-        let attempts = 0;
-        while (attempts < 5) {
-          try {
-            await CertificateAssignment.create({
-              certificationId: cert.id,
-              studentId: student.id,
-              certificateNumber,
-              fieldValues,
-              issuedBy: req.user.id,
-              issuedAt: new Date(),
-            });
-            created += 1;
-            break;
-          } catch (e) {
-            // We pre-checked the (certification, student) pair, so a unique
-            // violation here is almost always the certificate number — retry
-            // with a fresh one. Give up (skip) after a few attempts.
-            if (e.name === 'SequelizeUniqueConstraintError') {
-              attempts += 1;
-              if (attempts >= 5) { skipped += 1; break; }
-              certificateNumber = genCertificateNumber();
-              for (const f of fields) if (f.type === 'CERTIFICATE_ID') fieldValues[f.id] = certificateNumber;
-              continue;
-            }
-            throw e;
-          }
-        }
-      }
+      const { created, skipped } = await issueCertificatesTo(cert, students, req.user.id);
 
       // Mark the certification ACTIVE once it has been used.
       if (created > 0 && cert.status !== 'ACTIVE') await cert.update({ status: 'ACTIVE' });
@@ -296,6 +301,95 @@ module.exports = {
     } catch (err) {
       console.error('certification.assign error:', err);
       res.status(500).json({ message: 'Failed to assign certificate' });
+    }
+  },
+
+  // GET /api/certifications/session-template?sessionId= — download an .xlsx of
+  // every student in a session, pre-filled, for bulk assignment.
+  sessionTemplate: async (req, res) => {
+    try {
+      if (!canManage(req.user.role)) return res.status(403).json({ message: 'Not authorized' });
+      const { sessionId } = req.query;
+      if (!sessionId) return res.status(400).json({ message: 'sessionId is required' });
+      const rows = await StudentSession.findAll({
+        where: { academicSessionId: sessionId },
+        include: [{ model: User, as: 'Student', attributes: ['id', 'firstName', 'lastName', 'email', 'registrationNumber'] }],
+      });
+      const data = rows
+        .filter((r) => r.Student)
+        .map((r) => ({
+          'User ID': r.Student.id,
+          'Registration No': r.Student.registrationNumber || '',
+          'Name': fullName(r.Student),
+          'Email': r.Student.email || '',
+        }));
+      const ws = XLSX.utils.json_to_sheet(data, { header: ['User ID', 'Registration No', 'Name', 'Email'] });
+      ws['!cols'] = [{ wch: 38 }, { wch: 18 }, { wch: 26 }, { wch: 30 }];
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Recipients');
+      const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+      res.set('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.set('Content-Disposition', 'attachment; filename="certificate-recipients-template.xlsx"');
+      res.send(buf);
+    } catch (err) {
+      console.error('certification.sessionTemplate error:', err);
+      res.status(500).json({ message: 'Failed to generate template' });
+    }
+  },
+
+  // POST /api/certifications/:id/assign-excel — multipart .xlsx of recipients.
+  assignExcel: async (req, res) => {
+    try {
+      if (!canManage(req.user.role)) return res.status(403).json({ message: 'Not authorized' });
+      const cert = await Certification.findByPk(req.params.id);
+      if (!cert) return res.status(404).json({ message: 'Certification not found' });
+      if (!cert.templateImageUrl) return res.status(400).json({ message: 'Upload a template image before assigning' });
+      if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
+
+      const wb = XLSX.read(req.file.buffer, { type: 'buffer' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      if (!ws) return res.status(400).json({ message: 'The uploaded file has no sheets' });
+      const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+      if (!rows.length) return res.status(400).json({ message: 'The sheet has no rows' });
+
+      // Collect identifiers, tolerant of header casing/variants.
+      const pick = (row, keys) => {
+        for (const k of Object.keys(row)) {
+          if (keys.includes(k.trim().toLowerCase())) return String(row[k]).trim();
+        }
+        return '';
+      };
+      const ids = new Set(), emails = new Set(), regs = new Set();
+      let rowCount = 0;
+      for (const row of rows) {
+        const id = pick(row, ['user id', 'userid', 'id']);
+        const email = pick(row, ['email', 'e-mail']);
+        const reg = pick(row, ['registration no', 'registration number', 'reg no', 'registrationnumber']);
+        if (!id && !email && !reg) continue;
+        rowCount += 1;
+        if (id) ids.add(id);
+        if (email) emails.add(email.toLowerCase());
+        if (reg) regs.add(reg);
+      }
+      if (rowCount === 0) return res.status(400).json({ message: 'No recognizable rows. Keep the User ID / Email / Registration No columns.' });
+
+      const or = [];
+      if (ids.size) or.push({ id: { [Op.in]: [...ids] } });
+      if (emails.size) or.push({ email: { [Op.in]: [...emails] } });
+      if (regs.size) or.push({ registrationNumber: { [Op.in]: [...regs] } });
+      const students = or.length
+        ? await User.findAll({ where: { approvedRole: 'STUDENT', [Op.or]: or } })
+        : [];
+
+      const matchedCount = students.length;
+      const unmatched = Math.max(0, rowCount - matchedCount);
+      const { created, skipped } = await issueCertificatesTo(cert, students, req.user.id);
+      if (created > 0 && cert.status !== 'ACTIVE') await cert.update({ status: 'ACTIVE' });
+
+      res.json({ message: 'Bulk assignment complete', rows: rowCount, matched: matchedCount, created, skipped, unmatched });
+    } catch (err) {
+      console.error('certification.assignExcel error:', err);
+      res.status(500).json({ message: 'Failed to process the Excel file' });
     }
   },
 
