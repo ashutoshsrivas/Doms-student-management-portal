@@ -2093,6 +2093,54 @@ ClassAttendance.belongsTo(Class, { foreignKey: 'classId' });
 ClassAttendance.belongsTo(User, { foreignKey: 'submittedBy', as: 'Submitter' });
 ClassAttendance.belongsTo(User, { foreignKey: 'atrBy', as: 'ATRAuthor' });
 
+// ── Certifications ──────────────────────────────────────────────
+// A Certification is a reusable template: a base image plus positioned
+// dynamic fields. Assigning it to students issues CertificateAssignments.
+const Certification = sequelize.define('Certification', {
+  id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
+  title: { type: DataTypes.STRING, allowNull: false },
+  description: { type: DataTypes.TEXT, allowNull: true },
+  templateImageUrl: { type: DataTypes.STRING(1024), allowNull: true },
+  templateWidth: { type: DataTypes.INTEGER, allowNull: true },
+  templateHeight: { type: DataTypes.INTEGER, allowNull: true },
+  // Array of field definitions: { id, type, label, value, xPct, yPct,
+  // fontPct, color, fontFamily, bold, align }. type ∈ STUDENT_NAME |
+  // REGISTRATION_NUMBER | EMAIL | ISSUE_DATE | CERTIFICATE_ID | CUSTOM_TEXT.
+  fields: { type: DataTypes.JSON, allowNull: false, defaultValue: [] },
+  status: { type: DataTypes.ENUM('DRAFT', 'ACTIVE'), allowNull: false, defaultValue: 'DRAFT' },
+  createdBy: { type: DataTypes.UUID, allowNull: true },
+}, {
+  tableName: 'certifications',
+  timestamps: true,
+  underscored: true,
+});
+
+// One issued certificate: a Certification granted to a student, with the
+// field values snapshotted at issue time so the certificate is stable even
+// if the student's details or the template later change.
+const CertificateAssignment = sequelize.define('CertificateAssignment', {
+  id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
+  certificationId: { type: DataTypes.UUID, allowNull: false },
+  studentId: { type: DataTypes.UUID, allowNull: false },
+  certificateNumber: { type: DataTypes.STRING(64), allowNull: false, unique: true },
+  // Snapshot: { [fieldId]: resolvedValue }.
+  fieldValues: { type: DataTypes.JSON, allowNull: false, defaultValue: {} },
+  status: { type: DataTypes.ENUM('ISSUED', 'REVOKED'), allowNull: false, defaultValue: 'ISSUED' },
+  issuedBy: { type: DataTypes.UUID, allowNull: true },
+  issuedAt: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
+}, {
+  tableName: 'certificate_assignments',
+  timestamps: true,
+  underscored: true,
+  indexes: [{ unique: true, fields: ['certification_id', 'student_id'] }],
+});
+
+Certification.belongsTo(User, { foreignKey: 'createdBy', as: 'Creator' });
+Certification.hasMany(CertificateAssignment, { foreignKey: 'certificationId', as: 'Assignments', onDelete: 'CASCADE' });
+CertificateAssignment.belongsTo(Certification, { foreignKey: 'certificationId', as: 'Certification' });
+CertificateAssignment.belongsTo(User, { foreignKey: 'studentId', as: 'Student' });
+CertificateAssignment.belongsTo(User, { foreignKey: 'issuedBy', as: 'IssuedByUser' });
+
 // Faculty weekly schedule (Mon–Sat, 8:00–18:00). Non-student roles place
 // work-blocks on a 15-min grid. startMinutes/endMinutes are minutes since
 // midnight; dayOfWeek 1..6 = Mon..Sat.
@@ -2284,6 +2332,8 @@ module.exports = {
   Class,
   ClassRepresentative,
   ClassAttendance,
+  Certification,
+  CertificateAssignment,
   WorkBlock,
   FacultyAchievement,
   MentorFeedbackMessage,

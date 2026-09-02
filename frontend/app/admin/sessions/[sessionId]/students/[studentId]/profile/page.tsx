@@ -9,6 +9,7 @@ import apiClient from '@/app/lib/apiClient';
 import toast from 'react-hot-toast';
 import DashboardLayout from '@/app/components/DashboardLayout';
 import AssessmentGraphs from '@/app/admin/components/AssessmentGraphs';
+import StudentCertificates from '@/app/components/Certificates/StudentCertificates';
 
 interface StudentInfo {
   id: string;
@@ -1583,6 +1584,12 @@ export default function StudentProfilePage() {
               <p className="text-gray-600 text-lg">No profile data available for this student.</p>
             </div>
           )}
+
+          {/* Earned Certificates — issued via the Certifications feature */}
+          <div className="mt-6 bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+            <h4 className="text-xl font-bold text-gray-900 mb-4">Earned Certificates</h4>
+            <StudentCertificates studentId={student.id} />
+          </div>
         </div>
 
         {/* Export Modal */}

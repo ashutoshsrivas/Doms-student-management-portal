@@ -10,6 +10,7 @@ import {
   FiUser,
   FiChevronDown,
   FiBarChart2,
+  FiAward,
   FiUsers,
   FiCalendar,
   FiCheckCircle,
@@ -107,6 +108,7 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
         { name: 'Sessions', href: '/admin/sessions', iconKey: 'calendar' },
         { name: 'Classes', href: '/admin/classes', iconKey: 'list' },
         { name: 'Assessments', href: '/admin/assessments', iconKey: 'check' },
+        { name: 'Certifications', href: '/admin/certifications', iconKey: 'award' },
         { name: 'Mentor Teams', href: '/admin/mentors', iconKey: 'users' },
         { name: 'My Mentees', href: '/faculty/mentors', iconKey: 'users' },
         { name: "Mentees' SIP", href: '/faculty/mentees-sip', iconKey: 'briefcase' },
@@ -156,6 +158,7 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
         { name: 'Sessions', href: '/admin/sessions', iconKey: 'calendar' },
         { name: 'Classes', href: '/admin/classes', iconKey: 'list' },
         { name: 'Assessments', href: '/admin/assessments', iconKey: 'check' },
+        { name: 'Certifications', href: '/admin/certifications', iconKey: 'award' },
         { name: 'Mentor Teams', href: '/admin/mentors', iconKey: 'users' },
         { name: 'My Mentees', href: '/faculty/mentors', iconKey: 'users' },
         { name: "Mentees' SIP", href: '/faculty/mentees-sip', iconKey: 'briefcase' },
@@ -262,6 +265,7 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
       hardDrive:  <FiHardDrive className="w-4.5 h-4.5" />,
       fileText:   <FiFileText className="w-4.5 h-4.5" />,
       clipboard:  <FiClipboard className="w-4.5 h-4.5" />,
+      award:      <FiAward className="w-4.5 h-4.5" />,
     };
     return iconMap[iconKey] || <FiBarChart2 className="w-4.5 h-4.5" />;
   };

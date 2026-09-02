@@ -8,6 +8,7 @@ import useAuthStore from '@/app/store/authStore';
 import apiClient from '@/app/lib/apiClient';
 import toast from 'react-hot-toast';
 import { FiArrowLeft, FiSave, FiTrash2, FiPlus } from 'react-icons/fi';
+import StudentCertificates from '@/app/components/Certificates/StudentCertificates';
 
 interface StudentProfileData {
   fatherName: string;
@@ -43,7 +44,7 @@ interface StudentProfileData {
   certificateDocuments: Array<{ id: string; name: string; url: string; uploadedAt: string }>;
 }
 
-type TabType = 'personal' | 'professional' | 'skills' | 'work' | 'achievements' | 'documents' | 'online' | 'additional';
+type TabType = 'personal' | 'professional' | 'skills' | 'work' | 'achievements' | 'documents' | 'online' | 'additional' | 'certificates';
 
 function StudentProfileContent() {
   const router = useRouter();
@@ -161,6 +162,7 @@ function StudentProfileContent() {
     { id: 'documents', label: 'Documents' },
     { id: 'online', label: 'Online Presence' },
     { id: 'additional', label: 'Additional Info' },
+    { id: 'certificates', label: 'Certificates' },
   ];
 
   const fetchProfile = async () => {
@@ -840,6 +842,13 @@ function StudentProfileContent() {
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {activeTab === 'certificates' && (
+              <div>
+                <h3 className="font-semibold text-gray-900 mb-4">My Certificates</h3>
+                <StudentCertificates />
               </div>
             )}
           </div>
