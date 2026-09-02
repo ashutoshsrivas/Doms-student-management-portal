@@ -478,9 +478,15 @@ function AttendancePanel({ cls, canWriteATR }: { cls: ClassRow; canWriteATR: boo
 
   return (
     <div className="rounded-lg border border-gray-200 bg-white p-3">
-      <div className="mb-2 flex items-center justify-between">
-        <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 flex items-center gap-1">
-          <FiCalendar className="h-3 w-3" /> Daily Attendance
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 flex items-center gap-1">
+            <FiCalendar className="h-3 w-3" /> Daily Attendance
+          </div>
+          <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700">
+            <FiUsers className="h-3 w-3" />
+            Total students: {cls.totalStrength ?? '—'}
+          </span>
         </div>
         {canWriteATR && (
           <span className="text-[10px] text-gray-400">ATR visible only to ADMIN, HOD and this class's coordinator</span>
