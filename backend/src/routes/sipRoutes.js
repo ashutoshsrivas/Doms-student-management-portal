@@ -23,6 +23,9 @@ router.get(
   authorizeRole('ADMIN', 'HOD', 'PLACEMENT_COORDINATOR'),
   sipController.getMonitor
 );
+// List of students who uploaded an NOC — everyone except students (gated in
+// the controller). Must be before /:sipId.
+router.get('/noc-list', authenticateToken, sipController.getNOCList);
 router.post('/', authenticateToken, sipController.createSIP);
 router.get('/:sipId', authenticateToken, sipController.getSIPDetails);
 router.put('/:sipId', authenticateToken, sipController.updateSIP);
@@ -35,5 +38,6 @@ router.get('/:sipId/weekly-updates', authenticateToken, sipController.getWeeklyU
 // File Upload Routes
 router.post('/:sipId/upload-certificate', authenticateToken, resumeUpload.single('certificate'), sipController.uploadCertificate);
 router.post('/:sipId/upload-feedback', authenticateToken, resumeUpload.single('feedback'), sipController.uploadFeedback);
+router.post('/:sipId/upload-noc', authenticateToken, resumeUpload.single('noc'), sipController.uploadNOC);
 
 module.exports = router;

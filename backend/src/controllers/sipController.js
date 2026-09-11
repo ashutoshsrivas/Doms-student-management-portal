@@ -423,6 +423,104 @@ const sipController = {
     }
   },
 
+  // Upload an (optional) No-Objection Certificate. Owner (student) or admin.
+  uploadNOC: async (req, res) => {
+    try {
+      const { sipId } = req.params;
+      const userId = req.user.id;
+      const userRole = req.user.role;
+
+      if (!req.file) {
+        return res.status(400).json({ message: 'No file uploaded' });
+      }
+
+      const sip = await SIP.findByPk(sipId);
+      if (!sip) {
+        return res.status(404).json({ message: 'SIP not found' });
+      }
+
+      const isOwner = sip.createdBy === userId;
+      const isAdmin = ['ADMIN', 'HOD', 'PLACEMENT_COORDINATOR'].includes(userRole);
+      if (!isOwner && !isAdmin) {
+        return res.status(403).json({ message: 'Not authorized to upload NOC' });
+      }
+
+      if (sip.nocUrl) {
+        await deleteFromS3(sip.nocUrl);
+      }
+
+      const nocUrl = await uploadToS3(
+        req.file.buffer,
+        req.file.originalname,
+        req.file.mimetype,
+        'sip-noc'
+      );
+
+      await sip.update({
+        nocUrl,
+        nocFileName: req.file.originalname,
+        nocUploadedAt: new Date(),
+      });
+
+      res.json({
+        message: 'NOC uploaded successfully',
+        nocUrl,
+        nocFileName: req.file.originalname,
+        nocUploadedAt: sip.nocUploadedAt,
+      });
+    } catch (error) {
+      console.error('Error uploading NOC:', error);
+      res.status(500).json({ message: 'Failed to upload NOC', error: error.message });
+    }
+  },
+
+  // List every student who has uploaded an NOC. Visible to all roles EXCEPT
+  // students. Optional ?sessionId= filter.
+  getNOCList: async (req, res) => {
+    try {
+      if (req.user.role === 'STUDENT') {
+        return res.status(403).json({ message: 'Not authorized' });
+      }
+      const { sessionId } = req.query;
+      const sessionWhere = sessionId ? { academicSessionId: sessionId } : undefined;
+
+      const sips = await SIP.findAll({
+        where: { nocUrl: { [Op.ne]: null } },
+        include: [
+          {
+            model: StudentSession,
+            required: !!sessionWhere,
+            where: sessionWhere,
+            include: [{ model: AcademicSession, attributes: ['id', 'name'] }],
+          },
+          { model: User, as: 'Student', attributes: ['id', 'firstName', 'lastName', 'email'] },
+        ],
+        order: [['nocUploadedAt', 'DESC']],
+      });
+
+      const list = sips.map((s) => {
+        const p = s.toJSON();
+        return {
+          sipId: p.id,
+          studentName: p.studentName || (p.Student ? `${p.Student.firstName || ''} ${p.Student.lastName || ''}`.trim() : ''),
+          enrollmentNo: p.enrollmentNo || '',
+          email: p.email || p.Student?.email || '',
+          specialization: p.specialization || '',
+          companyName: p.companyName || '',
+          sessionName: p.StudentSession?.AcademicSession?.name || '',
+          nocUrl: p.nocUrl,
+          nocFileName: p.nocFileName || '',
+          nocUploadedAt: p.nocUploadedAt,
+        };
+      });
+
+      res.json({ total: list.length, students: list });
+    } catch (error) {
+      console.error('Error fetching NOC list:', error);
+      res.status(500).json({ message: 'Failed to fetch NOC list', error: error.message });
+    }
+  },
+
   // ADMIN/HOD/PLACEMENT_COORDINATOR — SIP-wide statistics plus a
   // per-student compliance report (are weekly updates up to date?).
   // Returns stats, list of SIP-enabled sessions, and one row per

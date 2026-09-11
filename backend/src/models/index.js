@@ -1362,6 +1362,19 @@ const SIP = sequelize.define('SIP', {
   nocIssueDateExtension: {
     type: DataTypes.DATE,
   },
+  // Optional No-Objection Certificate uploaded by the student (or admin).
+  nocUrl: {
+    type: DataTypes.STRING(1024),
+    allowNull: true,
+  },
+  nocFileName: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+  nocUploadedAt: {
+    type: DataTypes.DATE,
+    allowNull: true,
+  },
   status: {
     type: DataTypes.ENUM('PENDING', 'COMPLETED'),
     defaultValue: 'PENDING',

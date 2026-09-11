@@ -31,6 +31,7 @@ export default function SIPContent() {
   const [uploadingCertificate, setUploadingCertificate] = useState(false);
   const [uploadingFaculty, setUploadingFaculty] = useState(false);
   const [uploadingSupervisor, setUploadingSupervisor] = useState(false);
+  const [uploadingNOC, setUploadingNOC] = useState(false);
   const [weeklyUpdates, setWeeklyUpdates] = useState<WeeklyUpdate[]>([]);
   const [currentWeekStatus, setCurrentWeekStatus] = useState('');
   const [submittingWeekly, setSubmittingWeekly] = useState(false);
@@ -295,6 +296,27 @@ export default function SIPContent() {
       toast.error('Failed to upload certificate');
     } finally {
       setUploadingCertificate(false);
+    }
+  };
+
+  const handleNOCUpload = async (file: File | null | undefined) => {
+    if (!file || !sip) return;
+    try {
+      setUploadingNOC(true);
+      const formDataObj = new FormData();
+      formDataObj.append('noc', file);
+      const response = await apiClient.post(`/sip/${sip.id}/upload-noc`, formDataObj);
+      setSip((prev: any) => ({
+        ...prev,
+        nocUrl: response.data.nocUrl,
+        nocFileName: response.data.nocFileName,
+        nocUploadedAt: response.data.nocUploadedAt,
+      }));
+      toast.success('NOC uploaded successfully');
+    } catch (error) {
+      toast.error('Failed to upload NOC');
+    } finally {
+      setUploadingNOC(false);
     }
   };
 
@@ -583,6 +605,11 @@ export default function SIPContent() {
           {activeTab === 'documents' && (
             sip ? (
               <div className="space-y-6">
+                <div>
+                  <label className="block text-gray-900 font-bold mb-3 text-base">NOC — No-Objection Certificate (PDF) <span className="font-normal text-gray-500 text-sm">(optional)</span></label>
+                  <input type="file" accept=".pdf,.doc,.docx" onChange={e => handleNOCUpload(e.target.files?.[0])} disabled={uploadingNOC} className="border-2 border-gray-300 rounded px-4 py-2 text-gray-900" />
+                  {sip?.nocUrl && <a href={sip.nocUrl} target="_blank" rel="noopener noreferrer" className="text-blue-700 underline font-bold mt-3 block hover:text-blue-900">View uploaded NOC{sip?.nocFileName ? ` (${sip.nocFileName})` : ''}</a>}
+                </div>
                 <div>
                   <label className="block text-gray-900 font-bold mb-3 text-base">Certificate (PDF)</label>
                   <input type="file" accept=".pdf" onChange={e => handleCertificateUpload(e.target.files?.[0])} disabled={uploadingCertificate} className="border-2 border-gray-300 rounded px-4 py-2 text-gray-900" />

@@ -551,6 +551,26 @@ async function start() {
       }
     }
 
+    // SIP: optional No-Objection Certificate upload.
+    for (const col of [
+      { name: 'noc_url', ddl: 'VARCHAR(1024) NULL' },
+      { name: 'noc_file_name', ddl: 'VARCHAR(255) NULL' },
+      { name: 'noc_uploaded_at', ddl: 'DATETIME NULL' },
+    ]) {
+      try {
+        await sequelize.query(`ALTER TABLE sips ADD COLUMN ${col.name} ${col.ddl}`);
+        console.log(`Added ${col.name} column to sips`);
+      } catch (error) {
+        if (error.message && error.message.includes('Duplicate column')) {
+          console.log(`${col.name} column already exists on sips`);
+        } else if (error.message && error.message.includes("doesn't exist")) {
+          // fresh install — sync already created it
+        } else {
+          console.error(`Error adding ${col.name} to sips:`, error.message);
+        }
+      }
+    }
+
     // Bootstrap default admin user
     await bootstrap();
 
