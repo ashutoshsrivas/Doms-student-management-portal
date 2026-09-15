@@ -227,7 +227,7 @@ export default function ViewGradePage() {
   }
 
   return (
-    <ProtectedRoute requiredRoles={['ADMIN', 'FACULTY', 'HOD']}>
+    <ProtectedRoute requiredRoles={['ADMIN', 'HOD', 'FACULTY', 'CHAIR_HEAD', 'MENTOR', 'PLACEMENT_COORDINATOR']}>
       <DashboardLayout>
         <div className="p-8 max-w-4xl mx-auto">
           {/* Header */}

@@ -245,7 +245,7 @@ export default function GradeSubmissionPage() {
   }
 
   return (
-    <ProtectedRoute requiredRoles={['ADMIN', 'HOD', 'FACULTY', 'MENTOR', 'PLACEMENT_COORDINATOR']}>
+    <ProtectedRoute requiredRoles={['ADMIN', 'HOD', 'FACULTY', 'CHAIR_HEAD', 'MENTOR', 'PLACEMENT_COORDINATOR']}>
     <DashboardLayout>
       <div className="min-h-screen bg-gray-50 py-8 px-4">
         <div className="max-w-4xl mx-auto pb-12">
