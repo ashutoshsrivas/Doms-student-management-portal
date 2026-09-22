@@ -15,6 +15,7 @@ type ClassRow = {
   id: string;
   name: string;
   totalStrength?: number | null;
+  nocCount?: number | null;
   Session: Session | null;
   Coordinator: Coordinator | null;
 };
@@ -105,9 +106,12 @@ function ClassCard({ cls }: { cls: ClassRow }) {
   const [saving, setSaving] = useState(false);
 
   const hasStrength = cls.totalStrength !== null && cls.totalStrength !== undefined;
-  // When the class strength is known, absent is auto-derived from present.
+  // Students holding an NOC — pre-filled as Leave on a new entry.
+  const nocDefault = cls.nocCount != null && cls.nocCount > 0 ? String(cls.nocCount) : '';
+  // When the class strength is known, absent is auto-derived:
+  // strength − present − leave (students on leave/NOC aren't absent).
   const autoAbsent = hasStrength
-    ? Math.max(0, (cls.totalStrength as number) - (parseInt(present, 10) || 0))
+    ? Math.max(0, (cls.totalStrength as number) - (parseInt(present, 10) || 0) - (parseInt(leave, 10) || 0))
     : null;
   const absentValue = hasStrength ? String(autoAbsent) : absent;
   const [showHistory, setShowHistory] = useState(false);
@@ -139,10 +143,10 @@ function ClassCard({ cls }: { cls: ClassRow }) {
       setPresent('');
       setAbsent('');
       setBunked('');
-      setLeave('');
+      setLeave(nocDefault);
       setInfo('');
     }
-  }, [rows, date, timing]);
+  }, [rows, date, timing, nocDefault]);
 
   const punch = async () => {
     if (!date) { toast.error('Pick a date'); return; }
@@ -188,6 +192,7 @@ function ClassCard({ cls }: { cls: ClassRow }) {
         <div className="mt-0.5 text-xs text-gray-600">
           {cls.Session?.name || '—'} · Coordinator: {nameOf(cls.Coordinator)}
           {hasStrength && <> · Total strength: <span className="font-semibold text-gray-800">{cls.totalStrength}</span></>}
+          {nocDefault && <> · NOC given: <span className="font-semibold text-amber-700">{nocDefault}</span></>}
         </div>
       </div>
 
@@ -214,7 +219,7 @@ function ClassCard({ cls }: { cls: ClassRow }) {
               onChange={(e) => setAbsent(e.target.value)}
               readOnly={hasStrength}
               placeholder="0"
-              title={hasStrength ? 'Auto-calculated from total strength − present' : undefined}
+              title={hasStrength ? 'Auto-calculated from total strength − present − leave' : undefined}
               className={`w-full rounded border border-gray-300 px-3 py-2 text-sm text-gray-900 ${hasStrength ? 'bg-gray-100 cursor-not-allowed' : ''}`}
             />
           </div>
@@ -225,6 +230,7 @@ function ClassCard({ cls }: { cls: ClassRow }) {
           <div>
             <label className="block text-xs font-semibold text-amber-700 mb-1">Leave</label>
             <input type="number" min={0} value={leave} onChange={(e) => setLeave(e.target.value)} placeholder="0" className="w-full rounded border border-gray-300 px-3 py-2 text-sm text-gray-900" />
+            {nocDefault && <p className="mt-1 text-[10px] text-amber-700">Includes {nocDefault} NOC</p>}
           </div>
           <div className="flex items-end">
             <button type="button" onClick={punch} disabled={saving} className="w-full inline-flex items-center justify-center gap-2 rounded bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60">

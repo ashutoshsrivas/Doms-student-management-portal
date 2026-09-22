@@ -7,7 +7,7 @@ router.use(authenticateToken);
 
 // Specific paths first — MUST come before /:id.
 router.get('/eligible-coordinators',
-  authorizeRole('ADMIN', 'HOD'),
+  authorizeRole('ADMIN', 'HOD', 'PLACEMENT_COORDINATOR'),
   classController.eligibleCoordinators);
 
 // CR picker — reachable by any role that could coordinate a class, so a

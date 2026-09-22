@@ -2035,6 +2035,9 @@ const Class = sequelize.define('Class', {
   // Total number of students in the class. Used to auto-derive the absent
   // count on attendance (absent = totalStrength - present).
   totalStrength: { type: DataTypes.INTEGER, allowNull: true },
+  // Students in the class holding an NOC (e.g. on SIP). Pre-fills the Leave
+  // count when a CR punches attendance; the CR can still adjust it.
+  nocCount: { type: DataTypes.INTEGER, allowNull: true },
   status: {
     type: DataTypes.ENUM('ACTIVE', 'ARCHIVED'),
     defaultValue: 'ACTIVE',

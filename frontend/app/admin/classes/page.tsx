@@ -22,6 +22,7 @@ type ClassRow = {
   description: string | null;
   coordinatorId: string;
   totalStrength: number | null;
+  nocCount?: number | null;
   status: string;
   Session: Session | null;
   Coordinator: Coordinator | null;
@@ -57,7 +58,9 @@ const fmt = (iso: string | null | undefined) => {
 
 function Content() {
   const { user } = useAuthStore();
+  // Create/delete: ADMIN/HOD only. See + edit every class: also Placement Coordinator.
   const isAdmin = ['ADMIN', 'HOD'].includes(user?.role || '');
+  const canManageAll = isAdmin || user?.role === 'PLACEMENT_COORDINATOR';
   const [classes, setClasses] = useState<ClassRow[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [sessionId, setSessionId] = useState('');
@@ -193,7 +196,7 @@ function Content() {
                       </span>
                     </div>
                   </div>
-                  {(isAdmin || c.coordinatorId === user?.id) && (
+                  {(canManageAll || c.coordinatorId === user?.id) && (
                     <div className="flex items-center gap-1 shrink-0">
                       <span
                         role="button"
@@ -225,7 +228,7 @@ function Content() {
                     )}
                     <CRList
                       cls={c}
-                      canEdit={isAdmin || c.coordinatorId === user?.id}
+                      canEdit={canManageAll || c.coordinatorId === user?.id}
                       editing={editingCRs === c.id}
                       onEditStart={() => setEditingCRs(c.id)}
                       onEditEnd={() => setEditingCRs(null)}
@@ -233,7 +236,7 @@ function Content() {
                     />
                     <AttendancePanel
                       cls={c}
-                      canWriteATR={isAdmin || c.coordinatorId === user?.id}
+                      canWriteATR={canManageAll || c.coordinatorId === user?.id}
                     />
                   </div>
                 )}
@@ -258,7 +261,7 @@ function Content() {
       {editingClass && (
         <EditClassModal
           cls={editingClass}
-          canChangeCoordinator={isAdmin}
+          canChangeCoordinator={canManageAll}
           onClose={() => setEditingClass(null)}
           onSaved={async () => {
             setEditingClass(null);
@@ -487,9 +490,14 @@ function AttendancePanel({ cls, canWriteATR }: { cls: ClassRow; canWriteATR: boo
             <FiUsers className="h-3 w-3" />
             Total students: {cls.totalStrength ?? '—'}
           </span>
+          {cls.nocCount != null && cls.nocCount > 0 && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
+              NOC given: {cls.nocCount}
+            </span>
+          )}
         </div>
         {canWriteATR && (
-          <span className="text-[10px] text-gray-400">ATR visible only to ADMIN, HOD and this class's coordinator</span>
+          <span className="text-[10px] text-gray-400">ATR visible only to ADMIN, HOD, Placement Coordinator and this class's coordinator</span>
         )}
       </div>
       {loading ? (
@@ -658,7 +666,7 @@ function CreateClassModal({
           <div>
             <label className="block text-xs font-semibold text-gray-700 mb-1">Total strength</label>
             <input type="number" min={0} value={totalStrength} onChange={(e) => setTotalStrength(e.target.value)} placeholder="e.g. 60" className="w-full rounded border border-gray-300 px-3 py-2 text-sm text-gray-900" />
-            <p className="mt-1 text-[11px] text-gray-500">Total students. Absent is auto-calculated on attendance (strength − present).</p>
+            <p className="mt-1 text-[11px] text-gray-500">Total students. Absent is auto-calculated on attendance (strength − present − leave).</p>
           </div>
           <div>
             <label className="block text-xs font-semibold text-gray-700 mb-1">Class coordinator *</label>
@@ -694,6 +702,9 @@ function EditClassModal({
   const [description, setDescription] = useState(cls.description || '');
   const [totalStrength, setTotalStrength] = useState(
     cls.totalStrength === null || cls.totalStrength === undefined ? '' : String(cls.totalStrength)
+  );
+  const [nocCount, setNocCount] = useState(
+    cls.nocCount === null || cls.nocCount === undefined ? '' : String(cls.nocCount)
   );
   const [status, setStatus] = useState(cls.status || 'ACTIVE');
   const [coordinatorId, setCoordinatorId] = useState(cls.coordinatorId);
@@ -733,6 +744,7 @@ function EditClassModal({
         name: name.trim(),
         description: description.trim() || null,
         totalStrength: totalStrength.trim() === '' ? null : Math.max(0, parseInt(totalStrength, 10) || 0),
+        nocCount: nocCount.trim() === '' ? null : Math.max(0, parseInt(nocCount, 10) || 0),
         status,
       };
       // Only ADMIN/HOD may send coordinatorId — the backend rejects it otherwise.
@@ -766,7 +778,12 @@ function EditClassModal({
           <div>
             <label className="block text-xs font-semibold text-gray-700 mb-1">Total strength</label>
             <input type="number" min={0} value={totalStrength} onChange={(e) => setTotalStrength(e.target.value)} placeholder="e.g. 60" className="w-full rounded border border-gray-300 px-3 py-2 text-sm text-gray-900" />
-            <p className="mt-1 text-[11px] text-gray-500">Total students. Absent is auto-calculated on attendance (strength − present).</p>
+            <p className="mt-1 text-[11px] text-gray-500">Total students. Absent is auto-calculated on attendance (strength − present − leave).</p>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 mb-1">NOC given</label>
+            <input type="number" min={0} value={nocCount} onChange={(e) => setNocCount(e.target.value)} placeholder="e.g. 5" className="w-full rounded border border-gray-300 px-3 py-2 text-sm text-gray-900" />
+            <p className="mt-1 text-[11px] text-gray-500">Students with an NOC. Pre-filled as Leave when a CR submits attendance (they can adjust it).</p>
           </div>
           {canChangeCoordinator && (
             <div>

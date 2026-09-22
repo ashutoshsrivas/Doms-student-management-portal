@@ -10,7 +10,9 @@ const { Op } = require('sequelize');
 
 const MAX_CRS = 4;
 const COORDINATOR_ROLES = ['FACULTY', 'CHAIR_HEAD', 'PLACEMENT_COORDINATOR', 'COORDINATOR'];
-const ORG_WIDE_ROLES = ['ADMIN', 'HOD'];
+// Roles that see and edit every class (create/delete stay ADMIN/HOD at the
+// route level). TRAINER is aliased to PLACEMENT_COORDINATOR, so it's included.
+const ORG_WIDE_ROLES = ['ADMIN', 'HOD', 'PLACEMENT_COORDINATOR'];
 
 // Whether the caller can see the ATR field on attendance rows.
 const canReadATR = (role) => ORG_WIDE_ROLES.includes(role);
@@ -183,9 +185,13 @@ module.exports = {
         const v = req.body.totalStrength;
         patch.totalStrength = (v === null || v === '') ? null : Math.max(0, parseInt(v, 10) || 0);
       }
+      if (req.body.nocCount !== undefined) {
+        const v = req.body.nocCount;
+        patch.nocCount = (v === null || v === '') ? null : Math.max(0, parseInt(v, 10) || 0);
+      }
       if (req.body.coordinatorId !== undefined) {
         if (!ORG_WIDE_ROLES.includes(req.user.role)) {
-          return res.status(403).json({ message: 'Only ADMIN/HOD can change the coordinator' });
+          return res.status(403).json({ message: 'Only ADMIN/HOD/Placement Coordinator can change the coordinator' });
         }
         const c = await User.findByPk(req.body.coordinatorId);
         if (!c || !COORDINATOR_ROLES.includes(c.approvedRole)) {
@@ -309,10 +315,11 @@ module.exports = {
       const b = Math.max(0, parseInt(bunkedCount, 10) || 0);
       const l = Math.max(0, parseInt(leaveCount, 10) || 0);
       // Absent is auto-derived from the class total strength when it's set
-      // (absent = strength - present, clamped at 0); otherwise fall back to any
-      // value the client sent.
+      // (absent = strength - present - leave, clamped at 0, so students on
+      // leave/NOC aren't double-counted); otherwise fall back to any value the
+      // client sent.
       const a = (cls.totalStrength !== null && cls.totalStrength !== undefined)
-        ? Math.max(0, cls.totalStrength - p)
+        ? Math.max(0, cls.totalStrength - p - l)
         : Math.max(0, parseInt(absentCount, 10) || 0);
       // Optional class timing / period. Empty string = untimed daily entry.
       const timing = typeof classTiming === 'string' ? classTiming.trim().slice(0, 100) : '';

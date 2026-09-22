@@ -539,6 +539,18 @@ async function start() {
       }
     }
     try {
+      await sequelize.query(`ALTER TABLE classes ADD COLUMN noc_count INT NULL`);
+      console.log('Added noc_count column to classes');
+    } catch (error) {
+      if (error.message && error.message.includes('Duplicate column')) {
+        console.log('noc_count column already exists on classes');
+      } else if (error.message && error.message.includes("doesn't exist")) {
+        // fresh install — sync already created it
+      } else {
+        console.error('Error adding noc_count to classes:', error.message);
+      }
+    }
+    try {
       await sequelize.query(`ALTER TABLE class_attendance ADD COLUMN absent_count INT NOT NULL DEFAULT 0`);
       console.log('Added absent_count column to class_attendance');
     } catch (error) {
