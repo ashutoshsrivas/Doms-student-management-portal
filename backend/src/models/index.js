@@ -1521,6 +1521,34 @@ const SIPQuestionAnswer = sequelize.define('SIPQuestionAnswer', {
   underscored: true,
 });
 
+// ============ STUDENT NOC ============
+// No-Objection Certificate uploaded by a student, independent of the SIP form
+// (an NOC can be for something other than SIP). One current NOC per student
+// per session enrollment; re-uploading replaces the file. Staff set the
+// issue date from /sip-noc. No FK constraints/cascades, so deleting a session
+// or user never deletes NOC records.
+const StudentNOC = sequelize.define('StudentNOC', {
+  id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
+  userId: { type: DataTypes.UUID, allowNull: false },
+  studentSessionId: { type: DataTypes.UUID, allowNull: true },
+  nocUrl: { type: DataTypes.STRING(1024), allowNull: false },
+  nocFileName: { type: DataTypes.STRING, allowNull: true },
+  uploadedAt: { type: DataTypes.DATE, allowNull: false },
+  issueDate: { type: DataTypes.DATEONLY, allowNull: true },
+  issueDateSetBy: { type: DataTypes.UUID, allowNull: true },
+  issueDateSetAt: { type: DataTypes.DATE, allowNull: true },
+  // Set when the record was carried over from the old SIP-form NOC upload.
+  sourceSipId: { type: DataTypes.UUID, allowNull: true },
+}, {
+  tableName: 'student_nocs',
+  timestamps: true,
+  underscored: true,
+  indexes: [{ unique: true, fields: ['user_id', 'student_session_id'] }],
+});
+
+StudentNOC.belongsTo(User, { foreignKey: 'userId', as: 'Student', constraints: false });
+StudentNOC.belongsTo(StudentSession, { foreignKey: 'studentSessionId', constraints: false });
+
 // ============ SIP ASSOCIATIONS ============
 
 SIP.belongsTo(StudentSession, { foreignKey: 'studentSessionId', onDelete: 'CASCADE' });
@@ -2309,6 +2337,7 @@ NotificationPromptResponse.belongsTo(User, { foreignKey: 'studentUserId', as: 'S
 
 module.exports = {
   sequelize,
+  StudentNOC,
   User,
   Role,
   AcademicSession,

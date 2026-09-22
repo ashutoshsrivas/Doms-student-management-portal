@@ -246,6 +246,7 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
         { name: 'My Profile', href: '/student/profile', iconKey: 'user' },
         { name: 'Class Attendance', href: '/student/class-attendance', iconKey: 'calendar' },
         { name: 'Placements and SIP', href: '/student/sip', iconKey: 'briefcase', children: studentSipChildren },
+        { name: 'Upload NOC', href: '/student/noc', iconKey: 'fileText' },
         { name: 'Announcements', href: '/student/announcements', iconKey: 'bell', children: studentAnnouncementsChildren },
       ],
     };

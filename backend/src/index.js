@@ -32,6 +32,7 @@ const scheduleRoutes = require('./routes/scheduleRoutes');
 const mentorReportRoutes = require('./routes/mentorReportRoutes');
 const mentorFeedbackRoutes = require('./routes/mentorFeedbackRoutes');
 const notificationPromptRoutes = require('./routes/notificationPromptRoutes');
+const nocRoutes = require('./routes/nocRoutes');
 const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
@@ -88,6 +89,7 @@ app.use('/api/schedule', scheduleRoutes);
 app.use('/api/mentor-report', mentorReportRoutes);
 app.use('/api/mentor-feedback', mentorFeedbackRoutes);
 app.use('/api/notification-prompts', notificationPromptRoutes);
+app.use('/api/noc', nocRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
@@ -584,6 +586,27 @@ async function start() {
     }
 
     // Bootstrap default admin user
+    // Carry NOCs uploaded through the old SIP-form upload over to the
+    // standalone student_nocs table (sync() created it). Idempotent and
+    // additive: copies each SIP NOC once, never touches the sips table.
+    try {
+      const [, meta] = await sequelize.query(`
+        INSERT INTO student_nocs
+          (id, user_id, student_session_id, noc_url, noc_file_name, uploaded_at, source_sip_id, created_at, updated_at)
+        SELECT UUID(), s.created_by, s.student_session_id, s.noc_url, s.noc_file_name,
+               COALESCE(s.noc_uploaded_at, s.updated_at), s.id, NOW(), NOW()
+        FROM sips s
+        WHERE s.noc_url IS NOT NULL
+          AND NOT EXISTS (SELECT 1 FROM student_nocs n WHERE n.source_sip_id = s.id)
+          AND NOT EXISTS (SELECT 1 FROM student_nocs n2
+                          WHERE n2.user_id = s.created_by AND n2.student_session_id = s.student_session_id)
+      `);
+      const copied = meta && typeof meta.affectedRows === 'number' ? meta.affectedRows : 0;
+      if (copied) console.log(`Carried ${copied} SIP NOC(s) over to student_nocs`);
+    } catch (error) {
+      console.error('Error carrying SIP NOCs over to student_nocs:', error.message);
+    }
+
     await bootstrap();
 
     app.listen(PORT, () => {
