@@ -184,7 +184,7 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
         { name: 'Dashboard', href: '/coordinator/dashboard', iconKey: 'chart' },
         { name: 'Sessions', href: '/coordinator/sessions', iconKey: 'calendar' },
         { name: 'Assessments', href: '/coordinator/assessments', iconKey: 'check' },
-        { name: 'My Classes', href: '/admin/classes', iconKey: 'list' },
+        { name: 'Classes', href: '/admin/classes', iconKey: 'list' },
         { name: 'Mentor Teams', href: '/faculty/mentors', iconKey: 'users' },
         { name: "Mentees' SIP", href: '/faculty/mentees-sip', iconKey: 'briefcase' },
         { name: 'Mentor Messages', href: '/admin/mentor-messages', iconKey: 'bell' },
@@ -203,16 +203,17 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
         { name: 'My Tasks', href: '/faculty/tasks', iconKey: 'clipboard' },
         { name: 'Announcements', href: '/student/announcements', iconKey: 'bell', children: studentAnnouncementsChildren },
       ],
-      // COORDINATOR is aliased to ADMIN at the auth layer so all admin
-      // endpoints are accessible. Sidebar mirrors ADMIN (minus Landing
-      // Page, File Management and Faculty Tasks) but with faculty-style
-      // My Tasks / My Schedule per product spec.
+      // COORDINATOR is aliased to ADMIN at the auth layer, so it gets the
+      // full ADMIN sidebar with exactly two areas removed: Faculty Tasks
+      // (admin side — "My Tasks" stays) and the Landing Page editor. The
+      // backend enforces the same two exclusions via rawRole.
       COORDINATOR: [
         { name: 'Dashboard', href: '/admin/dashboard', iconKey: 'chart' },
         { name: 'Users', href: '/admin/users', iconKey: 'users' },
         { name: 'Sessions', href: '/admin/sessions', iconKey: 'calendar' },
         { name: 'Classes', href: '/admin/classes', iconKey: 'list' },
         { name: 'Assessments', href: '/admin/assessments', iconKey: 'check' },
+        { name: 'Certifications', href: '/admin/certifications', iconKey: 'award' },
         { name: 'Mentor Teams', href: '/admin/mentors', iconKey: 'users' },
         { name: 'My Mentees', href: '/faculty/mentors', iconKey: 'users' },
         { name: "Mentees' SIP", href: '/faculty/mentees-sip', iconKey: 'briefcase' },
@@ -221,11 +222,13 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
           { name: 'Mentor Messages', href: '/admin/mentor-messages', iconKey: 'bell' },
         ] },
         { name: 'Placements and SIP', href: '/admin/sip', iconKey: 'briefcase', children: sipChildren },
+        { name: 'File Management', href: '/admin/files', iconKey: 'hardDrive' },
         { name: 'Reports', href: '/admin/reports', iconKey: 'fileText' },
-        { name: 'My Schedule', href: '/schedule', iconKey: 'calendar' },
         { name: 'My Tasks', href: '/faculty/tasks', iconKey: 'clipboard' },
+        { name: 'My Schedule', href: '/schedule', iconKey: 'calendar', children: [
+          { name: 'All Schedules', href: '/schedule/manage', iconKey: 'list' },
+        ] },
         { name: 'Announcements', href: '/admin/announcements', iconKey: 'bell', children: adminAnnouncementsChildren },
-        { name: 'Profile', href: '/profile', iconKey: 'user' },
       ],
       MENTOR: [
         { name: 'Dashboard', href: '/faculty/dashboard', iconKey: 'chart' },

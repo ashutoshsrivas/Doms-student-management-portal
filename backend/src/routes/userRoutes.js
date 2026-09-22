@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const userController = require('../controllers/userController');
-const { authenticateToken, authorizeRole } = require('../middleware/auth');
+const { authenticateToken, authorizeRole, restrictRoleGrants } = require('../middleware/auth');
 const { upload, resumeUpload } = require('../middleware/upload');
 
 // Admin-only routes (must come before :id routes)
@@ -70,6 +70,7 @@ router.post(
   '/',
   authenticateToken,
   authorizeRole('ADMIN', 'HOD'),
+  restrictRoleGrants,
   userController.createUser
 );
 
@@ -78,6 +79,7 @@ router.put(
   '/:userId',
   authenticateToken,
   authorizeRole('ADMIN', 'HOD'),
+  restrictRoleGrants,
   userController.updateUser
 );
 
@@ -102,6 +104,7 @@ router.put(
   '/:userId/role',
   authenticateToken,
   authorizeRole('ADMIN', 'HOD'),
+  restrictRoleGrants,
   userController.updateUserRole
 );
 

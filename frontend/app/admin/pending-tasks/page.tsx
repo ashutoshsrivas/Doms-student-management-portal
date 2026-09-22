@@ -66,7 +66,10 @@ export default function AdminPendingTasksPage() {
   const [priorityFilter, setPriorityFilter] = useState<'ALL' | Priority>('ALL');
 
   useEffect(() => {
-    if (user && !['ADMIN', 'HOD'].includes(user.role)) router.push('/dashboard');
+    // Coordinators are aliased to ADMIN but excluded from faculty-task
+    // administration, so check the real approved role too.
+    const rawRole = (user as { approvedRole?: string } | null)?.approvedRole;
+    if (user && (!['ADMIN', 'HOD'].includes(user.role) || rawRole === 'COORDINATOR')) router.push('/unauthorized');
   }, [user, router]);
 
   const [approvingId, setApprovingId] = useState<string | null>(null);

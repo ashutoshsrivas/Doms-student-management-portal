@@ -1,10 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const facultyGroupController = require('../controllers/facultyGroupController');
-const { authenticateToken, authorizeRole } = require('../middleware/auth');
+const { authenticateToken, authorizeRole, denyRawRoles } = require('../middleware/auth');
 
 // Groups management is admin-only.
-router.use(authenticateToken, authorizeRole('ADMIN', 'HOD'));
+// Coordinators are excluded: faculty-task administration is admin/HOD only.
+router.use(authenticateToken, authorizeRole('ADMIN', 'HOD'), denyRawRoles('COORDINATOR'));
 
 router.get('/', facultyGroupController.list);
 router.post('/', facultyGroupController.create);

@@ -342,7 +342,7 @@ function LandingEditor() {
 
 export default function LandingEditorPage() {
   return (
-    <ProtectedRoute requiredRoles={['ADMIN', 'HOD']}>
+    <ProtectedRoute requiredRoles={['ADMIN', 'HOD']} deniedRoles={['COORDINATOR']}>
       <DashboardLayout>
         <LandingEditor />
       </DashboardLayout>

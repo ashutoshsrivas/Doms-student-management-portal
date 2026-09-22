@@ -32,11 +32,15 @@ interface UserStats {
 }
 
 const roles = ['ADMIN', 'HOD', 'FACULTY', 'CHAIR_HEAD', 'COORDINATOR', 'PLACEMENT_COORDINATOR', 'TRAINER', 'STUDENT', 'MENTOR'];
+// A coordinator may not grant these — the backend rejects it too.
+const COORDINATOR_BLOCKED_ROLES = ['ADMIN', 'HOD', 'COORDINATOR'];
 const statuses = ['ACTIVE', 'INACTIVE', 'PENDING', 'APPROVED', 'REJECTED'];
 
 export default function UsersPage() {
   const router = useRouter();
   const { user: currentUser } = useAuthStore();
+  const isCoordinator = (currentUser as { approvedRole?: string } | null)?.approvedRole === 'COORDINATOR';
+  const assignableRoles = isCoordinator ? roles.filter((r) => !COORDINATOR_BLOCKED_ROLES.includes(r)) : roles;
   const [users, setUsers] = useState<User[]>([]);
   const [stats, setStats] = useState<UserStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -585,7 +589,7 @@ export default function UsersPage() {
                     onChange={(e) => setFormData({ ...formData, approvedRole: e.target.value })}
                     className="w-full px-3 py-2 border-2 border-gray-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 bg-white text-gray-900"
                   >
-                    {roles.map((role) => (
+                    {assignableRoles.map((role) => (
                       <option key={role} value={role}>
                         {role}
                       </option>

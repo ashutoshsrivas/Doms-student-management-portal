@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const authController = require('../controllers/authController');
-const { authenticateToken, authorizeRole } = require('../middleware/auth');
+const { authenticateToken, authorizeRole, restrictRoleGrants } = require('../middleware/auth');
 const { upload } = require('../middleware/upload');
 
 // Public routes
@@ -26,6 +26,7 @@ router.post(
   '/approve-user',
   authenticateToken,
   authorizeRole('ADMIN', 'HOD'),
+  restrictRoleGrants,
   authController.approveUser
 );
 router.post(

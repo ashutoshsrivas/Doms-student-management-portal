@@ -12,6 +12,36 @@ const ROLE_ALIASES = {
 };
 const effectiveRole = (role) => ROLE_ALIASES[role] || role;
 
+// COORDINATOR is an ADMIN alias, but not everywhere: faculty-task
+// administration and the landing-page editor stay admin/HOD only. Those
+// routes check req.user.rawRole (the real approved_role) instead.
+const PRIVILEGED_ROLES = ['ADMIN', 'HOD', 'COORDINATOR'];
+
+const denyRawRoles = (...blocked) => (req, res, next) => {
+  if (blocked.includes(req.user?.rawRole)) {
+    return res.status(403).json({ message: 'Access denied for your role' });
+  }
+  return next();
+};
+
+// A coordinator must not be able to grant ADMIN/HOD/COORDINATOR — that would
+// hand back the very screens this restriction removes.
+const restrictRoleGrants = (req, res, next) => {
+  if (req.user?.rawRole !== 'COORDINATOR') return next();
+  const requested = [
+    req.body?.approvedRole,
+    req.body?.requestedRole,
+    req.body?.newRole,
+    req.body?.role,
+  ].filter(Boolean);
+  if (requested.some((r) => PRIVILEGED_ROLES.includes(String(r).toUpperCase()))) {
+    return res.status(403).json({
+      message: 'Coordinators cannot assign the ADMIN, HOD or COORDINATOR role',
+    });
+  }
+  return next();
+};
+
 const authenticateToken = async (req, res, next) => {
   try {
     const authHeader = req.headers['authorization'];
@@ -51,6 +81,7 @@ const authenticateToken = async (req, res, next) => {
       firstName: dbUser.firstName,
       lastName: dbUser.lastName,
       role: effectiveRole(dbUser.approvedRole),
+      rawRole: dbUser.approvedRole,
       status: dbUser.status,
     };
 
@@ -80,4 +111,7 @@ module.exports = {
   authenticateToken,
   authorizeRole,
   effectiveRole,
+  denyRawRoles,
+  restrictRoleGrants,
+  PRIVILEGED_ROLES,
 };

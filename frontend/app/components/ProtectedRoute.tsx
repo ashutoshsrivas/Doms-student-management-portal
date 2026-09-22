@@ -7,11 +7,15 @@ import useAuthStore from '@/app/store/authStore';
 interface ProtectedRouteProps {
   children: ReactNode;
   requiredRoles?: string[];
+  // Checked against the real approved role, not the aliased one, so a
+  // COORDINATOR (aliased to ADMIN) can be excluded from admin-only screens.
+  deniedRoles?: string[];
 }
 
-export default function ProtectedRoute({ children, requiredRoles = [] }: ProtectedRouteProps) {
+export default function ProtectedRoute({ children, requiredRoles = [], deniedRoles = [] }: ProtectedRouteProps) {
   const router = useRouter();
   const { user, isAuthenticated, token } = useAuthStore();
+  const rawRole = (user as { approvedRole?: string } | null)?.approvedRole;
 
   // Wait for user to be loaded with required properties
   const isUserLoaded = user && user.role;
@@ -30,12 +34,16 @@ export default function ProtectedRoute({ children, requiredRoles = [] }: Protect
     }
 
     if (isAuthenticated && user) {
+      if (deniedRoles.length > 0 && rawRole && deniedRoles.includes(rawRole)) {
+        router.push('/unauthorized');
+        return;
+      }
       if (requiredRoles.length > 0 && !requiredRoles.includes(user.role)) {
         router.push('/unauthorized');
         return;
       }
     }
-  }, [isUserLoaded, isAuthenticated, token, user?.role, router, requiredRoles]);
+  }, [isUserLoaded, isAuthenticated, token, user?.role, rawRole, router, requiredRoles, deniedRoles]);
 
   if (!isUserLoaded && (isAuthenticated || token)) {
     return (

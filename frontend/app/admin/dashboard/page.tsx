@@ -72,6 +72,8 @@ function RingChart({ value, total, color, label }: { value: number; total: numbe
 
 function AdminDashboardContent() {
   const { user } = useAuthStore();
+  // Coordinators inherit ADMIN access but cannot grant privileged roles.
+  const isCoordinator = (user as { approvedRole?: string } | null)?.approvedRole === 'COORDINATOR';
   const [stats, setStats] = useState<Stats>({ totalUsers: 0, pendingRequests: 0, activeSessions: 0, totalSessions: 0 });
   const [pendingUsers, setPendingUsers] = useState<User[]>([]);
   const [selectedRoles, setSelectedRoles] = useState<{ [userId: string]: string }>({});
@@ -323,10 +325,10 @@ function AdminDashboardContent() {
                           disabled={approving === u.id}
                         >
                           <option value="">Select role</option>
-                          <option value="ADMIN">Admin</option>
-                          <option value="HOD">HOD</option>
+                          {!isCoordinator && <option value="ADMIN">Admin</option>}
+                          {!isCoordinator && <option value="HOD">HOD</option>}
                           <option value="FACULTY">Faculty</option>
-                          <option value="COORDINATOR">Coordinator</option>
+                          {!isCoordinator && <option value="COORDINATOR">Coordinator</option>}
                           <option value="PLACEMENT_COORDINATOR">Placement Coord.</option>
                           <option value="TRAINER">Trainer</option>
                           <option value="STUDENT">Student</option>

@@ -6,6 +6,18 @@ const { assessmentUpload } = require('../middleware/upload');
 
 router.use(authenticateToken);
 
+// Coordinators get admin access almost everywhere (COORDINATOR -> ADMIN
+// alias), but not over faculty tasks: they act as a plain assignee here, so
+// they keep "My Tasks" and lose every admin power. Dropping the alias makes
+// both the authorizeRole guards below and the controller's isAdmin branches
+// treat them as a normal user.
+router.use((req, res, next) => {
+  if (req.user?.rawRole === 'COORDINATOR') {
+    req.user.role = 'COORDINATOR';
+  }
+  next();
+});
+
 // --- Admin-only routes (specific paths first, before any :id catch) ------
 router.post('/', authorizeRole('ADMIN', 'HOD'), facultyTaskController.create);
 router.post('/bulk', authorizeRole('ADMIN', 'HOD'), facultyTaskController.bulkCreate);
