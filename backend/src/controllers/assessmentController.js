@@ -17,6 +17,10 @@ const {
 const DISTRIBUTOR_ROLES = new Set(['ADMIN', 'HOD', 'PLACEMENT_COORDINATOR']);
 const DISTRIBUTE_TARGET_ROLES = ['FACULTY', 'CHAIR_HEAD', 'MENTOR', 'HOD', 'ADMIN', 'PLACEMENT_COORDINATOR', 'COORDINATOR', 'TRAINER'];
 const ORG_ADMIN_ROLES = new Set(['ADMIN', 'HOD', 'PLACEMENT_COORDINATOR']);
+// Staff who may add a submission on a student's behalf — same list that may
+// create assessments. Any faculty can do it for any student; students can't.
+const SUBMISSION_STAFF_ROLES = new Set(['ADMIN', 'HOD', 'MENTOR', 'FACULTY', 'CHAIR_HEAD', 'PLACEMENT_COORDINATOR']);
+const canAddSubmissions = (req) => SUBMISSION_STAFF_ROLES.has(req.user?.role);
 
 // Returns { isCreator, isAdmin, isDistributed } for the current user on the
 // given assessment. Distributed faculty can pick students + grade their own
@@ -1659,15 +1663,11 @@ const assessmentController = {
     }
   },
 
-  // Create submission directly with assessmentId and studentSessionId (or userId)
+  // Create submission directly with assessmentId and studentSessionId (or userId).
+  // Any staff role that can manage assessments may add one for any student.
   createSubmissionDirect: async (req, res) => {
     const { assessmentId } = req.params;
     let { studentSessionId, userId } = req.body;
-
-    // Only ADMIN can create submissions for others
-    if (req.user?.role !== 'ADMIN') {
-      return res.status(403).json({ message: 'Only admins can create submissions for students' });
-    }
 
     if (!assessmentId || (!studentSessionId && !userId)) {
       return res.status(400).json({ message: 'assessmentId and (studentSessionId or userId) are required' });
@@ -1680,6 +1680,10 @@ const assessmentController = {
       const assessment = await Assessment.findByPk(assessmentId);
       if (!assessment) {
         return res.status(404).json({ message: 'Assessment not found' });
+      }
+
+      if (!canAddSubmissions(req)) {
+        return res.status(403).json({ message: 'Not authorized to add submissions for this assessment' });
       }
 
       // If userId is provided instead of sessionId, find the latest student session
@@ -1755,15 +1759,10 @@ const assessmentController = {
     }
   },
 
-  // Create submission for a student (admin only)
+  // Create submission for a student (any assessment-managing staff role)
   createSubmissionForStudent: async (req, res) => {
     const { assessmentId, userId } = req.body;
     const adminId = req.user?.id;
-
-    // Only ADMIN can create submissions for others
-    if (req.user?.role !== 'ADMIN') {
-      return res.status(403).json({ message: 'Only admins can create submissions for students' });
-    }
 
     if (!assessmentId || !userId) {
       return res.status(400).json({ message: 'assessmentId and userId are required' });
@@ -1776,6 +1775,10 @@ const assessmentController = {
       const assessment = await Assessment.findByPk(assessmentId);
       if (!assessment) {
         return res.status(404).json({ message: 'Assessment not found' });
+      }
+
+      if (!canAddSubmissions(req)) {
+        return res.status(403).json({ message: 'Not authorized to add submissions for this assessment' });
       }
 
       // Get the user (student)
