@@ -9,6 +9,8 @@ const {
   User,
   AssessmentQuestion,
   AssessmentResponse,
+  MentorTeam,
+  MentorTeamMember,
 } = require('../models');
 const { Op } = require('sequelize');
 
@@ -19,6 +21,19 @@ const ORG_ADMIN_ROLES = new Set(['ADMIN', 'HOD', 'PLACEMENT_COORDINATOR']);
 // admin/HOD handed the assessment to (an AssessmentDistribution row). Such a
 // faculty may view the admin-created rubrics and grade the submissions of the
 // students they themselves assigned — but only those.
+
+// Student sessions this user mentors (their mentor-team members). A mentor
+// owns their mentees' work regardless of who attached the student to the
+// assessment, so they can see and grade it.
+async function myMenteeSessionIds(userId) {
+  if (!userId) return [];
+  const rows = await MentorTeamMember.findAll({
+    attributes: ['studentSessionId'],
+    include: [{ model: MentorTeam, attributes: [], where: { facultyId: userId } }],
+  });
+  return [...new Set(rows.map((r) => r.studentSessionId).filter(Boolean))];
+}
+
 async function getAssessmentAccess(assessment, req) {
   const userId = req.user?.id;
   const userRole = req.user?.role;
@@ -31,15 +46,24 @@ async function getAssessmentAccess(assessment, req) {
     });
     isDistributed = !!row;
   }
-  return { isCreator, isAdmin, isDistributed };
+  // A CHAIR_HEAD on a distributed assessment heads that area, so they see
+  // every entry in it — not just students they personally assigned.
+  const seesAll = isCreator || isAdmin || (isDistributed && userRole === 'CHAIR_HEAD');
+  // Mentors reach their mentees' entries even when someone else attached the
+  // student to the assessment.
+  const menteeSessionIds = seesAll ? [] : await myMenteeSessionIds(userId);
+  const isMentor = menteeSessionIds.length > 0;
+  return { isCreator, isAdmin, isDistributed, isMentor, menteeSessionIds, seesAll };
 }
 
 // Whether the current user may act on one specific submission. Creator + org
 // admins may act on any; a distributed faculty only on submissions from a
 // student they assigned (AssessmentAssignment.assignedBy === them).
 async function canAccessSubmission(submission, access, userId) {
-  const { isCreator, isAdmin, isDistributed } = access;
-  if (isCreator || isAdmin) return true;
+  const { isDistributed, isMentor, menteeSessionIds, seesAll } = access;
+  if (seesAll) return true;
+  // A mentor may grade their own mentee's submission however it was attached.
+  if (isMentor && menteeSessionIds.includes(submission.studentSessionId)) return true;
   if (!isDistributed) return false;
   const assignment = await AssessmentAssignment.findOne({
     where: {
@@ -128,8 +152,8 @@ module.exports = {
       }
 
       // Creator, org admins, and distributed faculty may view the rubrics.
-      const { isCreator, isAdmin, isDistributed } = await getAssessmentAccess(assessment, req);
-      if (!isCreator && !isAdmin && !isDistributed) {
+      const { isCreator, isAdmin, isDistributed, isMentor } = await getAssessmentAccess(assessment, req);
+      if (!isCreator && !isAdmin && !isDistributed && !isMentor) {
         return res.status(403).json({ message: 'Not authorized to view rubrics for this assessment' });
       }
 

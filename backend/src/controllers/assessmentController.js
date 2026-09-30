@@ -12,6 +12,8 @@ const {
   User,
   RubricScore,
   RubricCriteria,
+  MentorTeam,
+  MentorTeamMember,
 } = require('../models');
 
 const DISTRIBUTOR_ROLES = new Set(['ADMIN', 'HOD', 'PLACEMENT_COORDINATOR']);
@@ -25,6 +27,19 @@ const canAddSubmissions = (req) => SUBMISSION_STAFF_ROLES.has(req.user?.role);
 // Returns { isCreator, isAdmin, isDistributed } for the current user on the
 // given assessment. Distributed faculty can pick students + grade their own
 // students' submissions, but cannot edit questions/rubrics/publish.
+
+// Student sessions this user mentors (their mentor-team members). A mentor
+// owns their mentees' work regardless of who attached the student to the
+// assessment, so they can see and grade it.
+async function myMenteeSessionIds(userId) {
+  if (!userId) return [];
+  const rows = await MentorTeamMember.findAll({
+    attributes: ['studentSessionId'],
+    include: [{ model: MentorTeam, attributes: [], where: { facultyId: userId } }],
+  });
+  return [...new Set(rows.map((r) => r.studentSessionId).filter(Boolean))];
+}
+
 async function getAccess(assessment, req) {
   const userId = req.user?.id;
   const userRole = req.user?.role;
@@ -37,7 +52,14 @@ async function getAccess(assessment, req) {
     });
     isDistributed = !!row;
   }
-  return { isCreator, isAdmin, isDistributed };
+  // A CHAIR_HEAD on a distributed assessment heads that area, so they see
+  // every entry in it — not just students they personally assigned.
+  const seesAll = isCreator || isAdmin || (isDistributed && userRole === 'CHAIR_HEAD');
+  // Mentors reach their mentees' entries even when someone else attached the
+  // student to the assessment.
+  const menteeSessionIds = seesAll ? [] : await myMenteeSessionIds(userId);
+  const isMentor = menteeSessionIds.length > 0;
+  return { isCreator, isAdmin, isDistributed, isMentor, menteeSessionIds, seesAll };
 }
 const { Op } = require('sequelize');
 const { uploadToS3 } = require('../utils/s3Upload');
@@ -823,8 +845,8 @@ const assessmentController = {
         return res.status(404).json({ message: 'Assessment not found' });
       }
 
-      const { isCreator, isAdmin, isDistributed } = await getAccess(assessment, req);
-      if (!isCreator && !isAdmin && !isDistributed) {
+      const { isCreator, isAdmin, isDistributed, isMentor } = await getAccess(assessment, req);
+      if (!isCreator && !isAdmin && !isDistributed && !isMentor) {
         return res.status(403).json({ message: 'Not authorized to assign this assessment' });
       }
 
@@ -866,6 +888,7 @@ const assessmentController = {
       }
 
       const assignments = [];
+      let alreadyAssigned = 0;
 
       // Assign to specific students
       for (const studentSessionId of studentSessionIds) {
@@ -873,7 +896,9 @@ const assessmentController = {
           where: { assessmentId, studentSessionId },
         });
 
-        if (!existing) {
+        if (existing) {
+          alreadyAssigned += 1;
+        } else {
           assignments.push({
             assessmentId,
             studentSessionId,
@@ -903,9 +928,14 @@ const assessmentController = {
         await AssessmentAssignment.bulkCreate(assignments);
       }
 
+      const parts = [`Assessment assigned to ${assignments.length} student(s)/categor(ies)`];
+      if (alreadyAssigned > 0) {
+        parts.push(`${alreadyAssigned} were already attached to this assessment (by you or someone else) and were left as they are`);
+      }
       res.status(201).json({
-        message: `Assessment assigned to ${assignments.length} students/categories`,
+        message: parts.join(' — '),
         assignmentsCreated: assignments.length,
+        alreadyAssigned,
       });
     } catch (error) {
       console.error('Assign assessment error:', error);
@@ -959,15 +989,18 @@ const assessmentController = {
         return res.status(404).json({ message: 'Assessment not found' });
       }
 
-      const { isCreator, isAdmin, isDistributed } = await getAccess(assessment, req);
-      if (!isCreator && !isAdmin && !isDistributed) {
+      const { isCreator, isAdmin, isDistributed, isMentor, menteeSessionIds, seesAll } = await getAccess(assessment, req);
+      if (!isCreator && !isAdmin && !isDistributed && !isMentor) {
         return res.status(403).json({ message: 'Not authorized to view assignments for this assessment' });
       }
 
-      // Distributed faculty see only what they picked. Creator + admin see everything.
+      // Distributed faculty see what they picked plus their own mentees;
+      // creator, admins and chair heads on the assessment see everything.
       const where = { assessmentId };
-      if (isDistributed && !isCreator && !isAdmin) {
-        where.assignedBy = userId;
+      if (!seesAll) {
+        where[Op.or] = menteeSessionIds.length > 0
+          ? [{ assignedBy: userId }, { studentSessionId: { [Op.in]: menteeSessionIds } }]
+          : [{ assignedBy: userId }];
       }
 
       const assignments = await AssessmentAssignment.findAll({
@@ -1161,8 +1194,8 @@ const assessmentController = {
         return res.status(404).json({ message: 'Assessment not found' });
       }
 
-      const { isCreator, isAdmin, isDistributed } = await getAccess(assessment, req);
-      if (!isCreator && !isAdmin && !isDistributed) {
+      const { isCreator, isAdmin, isDistributed, isMentor, menteeSessionIds, seesAll } = await getAccess(assessment, req);
+      if (!isCreator && !isAdmin && !isDistributed && !isMentor) {
         return res.status(403).json({ message: 'Not authorized to view these submissions' });
       }
 
@@ -1171,14 +1204,16 @@ const assessmentController = {
         assessmentId,
         status: { [Op.in]: ['SUBMITTED', 'GRADED'] },
       };
-      if (isDistributed && !isCreator && !isAdmin) {
+      if (!seesAll) {
         const myAssignments = await AssessmentAssignment.findAll({
           where: { assessmentId, assignedBy: userId },
           attributes: ['studentSessionId'],
         });
-        const myStudentIds = myAssignments
-          .map((a) => a.studentSessionId)
-          .filter(Boolean);
+        // What they attached themselves, plus every student they mentor.
+        const myStudentIds = [...new Set([
+          ...myAssignments.map((a) => a.studentSessionId),
+          ...menteeSessionIds,
+        ].filter(Boolean))];
         if (myStudentIds.length === 0) {
           return res.status(200).json({ message: 'Submissions retrieved', submissions: [] });
         }
@@ -1539,8 +1574,8 @@ const assessmentController = {
       // Creator / admin see every submission. Distributed faculty see only
       // submissions from the students they themselves assigned — mirrors
       // getAssessmentSubmissions.
-      const { isCreator, isAdmin, isDistributed } = await getAccess(assessment, req);
-      if (!isCreator && !isAdmin && !isDistributed) {
+      const { isCreator, isAdmin, isDistributed, isMentor, menteeSessionIds, seesAll } = await getAccess(assessment, req);
+      if (!isCreator && !isAdmin && !isDistributed && !isMentor) {
         return res.status(403).json({ message: 'Not authorized to view these results' });
       }
 
@@ -1548,14 +1583,16 @@ const assessmentController = {
         assessmentId,
         status: { [Op.in]: ['SUBMITTED', 'GRADED'] },
       };
-      if (isDistributed && !isCreator && !isAdmin) {
+      if (!seesAll) {
         const myAssignments = await AssessmentAssignment.findAll({
           where: { assessmentId, assignedBy: userId },
           attributes: ['studentSessionId'],
         });
-        const myStudentIds = myAssignments
-          .map((a) => a.studentSessionId)
-          .filter(Boolean);
+        // What they attached themselves, plus every student they mentor.
+        const myStudentIds = [...new Set([
+          ...myAssignments.map((a) => a.studentSessionId),
+          ...menteeSessionIds,
+        ].filter(Boolean))];
         if (myStudentIds.length === 0) {
           return res.status(200).json({
             message: 'Results retrieved',
