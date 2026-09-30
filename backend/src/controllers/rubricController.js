@@ -50,8 +50,9 @@ async function getAssessmentAccess(assessment, req) {
   // every entry in it — not just students they personally assigned.
   const seesAll = isCreator || isAdmin || (isDistributed && userRole === 'CHAIR_HEAD');
   // Mentors reach their mentees' entries even when someone else attached the
-  // student to the assessment.
-  const menteeSessionIds = seesAll ? [] : await myMenteeSessionIds(userId);
+  // student to the assessment. Computed for everyone so viewers who see the
+  // whole assessment can still filter down to their own mentees.
+  const menteeSessionIds = await myMenteeSessionIds(userId);
   const isMentor = menteeSessionIds.length > 0;
   return { isCreator, isAdmin, isDistributed, isMentor, menteeSessionIds, seesAll };
 }

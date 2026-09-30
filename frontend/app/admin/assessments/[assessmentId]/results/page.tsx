@@ -45,6 +45,7 @@ interface AssessmentSubmission {
   assessmentId: string;
   studentSessionId: string;
   status: 'IN_PROGRESS' | 'SUBMITTED' | 'GRADED';
+  isMyMentee?: boolean;
   totalScore?: number;
   submittedAt?: string;
   gradedAt?: string;
@@ -108,6 +109,7 @@ export default function AssessmentResultsPage() {
   const [expandedSubmission, setExpandedSubmission] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<'name' | 'score' | 'date'>('name');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'SUBMITTED' | 'GRADED'>('ALL');
+  const [menteeOnly, setMenteeOnly] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedStudentId, setSelectedStudentId] = useState<string>('');
   const [selectedStudentSessionId, setSelectedStudentSessionId] = useState<string>('');
@@ -272,6 +274,9 @@ export default function AssessmentResultsPage() {
     await fetchAllUsers();
   };
 
+  // How many of the loaded entries are the viewer's own mentees.
+  const menteeCount = submissions.filter((s) => s.isMyMentee && s.status !== 'IN_PROGRESS').length;
+
   const getSortedSubmissions = () => {
     let sorted = [...submissions];
 
@@ -281,6 +286,11 @@ export default function AssessmentResultsPage() {
     // Filter by status
     if (statusFilter !== 'ALL') {
       sorted = sorted.filter((s) => s.status === statusFilter);
+    }
+
+    // Only the viewer's own mentees
+    if (menteeOnly) {
+      sorted = sorted.filter((s) => s.isMyMentee);
     }
 
     // Sort
@@ -312,9 +322,10 @@ export default function AssessmentResultsPage() {
   };
 
   const downloadResults = async () => {
-    // Filter only submitted assessments (including graded ones, since they were submitted)
-    const submittedAssessments = submissions.filter((s) => 
-      s.status === 'SUBMITTED' || s.status === 'GRADED'
+    // Filter only submitted assessments (including graded ones, since they were
+    // submitted). Respects the "my mentees only" filter so the CSV matches the list.
+    const submittedAssessments = submissions.filter((s) =>
+      (s.status === 'SUBMITTED' || s.status === 'GRADED') && (!menteeOnly || s.isMyMentee)
     );
 
     if (submittedAssessments.length === 0) {
@@ -573,6 +584,18 @@ export default function AssessmentResultsPage() {
                 <option value="score">Sort by Score</option>
                 <option value="date">Sort by Date</option>
               </select>
+
+              {menteeCount > 0 && (
+                <label className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={menteeOnly}
+                    onChange={(e) => setMenteeOnly(e.target.checked)}
+                    className="h-4 w-4 accent-blue-600"
+                  />
+                  <span className="text-sm font-medium text-gray-800">My mentees only ({menteeCount})</span>
+                </label>
+              )}
             </div>
 
             <button
