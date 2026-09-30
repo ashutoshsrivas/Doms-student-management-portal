@@ -196,9 +196,9 @@ module.exports = {
         });
         if (activeSession) sessionId = activeSession.id;
       }
-      const teamWhere = {
-        [Op.or]: [{ facultyId: userId }, { createdBy: userId }],
-      };
+      // Only teams where the caller is the mentor. Teams they merely created
+      // for another faculty are that faculty's mentees, not theirs.
+      const teamWhere = { facultyId: userId };
       if (sessionId) teamWhere.sessionId = sessionId;
 
       const teams = await MentorTeam.findAll({
