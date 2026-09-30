@@ -178,6 +178,7 @@ function StudentDashboardContent() {
   const [stats, setStats] = useState<Stats>({ activeSession: null, assessmentsPending: 0, messagesUnread: 0, achievements: 0 });
   const [loading, setLoading] = useState(true);
   const [sipCompliance, setSipCompliance] = useState<SIPCompliance | null>(null);
+  const [gradeSummary, setGradeSummary] = useState<{ average: number | null; averageLetter: string | null; count: number } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -222,6 +223,17 @@ function StudentDashboardContent() {
       }
     };
     fetchDashboardData();
+
+    // Average grade across everything this student has been graded on.
+    (async () => {
+      try {
+        const res = await apiClient.get('/grades/me');
+        if (!cancelled) setGradeSummary({ average: res.data.average, averageLetter: res.data.averageLetter, count: res.data.count || 0 });
+      } catch {
+        // no grades yet, or endpoint unavailable — card just stays hidden
+      }
+    })();
+
     return () => { cancelled = true; };
   }, []);
 
@@ -285,6 +297,31 @@ function StudentDashboardContent() {
           </p>
         </div>
       </div>
+
+      {gradeSummary && gradeSummary.count > 0 && (
+        <Link
+          href="/student/grades"
+          className="block bg-white rounded-2xl p-4 mb-6 border border-[rgba(60,60,67,0.07)] shadow-sm hover:shadow-md transition animate-slide-up"
+          style={{ animationDelay: '120ms' }}
+        >
+          <div className="flex items-center gap-4">
+            <span className="flex-shrink-0 w-14 h-14 rounded-2xl bg-indigo-50 text-indigo-700 flex items-center justify-center text-2xl font-bold">
+              {gradeSummary.averageLetter || '—'}
+            </span>
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-indigo-600">Average Grade</p>
+              <h3 className="text-[15px] font-bold text-gray-900">
+                {gradeSummary.averageLetter || 'Not graded yet'}
+                {gradeSummary.average !== null && <span className="ml-1 text-[13px] font-medium text-gray-500">({gradeSummary.average})</span>}
+              </h3>
+              <p className="text-[13px] text-gray-600">
+                Across {gradeSummary.count} topic{gradeSummary.count === 1 ? '' : 's'} — tap to see each one and who graded it
+              </p>
+            </div>
+            <FiArrowRight className="w-4 h-4 text-indigo-600 flex-shrink-0" />
+          </div>
+        </Link>
+      )}
 
       {/* Stat Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-6">

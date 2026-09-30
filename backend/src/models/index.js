@@ -1521,6 +1521,46 @@ const SIPQuestionAnswer = sequelize.define('SIPQuestionAnswer', {
   underscored: true,
 });
 
+// ============ GRADING (A/B/C/D/Unavailable) ============
+// A faculty creates a titled grade list inside an academic session, then
+// grades students on it. One grade per student per list. No FK constraints,
+// so removing a session or user never deletes grade history.
+const GradeSheet = sequelize.define('GradeSheet', {
+  id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
+  title: { type: DataTypes.STRING, allowNull: false },
+  description: { type: DataTypes.TEXT, allowNull: true },
+  academicSessionId: { type: DataTypes.UUID, allowNull: false },
+  createdBy: { type: DataTypes.UUID, allowNull: false },
+}, {
+  tableName: 'grade_sheets',
+  timestamps: true,
+  underscored: true,
+});
+
+const GRADE_VALUES = ['A', 'B', 'C', 'D', 'UNAVAILABLE'];
+
+const StudentGrade = sequelize.define('StudentGrade', {
+  id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
+  gradeSheetId: { type: DataTypes.UUID, allowNull: false },
+  studentSessionId: { type: DataTypes.UUID, allowNull: false },
+  grade: { type: DataTypes.ENUM(...GRADE_VALUES), allowNull: false },
+  remark: { type: DataTypes.STRING, allowNull: true },
+  gradedBy: { type: DataTypes.UUID, allowNull: true },
+  gradedAt: { type: DataTypes.DATE, allowNull: true },
+}, {
+  tableName: 'student_grades',
+  timestamps: true,
+  underscored: true,
+  indexes: [{ unique: true, fields: ['grade_sheet_id', 'student_session_id'] }],
+});
+
+GradeSheet.belongsTo(AcademicSession, { foreignKey: 'academicSessionId', constraints: false });
+GradeSheet.belongsTo(User, { as: 'Creator', foreignKey: 'createdBy', constraints: false });
+GradeSheet.hasMany(StudentGrade, { foreignKey: 'gradeSheetId', constraints: false });
+StudentGrade.belongsTo(GradeSheet, { foreignKey: 'gradeSheetId', constraints: false });
+StudentGrade.belongsTo(StudentSession, { foreignKey: 'studentSessionId', constraints: false });
+StudentGrade.belongsTo(User, { as: 'Grader', foreignKey: 'gradedBy', constraints: false });
+
 // ============ STUDENT NOC ============
 // No-Objection Certificate uploaded by a student, independent of the SIP form
 // (an NOC can be for something other than SIP). One current NOC per student
@@ -2337,6 +2377,9 @@ NotificationPromptResponse.belongsTo(User, { foreignKey: 'studentUserId', as: 'S
 
 module.exports = {
   sequelize,
+  GradeSheet,
+  StudentGrade,
+  GRADE_VALUES,
   StudentNOC,
   User,
   Role,

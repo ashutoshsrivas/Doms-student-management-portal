@@ -33,6 +33,7 @@ const mentorReportRoutes = require('./routes/mentorReportRoutes');
 const mentorFeedbackRoutes = require('./routes/mentorFeedbackRoutes');
 const notificationPromptRoutes = require('./routes/notificationPromptRoutes');
 const nocRoutes = require('./routes/nocRoutes');
+const gradeRoutes = require('./routes/gradeRoutes');
 const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
@@ -90,6 +91,7 @@ app.use('/api/mentor-report', mentorReportRoutes);
 app.use('/api/mentor-feedback', mentorFeedbackRoutes);
 app.use('/api/notification-prompts', notificationPromptRoutes);
 app.use('/api/noc', nocRoutes);
+app.use('/api/grades', gradeRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
