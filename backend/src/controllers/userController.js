@@ -3,24 +3,30 @@ const { uploadToS3, deleteFromS3 } = require('../utils/s3Upload');
 const { v4: uuidv4 } = require('uuid');
 
 const userController = {
-  // Get all users (Admin only)
+  // Get all users. ADMIN/HOD/CHAIR_HEAD get the full directory; other staff
+  // (faculty, mentors, placement coordinators) only get students, with just
+  // the fields the student pickers need.
   getAllUsers: async (req, res) => {
     try {
       const { role, status, page = 1, limit = 20 } = req.query;
       const offset = (page - 1) * limit;
 
+      const fullDirectoryRoles = ['ADMIN', 'HOD', 'CHAIR_HEAD'];
+      const studentsOnly = !fullDirectoryRoles.includes(req.user?.role);
+
       let where = {};
       if (role) where.approvedRole = role;
       if (status) where.status = status;
+      if (studentsOnly) where.approvedRole = 'STUDENT';
 
       const { count, rows } = await User.findAndCountAll({
         where,
         offset,
         limit: parseInt(limit),
         order: [['createdAt', 'DESC']],
-        attributes: {
-          exclude: ['password', 'verificationToken', 'resetPasswordToken'],
-        },
+        attributes: studentsOnly
+          ? ['id', 'firstName', 'lastName', 'email', 'registrationNumber', 'approvedRole', 'status', 'department']
+          : { exclude: ['password', 'verificationToken', 'resetPasswordToken'] },
       });
 
       res.json({

@@ -19,13 +19,15 @@ router.get(
   userController.getUserStatistics
 );
 
-// Get all users — admin/HOD/chair-head can read (chair-head needs it to
-// populate the Faculty Member picker in /admin/mentors). Modifying users
+// Get all users — admin/HOD/chair-head read the full directory (chair-head
+// needs it for the Faculty Member picker in /admin/mentors). Faculty, mentors
+// and placement coordinators are limited to students by the controller, so
+// they can populate student pickers (e.g. Create Submission). Modifying users
 // is still admin/HOD only via the routes below.
 router.get(
   '/',
   authenticateToken,
-  authorizeRole('ADMIN', 'HOD', 'CHAIR_HEAD'),
+  authorizeRole('ADMIN', 'HOD', 'CHAIR_HEAD', 'FACULTY', 'MENTOR', 'PLACEMENT_COORDINATOR'),
   userController.getAllUsers
 );
 
