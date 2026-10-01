@@ -218,6 +218,12 @@ const StudentSession = sequelize.define('StudentSession', {
     type: DataTypes.UUID,
     allowNull: true,
   },
+  // Section the student belongs to inside this session (SessionSection).
+  // Purely a label/grouping — nothing else keys off it.
+  sectionId: {
+    type: DataTypes.UUID,
+    allowNull: true,
+  },
 }, {
   tableName: 'student_sessions',
   timestamps: true,
@@ -1521,6 +1527,26 @@ const SIPQuestionAnswer = sequelize.define('SIPQuestionAnswer', {
   underscored: true,
 });
 
+// ============ SECTIONS ============
+// Named sections inside an academic session (SEC-A, AI&DS, …). A student
+// enrolment points at one section; nothing else in the app reads it.
+const SessionSection = sequelize.define('SessionSection', {
+  id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
+  academicSessionId: { type: DataTypes.UUID, allowNull: false },
+  name: { type: DataTypes.STRING, allowNull: false },
+  description: { type: DataTypes.TEXT, allowNull: true },
+  createdBy: { type: DataTypes.UUID, allowNull: true },
+}, {
+  tableName: 'session_sections',
+  timestamps: true,
+  underscored: true,
+  indexes: [{ unique: true, fields: ['academic_session_id', 'name'] }],
+});
+
+SessionSection.belongsTo(AcademicSession, { foreignKey: 'academicSessionId', constraints: false });
+SessionSection.hasMany(StudentSession, { foreignKey: 'sectionId', constraints: false });
+StudentSession.belongsTo(SessionSection, { as: 'Section', foreignKey: 'sectionId', constraints: false });
+
 // ============ GRADING (A/B/C/D/Unavailable) ============
 // A faculty creates a titled grade list inside an academic session, then
 // grades students on it. One grade per student per list. No FK constraints,
@@ -2377,6 +2403,7 @@ NotificationPromptResponse.belongsTo(User, { foreignKey: 'studentUserId', as: 'S
 
 module.exports = {
   sequelize,
+  SessionSection,
   GradeSheet,
   StudentGrade,
   GRADE_VALUES,

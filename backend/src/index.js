@@ -34,6 +34,7 @@ const mentorFeedbackRoutes = require('./routes/mentorFeedbackRoutes');
 const notificationPromptRoutes = require('./routes/notificationPromptRoutes');
 const nocRoutes = require('./routes/nocRoutes');
 const gradeRoutes = require('./routes/gradeRoutes');
+const sectionRoutes = require('./routes/sectionRoutes');
 const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
@@ -92,6 +93,7 @@ app.use('/api/mentor-feedback', mentorFeedbackRoutes);
 app.use('/api/notification-prompts', notificationPromptRoutes);
 app.use('/api/noc', nocRoutes);
 app.use('/api/grades', gradeRoutes);
+app.use('/api/sections', sectionRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
@@ -540,6 +542,18 @@ async function start() {
         // fresh install — sync already created it
       } else {
         console.error('Error adding total_strength to classes:', error.message);
+      }
+    }
+    try {
+      await sequelize.query(`ALTER TABLE student_sessions ADD COLUMN section_id CHAR(36) NULL`);
+      console.log('Added section_id column to student_sessions');
+    } catch (error) {
+      if (error.message && error.message.includes('Duplicate column')) {
+        console.log('section_id column already exists on student_sessions');
+      } else if (error.message && error.message.includes("doesn't exist")) {
+        // fresh install — sync already created it
+      } else {
+        console.error('Error adding section_id to student_sessions:', error.message);
       }
     }
     try {
