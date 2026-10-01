@@ -6,6 +6,7 @@ const {
   StudentGrade,
   GRADE_VALUES,
   StudentSession,
+  SessionSection,
   AcademicSession,
   User,
 } = require('../models');
@@ -198,7 +199,10 @@ const gradeController = {
 
       const rows = await StudentSession.findAll({
         where: { academicSessionId: sheet.academicSessionId },
-        include: [{ model: User, as: 'Student', attributes: ['id', 'firstName', 'lastName', 'email', 'registrationNumber'] }],
+        include: [
+          { model: User, as: 'Student', attributes: ['id', 'firstName', 'lastName', 'email', 'registrationNumber'] },
+          { model: SessionSection, as: 'Section', attributes: ['id', 'name'] },
+        ],
       });
       const existing = await StudentGrade.findAll({ where: { gradeSheetId: sheet.id }, attributes: ['studentSessionId', 'grade'] });
       const gradeBy = new Map(existing.map((g) => [g.studentSessionId, g.grade]));
@@ -211,6 +215,7 @@ const gradeController = {
           name: fullName(r.Student),
           email: r.Student.email,
           registrationNumber: r.Student.registrationNumber || '',
+          section: r.Section?.name || '',
           grade: gradeBy.get(r.id) || null,
         }))
         .sort((a, b) => a.name.localeCompare(b.name));
@@ -308,12 +313,16 @@ const gradeController = {
 
       const rows = await StudentSession.findAll({
         where: { academicSessionId: sheet.academicSessionId },
-        include: [{ model: User, as: 'Student', attributes: ['id', 'firstName', 'lastName', 'email', 'registrationNumber'] }],
+        include: [
+          { model: User, as: 'Student', attributes: ['id', 'firstName', 'lastName', 'email', 'registrationNumber'] },
+          { model: SessionSection, as: 'Section', attributes: ['id', 'name'] },
+        ],
       });
       const existing = await StudentGrade.findAll({ where: { gradeSheetId: sheet.id }, attributes: ['studentSessionId', 'grade'] });
       const gradeBy = new Map(existing.map((g) => [g.studentSessionId, g.grade]));
 
-      const header = ['Student Session ID', 'Registration No', 'Name', 'Email', 'Grade (A/B/C/D/Unavailable)'];
+      // Section is informational only — the import ignores it.
+      const header = ['Student Session ID', 'Registration No', 'Name', 'Email', 'Section', 'Grade (A/B/C/D/Unavailable)'];
       const data = rows
         .filter((r) => r.Student)
         .map((r) => ({
@@ -321,12 +330,13 @@ const gradeController = {
           'Registration No': r.Student.registrationNumber || '',
           'Name': fullName(r.Student),
           'Email': r.Student.email || '',
+          'Section': r.Section?.name || '',
           'Grade (A/B/C/D/Unavailable)': gradeBy.get(r.id) || '',
         }))
-        .sort((a, b) => a.Name.localeCompare(b.Name));
+        .sort((a, b) => (a.Section || '').localeCompare(b.Section || '') || a.Name.localeCompare(b.Name));
 
       const ws = XLSX.utils.json_to_sheet(data, { header });
-      ws['!cols'] = [{ wch: 38 }, { wch: 18 }, { wch: 26 }, { wch: 30 }, { wch: 26 }];
+      ws['!cols'] = [{ wch: 38 }, { wch: 18 }, { wch: 26 }, { wch: 30 }, { wch: 14 }, { wch: 26 }];
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Grades');
       const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });

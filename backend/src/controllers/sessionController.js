@@ -1,4 +1,4 @@
-const { AcademicSession, StudentSession, User, SessionCategory, StudentSessionCategory } = require('../models');
+const { AcademicSession, StudentSession, User, SessionCategory, StudentSessionCategory, SessionSection } = require('../models');
 
 const sessionController = {
   // Create academic session (Admin only)
@@ -960,12 +960,15 @@ const sessionController = {
       // Every enrolment for this session with its student's basic info.
       const rows = await StudentSession.findAll({
         where: { academicSessionId: id },
-        attributes: ['id', 'status', 'userId', 'enrollmentDate'],
-        include: [{
-          model: User,
-          as: 'Student',
-          attributes: ['id', 'firstName', 'lastName', 'email', 'registrationNumber', 'department', 'lastLogin', 'status'],
-        }],
+        attributes: ['id', 'status', 'userId', 'enrollmentDate', 'sectionId'],
+        include: [
+          {
+            model: User,
+            as: 'Student',
+            attributes: ['id', 'firstName', 'lastName', 'email', 'registrationNumber', 'department', 'lastLogin', 'status'],
+          },
+          { model: SessionSection, as: 'Section', attributes: ['id', 'name'] },
+        ],
       });
 
       const totals = {
@@ -1007,6 +1010,7 @@ const sessionController = {
           userStatus: s?.status || null,
           lastLogin: s?.lastLogin || null,
           hasLoggedIn,
+          sectionName: r.Section?.name || '',
         });
       }
 

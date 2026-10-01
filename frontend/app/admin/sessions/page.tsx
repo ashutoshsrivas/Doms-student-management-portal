@@ -71,6 +71,7 @@ export default function SessionsPage() {
     userStatus: string | null;
     lastLogin: string | null;
     hasLoggedIn: boolean;
+    sectionName?: string;
   }
   interface StatsDomain { domain: string; count: number; students: StatsStudent[] }
   interface StatsPayload {
@@ -294,6 +295,7 @@ export default function SessionsPage() {
       const studentRows = byDomain.flatMap((d) =>
         d.students.map((st) => ({
           'Domain': d.domain,
+          'Section': st.sectionName || '',
           'Name': `${st.firstName} ${st.lastName}`.trim(),
           'Registration No': st.registrationNumber || '',
           'Email': st.email,
@@ -314,7 +316,7 @@ export default function SessionsPage() {
       XLSX.utils.book_append_sheet(wb, wsDomains, 'By domain');
 
       const wsStudents = XLSX.utils.json_to_sheet(studentRows);
-      wsStudents['!cols'] = [{ wch: 44 }, { wch: 26 }, { wch: 16 }, { wch: 30 }, { wch: 16 }, { wch: 14 }, { wch: 10 }, { wch: 20 }];
+      wsStudents['!cols'] = [{ wch: 44 }, { wch: 14 }, { wch: 26 }, { wch: 16 }, { wch: 30 }, { wch: 16 }, { wch: 14 }, { wch: 10 }, { wch: 20 }];
       XLSX.utils.book_append_sheet(wb, wsStudents, 'Students');
 
       const safe = session.name.replace(/[^a-z0-9]+/gi, '-').toLowerCase();

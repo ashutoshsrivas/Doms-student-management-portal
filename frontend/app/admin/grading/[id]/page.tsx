@@ -9,7 +9,7 @@ import DashboardLayout from '@/app/components/DashboardLayout';
 import ProtectedRoute from '@/app/components/ProtectedRoute';
 
 type Sheet = { id: string; title: string; description: string; sessionName: string; createdByName: string; gradeCount: number };
-type Student = { studentSessionId: string; id: string; name: string; email: string; registrationNumber: string; grade: string | null };
+type Student = { studentSessionId: string; id: string; name: string; email: string; registrationNumber: string; section: string; grade: string | null };
 type GradeRow = {
   id: string;
   studentSessionId: string;
@@ -71,7 +71,7 @@ function Content() {
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return students;
-    return students.filter((s) => [s.name, s.email, s.registrationNumber].some((v) => (v || '').toLowerCase().includes(q)));
+    return students.filter((s) => [s.name, s.email, s.registrationNumber, s.section].some((v) => (v || '').toLowerCase().includes(q)));
   }, [students, query]);
 
   const setGrade = (studentSessionId: string, grade: string) => {
@@ -212,6 +212,7 @@ function Content() {
                 <tr>
                   <th className="px-4 py-2 text-left font-semibold text-gray-700">Student</th>
                   <th className="px-4 py-2 text-left font-semibold text-gray-700">Enrolment</th>
+                  <th className="px-4 py-2 text-left font-semibold text-gray-700">Section</th>
                   <th className="px-4 py-2 text-left font-semibold text-gray-700">Grade</th>
                   <th className="px-4 py-2 text-left font-semibold text-gray-700">Graded by</th>
                   <th className="px-4 py-2" />
@@ -229,6 +230,11 @@ function Content() {
                         <div className="text-[11px] text-gray-500">{s.email}</div>
                       </td>
                       <td className="px-4 py-2 text-gray-700">{s.registrationNumber || '—'}</td>
+                      <td className="px-4 py-2">
+                        {s.section
+                          ? <span className="inline-flex rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-semibold text-indigo-700">{s.section}</span>
+                          : <span className="text-xs text-gray-400">—</span>}
+                      </td>
                       <td className="px-4 py-2">
                         {canEdit ? (
                           <select value={value} onChange={(e) => setGrade(s.studentSessionId, e.target.value)}
@@ -259,7 +265,7 @@ function Content() {
       {canEdit && (
         <p className="text-xs text-gray-500">
           Tip: download the template, fill the <span className="font-semibold">Grade</span> column with A, B, C, D or Unavailable,
-          and upload it back. Rows without a grade are left untouched.
+          and upload it back. Rows without a grade are left untouched; the Section column is there to sort by and is ignored on upload.
         </p>
       )}
     </div>
