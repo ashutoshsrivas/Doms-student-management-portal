@@ -1547,7 +1547,7 @@ SessionSection.belongsTo(AcademicSession, { foreignKey: 'academicSessionId', con
 SessionSection.hasMany(StudentSession, { foreignKey: 'sectionId', constraints: false });
 StudentSession.belongsTo(SessionSection, { as: 'Section', foreignKey: 'sectionId', constraints: false });
 
-// ============ GRADING (A/B/C/D/Unavailable) ============
+// ============ GRADING (O/A+/A/B+/B/C/P/F/AB) ============
 // A faculty creates a titled grade list inside an academic session, then
 // grades students on it. One grade per student per list. No FK constraints,
 // so removing a session or user never deletes grade history.

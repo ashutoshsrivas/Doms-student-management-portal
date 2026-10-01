@@ -83,7 +83,7 @@ function Content() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Grading</h1>
           <p className="mt-1 text-sm text-gray-500">
-            Create a grading list for a session, then grade students A, B, C, D or Unavailable.
+            Create a grading list for a session, then grade students O, A+, A, B+, B, C, P, F or AB.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

@@ -44,6 +44,7 @@ function Content() {
   const [canEdit, setCanEdit] = useState(false);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
+  const [sectionFilter, setSectionFilter] = useState('ALL'); // ALL | NONE | <section name>
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -72,11 +73,21 @@ function Content() {
   const gradedCount = grades.length;
   const pendingChanges = Object.keys(draft).length;
 
+  // Sections present on this session's students, for the filter.
+  const sectionOptions = useMemo(
+    () => [...new Set(students.map((s) => s.section).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
+    [students],
+  );
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return students;
-    return students.filter((s) => [s.name, s.email, s.registrationNumber, s.section].some((v) => (v || '').toLowerCase().includes(q)));
-  }, [students, query]);
+    return students.filter((s) => {
+      if (sectionFilter === 'NONE' && s.section) return false;
+      if (sectionFilter !== 'ALL' && sectionFilter !== 'NONE' && s.section !== sectionFilter) return false;
+      if (!q) return true;
+      return [s.name, s.email, s.registrationNumber, s.section].some((v) => (v || '').toLowerCase().includes(q));
+    });
+  }, [students, query, sectionFilter]);
 
   const setGrade = (studentSessionId: string, grade: string) => {
     setDraft((d) => ({ ...d, [studentSessionId]: grade }));
@@ -199,7 +210,21 @@ function Content() {
       <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
         <div className="flex flex-wrap items-center gap-2 border-b border-gray-100 px-4 py-3">
           <span className="text-sm font-bold text-gray-900">Students in {sheet.sessionName}</span>
-          <span className="text-xs text-gray-500">{students.length} total</span>
+          <span className="text-xs text-gray-500">
+            {filtered.length === students.length ? `${students.length} total` : `${filtered.length} of ${students.length}`}
+          </span>
+          {sectionOptions.length > 0 && (
+            <select
+              value={sectionFilter}
+              onChange={(e) => setSectionFilter(e.target.value)}
+              aria-label="Filter by section"
+              className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-sm text-gray-900"
+            >
+              <option value="ALL">All sections</option>
+              {sectionOptions.map((name) => (<option key={name} value={name}>{name}</option>))}
+              <option value="NONE">No section</option>
+            </select>
+          )}
           <div className="relative ml-auto">
             <FiSearch className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
             <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search name, enrolment, email…"
