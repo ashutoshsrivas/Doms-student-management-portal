@@ -38,7 +38,6 @@ const fmt = (iso: string | null) => {
 
 function Content() {
   const [grades, setGrades] = useState<GradeRow[]>([]);
-  const [average, setAverage] = useState<number | null>(null);
   const [averageLetter, setAverageLetter] = useState<string | null>(null);
   const [countedForAverage, setCountedForAverage] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -48,7 +47,6 @@ function Content() {
       try {
         const res = await apiClient.get('/grades/me');
         setGrades(res.data.grades || []);
-        setAverage(res.data.average);
         setAverageLetter(res.data.averageLetter);
         setCountedForAverage(res.data.countedForAverage || 0);
       } catch (e: any) {
@@ -76,7 +74,7 @@ function Content() {
             </span>
             <div>
               <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Average grade</div>
-              <div className="text-lg font-bold text-gray-900">{averageLetter} <span className="text-sm font-medium text-gray-500">({average} / 10)</span></div>
+              <div className="text-lg font-bold text-gray-900">{averageLetter}</div>
               <div className="text-xs text-gray-500">
                 From {countedForAverage} grade{countedForAverage === 1 ? '' : 's'}
                 {grades.length > countedForAverage && <> · {grades.length - countedForAverage} marked AB (not counted)</>}

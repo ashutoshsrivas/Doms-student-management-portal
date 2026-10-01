@@ -480,8 +480,9 @@ const gradeController = {
         ? counted.reduce((sum, g) => sum + GRADE_POINTS[g.grade], 0) / counted.length
         : null;
 
+      // Students see letters only — the numeric average is deliberately not
+      // sent, so no marks-like number can show up anywhere in their UI.
       res.json({
-        average: average === null ? null : Number(average.toFixed(3)),
         averageLetter: average === null ? null : LETTER_FOR(average),
         count: grades.length,
         countedForAverage: counted.length,

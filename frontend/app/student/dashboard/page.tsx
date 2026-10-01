@@ -178,7 +178,7 @@ function StudentDashboardContent() {
   const [stats, setStats] = useState<Stats>({ activeSession: null, assessmentsPending: 0, messagesUnread: 0, achievements: 0 });
   const [loading, setLoading] = useState(true);
   const [sipCompliance, setSipCompliance] = useState<SIPCompliance | null>(null);
-  const [gradeSummary, setGradeSummary] = useState<{ average: number | null; averageLetter: string | null; count: number } | null>(null);
+  const [gradeSummary, setGradeSummary] = useState<{ averageLetter: string | null; count: number } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -228,7 +228,7 @@ function StudentDashboardContent() {
     (async () => {
       try {
         const res = await apiClient.get('/grades/me');
-        if (!cancelled) setGradeSummary({ average: res.data.average, averageLetter: res.data.averageLetter, count: res.data.count || 0 });
+        if (!cancelled) setGradeSummary({ averageLetter: res.data.averageLetter, count: res.data.count || 0 });
       } catch {
         // no grades yet, or endpoint unavailable — card just stays hidden
       }
@@ -312,7 +312,6 @@ function StudentDashboardContent() {
               <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-indigo-600">Average Grade</p>
               <h3 className="text-[15px] font-bold text-gray-900">
                 {gradeSummary.averageLetter || 'Not graded yet'}
-                {gradeSummary.average !== null && <span className="ml-1 text-[13px] font-medium text-gray-500">({gradeSummary.average} / 10)</span>}
               </h3>
               <p className="text-[13px] text-gray-600">
                 Across {gradeSummary.count} topic{gradeSummary.count === 1 ? '' : 's'} — tap to see each one and who graded it
