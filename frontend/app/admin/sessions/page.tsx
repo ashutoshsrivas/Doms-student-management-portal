@@ -257,6 +257,75 @@ export default function SessionsPage() {
     }
   };
 
+  // Download the whole Session Stats view as an .xlsx: a Summary sheet,
+  // a per-domain sheet and one row per student.
+  const handleDownloadStats = async () => {
+    if (!statsData) return;
+    try {
+      const XLSX = await import('xlsx');
+      const { session, totals, byDomain } = statsData;
+      const fmtDate = (iso: string | null) => {
+        if (!iso) return '';
+        const d = new Date(iso);
+        return Number.isNaN(d.getTime()) ? '' : d.toLocaleString();
+      };
+
+      const summary = [
+        { Metric: 'Session', Value: session.name },
+        { Metric: 'Start date', Value: fmtDate(session.startDate) },
+        { Metric: 'End date', Value: fmtDate(session.endDate) },
+        { Metric: 'Active session', Value: session.isActive ? 'Yes' : 'No' },
+        { Metric: 'Total students', Value: totals.total },
+        { Metric: 'Regular (onboarded & active)', Value: totals.regular },
+        { Metric: 'Dropped', Value: totals.dropped },
+        { Metric: 'Completed', Value: totals.completed },
+        { Metric: 'Pending', Value: totals.pending },
+        { Metric: 'Logged in (ever signed in)', Value: totals.loggedIn },
+        { Metric: 'Never logged in', Value: totals.neverLoggedIn },
+        { Metric: 'Domains', Value: byDomain.length },
+        { Metric: 'Downloaded on', Value: new Date().toLocaleString() },
+      ];
+      const domainRows = byDomain.map((d) => ({
+        'Domain': d.domain,
+        'Students': d.count,
+        'Logged in': d.students.filter((st) => st.hasLoggedIn).length,
+        'Never logged in': d.students.filter((st) => !st.hasLoggedIn).length,
+      }));
+      const studentRows = byDomain.flatMap((d) =>
+        d.students.map((st) => ({
+          'Domain': d.domain,
+          'Name': `${st.firstName} ${st.lastName}`.trim(),
+          'Registration No': st.registrationNumber || '',
+          'Email': st.email,
+          'Enrolment Status': st.enrollmentStatus,
+          'Account Status': st.userStatus || '',
+          'Logged In': st.hasLoggedIn ? 'Yes' : 'No',
+          'Last Login': fmtDate(st.lastLogin),
+        }))
+      );
+
+      const wb = XLSX.utils.book_new();
+      const wsSummary = XLSX.utils.json_to_sheet(summary);
+      wsSummary['!cols'] = [{ wch: 30 }, { wch: 30 }];
+      XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary');
+
+      const wsDomains = XLSX.utils.json_to_sheet(domainRows);
+      wsDomains['!cols'] = [{ wch: 48 }, { wch: 10 }, { wch: 12 }, { wch: 16 }];
+      XLSX.utils.book_append_sheet(wb, wsDomains, 'By domain');
+
+      const wsStudents = XLSX.utils.json_to_sheet(studentRows);
+      wsStudents['!cols'] = [{ wch: 44 }, { wch: 26 }, { wch: 16 }, { wch: 30 }, { wch: 16 }, { wch: 14 }, { wch: 10 }, { wch: 20 }];
+      XLSX.utils.book_append_sheet(wb, wsStudents, 'Students');
+
+      const safe = session.name.replace(/[^a-z0-9]+/gi, '-').toLowerCase();
+      XLSX.writeFile(wb, `session-stats-${safe}.xlsx`);
+      toast.success(`Downloaded ${studentRows.length} student rows`);
+    } catch (error) {
+      console.error('Failed to export session stats:', error);
+      toast.error('Failed to download stats');
+    }
+  };
+
   // Download Excel template
   const handleDownloadTemplate = async () => {
     try {
@@ -812,12 +881,23 @@ export default function SessionsPage() {
                   {selectedSession?.name || '—'}
                 </p>
               </div>
-              <button
-                onClick={() => { setShowStatsModal(false); setStatsData(null); }}
-                className="text-gray-600 hover:text-gray-800"
-              >
-                <FiX className="w-6 h-6" />
-              </button>
+              <div className="flex items-center gap-3">
+                {statsData && (
+                  <button
+                    onClick={handleDownloadStats}
+                    className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-3 py-2 text-sm font-semibold text-white hover:bg-green-700"
+                    title="Download these stats as an Excel file"
+                  >
+                    <FiDownload className="w-4 h-4" /> Download Excel
+                  </button>
+                )}
+                <button
+                  onClick={() => { setShowStatsModal(false); setStatsData(null); }}
+                  className="text-gray-600 hover:text-gray-800"
+                >
+                  <FiX className="w-6 h-6" />
+                </button>
+              </div>
             </div>
 
             <div className="p-6 overflow-y-auto">
