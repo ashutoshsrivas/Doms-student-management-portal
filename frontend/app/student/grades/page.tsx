@@ -17,13 +17,17 @@ type GradeRow = {
   gradedAt: string | null;
 };
 
-const label = (g: string) => (g === 'UNAVAILABLE' ? 'Unavailable' : g);
+const label = (g: string) => (g === 'AB' ? 'AB (absent)' : g);
 const chipClass = (g: string) => ({
-  A: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  B: 'bg-blue-50 text-blue-700 border-blue-200',
-  C: 'bg-amber-50 text-amber-700 border-amber-200',
-  D: 'bg-orange-50 text-orange-700 border-orange-200',
-  UNAVAILABLE: 'bg-gray-50 text-gray-600 border-gray-200',
+  'O': 'bg-emerald-100 text-emerald-800 border-emerald-300',
+  'A+': 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  'A': 'bg-green-50 text-green-700 border-green-200',
+  'B+': 'bg-blue-50 text-blue-700 border-blue-200',
+  'B': 'bg-sky-50 text-sky-700 border-sky-200',
+  'C': 'bg-amber-50 text-amber-700 border-amber-200',
+  'P': 'bg-orange-50 text-orange-700 border-orange-200',
+  'F': 'bg-red-50 text-red-700 border-red-200',
+  'AB': 'bg-gray-50 text-gray-600 border-gray-200',
 }[g] || 'bg-gray-50 text-gray-600 border-gray-200');
 
 const fmt = (iso: string | null) => {
@@ -72,10 +76,10 @@ function Content() {
             </span>
             <div>
               <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Average grade</div>
-              <div className="text-lg font-bold text-gray-900">{averageLetter} <span className="text-sm font-medium text-gray-500">({average})</span></div>
+              <div className="text-lg font-bold text-gray-900">{averageLetter} <span className="text-sm font-medium text-gray-500">({average} / 10)</span></div>
               <div className="text-xs text-gray-500">
                 From {countedForAverage} grade{countedForAverage === 1 ? '' : 's'}
-                {grades.length > countedForAverage && <> · {grades.length - countedForAverage} marked Unavailable (not counted)</>}
+                {grades.length > countedForAverage && <> · {grades.length - countedForAverage} marked AB (not counted)</>}
               </div>
             </div>
           </div>
@@ -95,7 +99,7 @@ function Content() {
             {grades.map((g) => (
               <li key={g.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
                 <span className={`inline-flex h-9 w-9 items-center justify-center rounded-lg border text-sm font-bold ${chipClass(g.grade)}`}>
-                  {g.grade === 'UNAVAILABLE' ? '—' : g.grade}
+                  {g.grade === 'AB' ? '—' : g.grade}
                 </span>
                 <div className="min-w-0 flex-1">
                   <div className="font-medium text-gray-900">{g.title}</div>

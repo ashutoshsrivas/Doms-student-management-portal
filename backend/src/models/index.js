@@ -1563,7 +1563,7 @@ const GradeSheet = sequelize.define('GradeSheet', {
   underscored: true,
 });
 
-const GRADE_VALUES = ['A', 'B', 'C', 'D', 'UNAVAILABLE'];
+const GRADE_VALUES = ['O', 'A+', 'A', 'B+', 'B', 'C', 'P', 'F', 'AB'];
 
 const StudentGrade = sequelize.define('StudentGrade', {
   id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },

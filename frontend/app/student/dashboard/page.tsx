@@ -312,7 +312,7 @@ function StudentDashboardContent() {
               <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-indigo-600">Average Grade</p>
               <h3 className="text-[15px] font-bold text-gray-900">
                 {gradeSummary.averageLetter || 'Not graded yet'}
-                {gradeSummary.average !== null && <span className="ml-1 text-[13px] font-medium text-gray-500">({gradeSummary.average})</span>}
+                {gradeSummary.average !== null && <span className="ml-1 text-[13px] font-medium text-gray-500">({gradeSummary.average} / 10)</span>}
               </h3>
               <p className="text-[13px] text-gray-600">
                 Across {gradeSummary.count} topic{gradeSummary.count === 1 ? '' : 's'} — tap to see each one and who graded it

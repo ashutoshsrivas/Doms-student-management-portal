@@ -19,14 +19,18 @@ type GradeRow = {
   student: { id: string; name: string; email: string; registrationNumber: string } | null;
 };
 
-const GRADES = ['A', 'B', 'C', 'D', 'UNAVAILABLE'];
-const label = (g: string) => (g === 'UNAVAILABLE' ? 'Unavailable' : g);
+const GRADES = ['O', 'A+', 'A', 'B+', 'B', 'C', 'P', 'F', 'AB'];
+const label = (g: string) => (g === 'AB' ? 'AB (absent)' : g);
 const chipClass = (g: string) => ({
-  A: 'bg-emerald-50 text-emerald-700',
-  B: 'bg-blue-50 text-blue-700',
-  C: 'bg-amber-50 text-amber-700',
-  D: 'bg-orange-50 text-orange-700',
-  UNAVAILABLE: 'bg-gray-100 text-gray-600',
+  'O': 'bg-emerald-100 text-emerald-800',
+  'A+': 'bg-emerald-50 text-emerald-700',
+  'A': 'bg-green-50 text-green-700',
+  'B+': 'bg-blue-50 text-blue-700',
+  'B': 'bg-sky-50 text-sky-700',
+  'C': 'bg-amber-50 text-amber-700',
+  'P': 'bg-orange-50 text-orange-700',
+  'F': 'bg-red-50 text-red-700',
+  'AB': 'bg-gray-100 text-gray-600',
 }[g] || 'bg-gray-100 text-gray-600');
 
 function Content() {
@@ -264,7 +268,7 @@ function Content() {
 
       {canEdit && (
         <p className="text-xs text-gray-500">
-          Tip: download the template, fill the <span className="font-semibold">Grade</span> column with A, B, C, D or Unavailable,
+          Tip: download the template, fill the <span className="font-semibold">Grade</span> column with O, A+, A, B+, B, C, P, F or AB,
           and upload it back. Rows without a grade are left untouched; the Section column is there to sort by and is ignored on upload.
         </p>
       )}

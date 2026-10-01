@@ -544,6 +544,20 @@ async function start() {
         console.error('Error adding total_strength to classes:', error.message);
       }
     }
+    // Grade scale moved from A/B/C/D/UNAVAILABLE to the 10-point letters.
+    // Widening the ENUM keeps every existing value that is still valid.
+    try {
+      await sequelize.query(
+        `ALTER TABLE student_grades MODIFY COLUMN grade ENUM('O','A+','A','B+','B','C','P','F','AB') NOT NULL`,
+      );
+      console.log('student_grades.grade ENUM is up to date');
+    } catch (error) {
+      if (error.message && error.message.includes("doesn't exist")) {
+        // fresh install — sync creates the table with the right ENUM
+      } else {
+        console.error('Error updating student_grades.grade ENUM:', error.message);
+      }
+    }
     try {
       await sequelize.query(`ALTER TABLE student_sessions ADD COLUMN section_id CHAR(36) NULL`);
       console.log('Added section_id column to student_sessions');

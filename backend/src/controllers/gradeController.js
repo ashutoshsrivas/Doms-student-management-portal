@@ -11,10 +11,12 @@ const {
   User,
 } = require('../models');
 
-// Points behind the average shown to students. UNAVAILABLE is skipped, never
-// counted as a zero.
-const GRADE_POINTS = { A: 4, B: 3, C: 2, D: 1 };
-const LETTER_FOR = (avg) => (avg >= 3.5 ? 'A' : avg >= 2.5 ? 'B' : avg >= 1.5 ? 'C' : 'D');
+// Points behind the average shown to students. F counts as a zero; AB
+// (absent) is skipped entirely, so it never drags the average down.
+const GRADE_POINTS = { O: 10, 'A+': 9, A: 8, 'B+': 7, B: 6, C: 5, P: 4, F: 0 };
+const LETTER_FOR = (avg) => Object.entries(GRADE_POINTS)
+  .reduce((best, [letter, points]) =>
+    (Math.abs(points - avg) < Math.abs(GRADE_POINTS[best] - avg) ? letter : best), 'O');
 
 const ORG_ADMIN_ROLES = ['ADMIN', 'HOD'];
 const isOrgAdmin = (role) => ORG_ADMIN_ROLES.includes(role);
@@ -22,10 +24,13 @@ const canManageSheet = (sheet, req) => sheet.createdBy === req.user.id || isOrgA
 
 const fullName = (u) => (u ? `${u.firstName || ''} ${u.lastName || ''}`.trim() : '');
 const normaliseGrade = (v) => {
-  const g = String(v ?? '').trim().toUpperCase();
+  // Tolerate spacing and common spellings: "a +" -> A+, "absent"/"NA" -> AB.
+  const g = String(v ?? '').trim().toUpperCase().replace(/\s+/g, '');
   if (!g) return null;
   if (GRADE_VALUES.includes(g)) return g;
-  if (['UNAVAILABLE', 'NA', 'N/A', 'U', '-'].includes(g)) return 'UNAVAILABLE';
+  if (['AB', 'ABSENT', 'UNAVAILABLE', 'NA', 'N/A', '-'].includes(g)) return 'AB';
+  if (['FAIL', 'FAILED'].includes(g)) return 'F';
+  if (['PASS', 'PASSED'].includes(g)) return 'P';
   return null;
 };
 
@@ -322,7 +327,7 @@ const gradeController = {
       const gradeBy = new Map(existing.map((g) => [g.studentSessionId, g.grade]));
 
       // Section is informational only — the import ignores it.
-      const header = ['Student Session ID', 'Registration No', 'Name', 'Email', 'Section', 'Grade (A/B/C/D/Unavailable)'];
+      const header = ['Student Session ID', 'Registration No', 'Name', 'Email', 'Section', `Grade (${GRADE_VALUES.join('/')})`];
       const data = rows
         .filter((r) => r.Student)
         .map((r) => ({
@@ -331,7 +336,7 @@ const gradeController = {
           'Name': fullName(r.Student),
           'Email': r.Student.email || '',
           'Section': r.Section?.name || '',
-          'Grade (A/B/C/D/Unavailable)': gradeBy.get(r.id) || '',
+          [`Grade (${GRADE_VALUES.join('/')})`]: gradeBy.get(r.id) || '',
         }))
         .sort((a, b) => (a.Section || '').localeCompare(b.Section || '') || a.Name.localeCompare(b.Name));
 
