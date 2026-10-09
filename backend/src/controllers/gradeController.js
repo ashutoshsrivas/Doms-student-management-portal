@@ -53,6 +53,7 @@ const shapeGrade = (g) => ({
   remark: g.remark || '',
   gradedAt: g.gradedAt,
   gradedByName: fullName(g.Grader),
+  section: g.StudentSession?.Section?.name || '',
   student: g.StudentSession?.Student
     ? {
       id: g.StudentSession.Student.id,
@@ -135,7 +136,10 @@ const gradeController = {
         include: [
           {
             model: StudentSession,
-            include: [{ model: User, as: 'Student', attributes: ['id', 'firstName', 'lastName', 'email', 'registrationNumber'] }],
+            include: [
+              { model: User, as: 'Student', attributes: ['id', 'firstName', 'lastName', 'email', 'registrationNumber'] },
+              { model: SessionSection, as: 'Section', attributes: ['id', 'name'] },
+            ],
           },
           { model: User, as: 'Grader', attributes: ['id', 'firstName', 'lastName'] },
         ],
@@ -446,6 +450,68 @@ const gradeController = {
     } catch (err) {
       console.error('grade.uploadGrades error:', err);
       res.status(500).json({ message: 'Failed to process the Excel file' });
+    }
+  },
+
+  // GET /api/grades/export?sessionId= — every grade across the lists this
+  // user can see, for building a report. Same visibility as listSheets.
+  exportAll: async (req, res) => {
+    try {
+      if (req.user.role === 'STUDENT') return res.status(403).json({ message: 'Not authorized' });
+      const where = isOrgAdmin(req.user.role) ? {} : { createdBy: req.user.id };
+      if (req.query.sessionId) where.academicSessionId = req.query.sessionId;
+
+      const sheets = await GradeSheet.findAll({
+        where,
+        include: [
+          { model: AcademicSession, attributes: ['id', 'name'] },
+          { model: User, as: 'Creator', attributes: ['id', 'firstName', 'lastName'] },
+        ],
+        order: [['createdAt', 'DESC']],
+      });
+      if (sheets.length === 0) return res.json({ sheets: [], rows: [] });
+
+      const grades = await StudentGrade.findAll({
+        where: { gradeSheetId: { [Op.in]: sheets.map((s) => s.id) } },
+        include: [
+          {
+            model: StudentSession,
+            include: [
+              { model: User, as: 'Student', attributes: ['id', 'firstName', 'lastName', 'email', 'registrationNumber'] },
+              { model: SessionSection, as: 'Section', attributes: ['id', 'name'] },
+            ],
+          },
+          { model: User, as: 'Grader', attributes: ['id', 'firstName', 'lastName'] },
+        ],
+      });
+
+      const sheetById = new Map(sheets.map((s) => [s.id, s]));
+      const rows = grades.map((g) => {
+        const sheet = sheetById.get(g.gradeSheetId);
+        const shaped = shapeGrade(g);
+        return {
+          sheetId: g.gradeSheetId,
+          title: sheet ? sheet.title : '',
+          sessionName: sheet?.AcademicSession?.name || '',
+          createdByName: sheet ? fullName(sheet.Creator) : '',
+          studentName: shaped.student?.name || '',
+          registrationNumber: shaped.student?.registrationNumber || '',
+          email: shaped.student?.email || '',
+          section: shaped.section,
+          grade: shaped.grade,
+          remark: shaped.remark,
+          gradedByName: shaped.gradedByName,
+          gradedAt: shaped.gradedAt,
+        };
+      }).sort((a, b) => a.title.localeCompare(b.title) || a.studentName.localeCompare(b.studentName));
+
+      res.json({
+        sheets: sheets.map((s) => shapeSheet(s, rows.filter((r) => r.sheetId === s.id).length)),
+        rows,
+      });
+    } catch (err) {
+      console.error('grade.exportAll error:', err);
+      res.status(500).json({ message: 'Failed to build the report' });
     }
   },
 

@@ -11,6 +11,7 @@ router.get('/me', gradeController.myGrades);
 
 // Staff: grading lists (students are refused inside the controller)
 router.get('/sheets', gradeController.listSheets);
+router.get('/export', gradeController.exportAll);
 router.post('/sheets', gradeController.createSheet);
 router.get('/sheets/:id', gradeController.getSheet);
 router.patch('/sheets/:id', gradeController.updateSheet);

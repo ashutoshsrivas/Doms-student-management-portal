@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
-import { FiArrowLeft, FiDownload, FiUpload, FiSearch, FiTrash2, FiSave } from 'react-icons/fi';
+import { FiArrowLeft, FiDownload, FiUpload, FiSearch, FiTrash2, FiSave, FiFileText } from 'react-icons/fi';
 import apiClient from '@/app/lib/apiClient';
 import DashboardLayout from '@/app/components/DashboardLayout';
 import ProtectedRoute from '@/app/components/ProtectedRoute';
@@ -121,6 +121,74 @@ function Content() {
     }
   };
 
+  // Report of this list, following whatever filter is on screen.
+  const reportRows = () => filtered.map((st) => {
+    const row = grades.find((g) => g.studentSessionId === st.studentSessionId);
+    return {
+      Student: st.name,
+      'Student ID': st.registrationNumber,
+      Section: st.section || '',
+      Grade: row ? row.grade : '',
+      'Graded by': row?.gradedByName || '',
+      'Graded on': row?.gradedAt ? String(row.gradedAt).slice(0, 10) : '',
+      Email: st.email,
+    };
+  });
+
+  const exportExcel = async () => {
+    try {
+      const XLSX = await import('xlsx');
+      const rows = reportRows();
+      const ws = XLSX.utils.json_to_sheet(rows);
+      ws['!cols'] = [{ wch: 26 }, { wch: 14 }, { wch: 12 }, { wch: 8 }, { wch: 22 }, { wch: 12 }, { wch: 30 }];
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Grades');
+      const graded = rows.filter((r) => r.Grade).length;
+      const info = XLSX.utils.json_to_sheet([
+        { Metric: 'Grading list', Value: sheet?.title || '' },
+        { Metric: 'Session', Value: sheet?.sessionName || '' },
+        { Metric: 'Section filter', Value: sectionFilter === 'ALL' ? 'All sections' : sectionFilter === 'NONE' ? 'No section' : sectionFilter },
+        { Metric: 'Students listed', Value: rows.length },
+        { Metric: 'Graded', Value: graded },
+        { Metric: 'Not graded', Value: rows.length - graded },
+        { Metric: 'Downloaded on', Value: new Date().toLocaleString() },
+      ]);
+      info['!cols'] = [{ wch: 20 }, { wch: 34 }];
+      XLSX.utils.book_append_sheet(wb, info, 'Summary');
+      const safe = (sheet?.title || 'grades').replace(/[^a-z0-9]+/gi, '-').toLowerCase();
+      XLSX.writeFile(wb, `${safe}-report.xlsx`);
+      toast.success(`Exported ${rows.length} row(s)`);
+    } catch {
+      toast.error('Export failed');
+    }
+  };
+
+  const exportPdf = async () => {
+    try {
+      const { jsPDF } = await import('jspdf');
+      const autoTable = (await import('jspdf-autotable')).default;
+      const rows = reportRows();
+      const doc = new jsPDF();
+      doc.setFontSize(15);
+      doc.text(sheet?.title || 'Grading list', 14, 16);
+      doc.setFontSize(10);
+      const scope = sectionFilter === 'ALL' ? 'All sections' : sectionFilter === 'NONE' ? 'No section' : sectionFilter;
+      doc.text(`${sheet?.sessionName || ''} · ${scope} · ${rows.filter((r) => r.Grade).length} of ${rows.length} graded`, 14, 23);
+      autoTable(doc, {
+        startY: 29,
+        head: [['Student', 'Student ID', 'Section', 'Grade', 'Graded by']],
+        body: rows.map((r) => [r.Student, r['Student ID'], r.Section, r.Grade, r['Graded by']]),
+        styles: { fontSize: 9, cellPadding: 2 },
+        headStyles: { fillColor: [37, 99, 235] },
+      });
+      const safe = (sheet?.title || 'grades').replace(/[^a-z0-9]+/gi, '-').toLowerCase();
+      doc.save(`${safe}-report.pdf`);
+      toast.success('PDF downloaded');
+    } catch {
+      toast.error('Export failed');
+    }
+  };
+
   const downloadTemplate = async () => {
     try {
       const res = await apiClient.get(`/grades/sheets/${sheetId}/template`, { responseType: 'blob' });
@@ -181,6 +249,16 @@ function Content() {
             </p>
             {sheet.description && <p className="mt-1 text-sm text-gray-600">{sheet.description}</p>}
           </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button type="button" onClick={exportExcel}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-2 text-sm font-semibold text-white hover:bg-green-700">
+            <FiDownload className="h-4 w-4" /> Export report
+          </button>
+          <button type="button" onClick={exportPdf}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">
+            <FiFileText className="h-4 w-4" /> PDF
+          </button>
         </div>
         {canEdit && (
           <div className="flex flex-wrap items-center gap-2">

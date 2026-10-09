@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
-import { FiPlus, FiSearch, FiUsers, FiCalendar, FiTrash2, FiEdit2 } from 'react-icons/fi';
+import { FiPlus, FiSearch, FiUsers, FiCalendar, FiTrash2, FiEdit2, FiDownload, FiFileText } from 'react-icons/fi';
 import apiClient from '@/app/lib/apiClient';
 import DashboardLayout from '@/app/components/DashboardLayout';
 import ProtectedRoute from '@/app/components/ProtectedRoute';
@@ -34,6 +34,7 @@ function Content() {
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
   const [creating, setCreating] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [editing, setEditing] = useState<Sheet | null>(null);
 
   const load = async () => {
@@ -77,6 +78,86 @@ function Content() {
 
   const canEdit = (s: Sheet) => s.createdBy === user?.id || ['ADMIN', 'HOD'].includes(user?.role || '');
 
+  // Report over every grading list this user can see.
+  const fetchReport = async () => {
+    const { data } = await apiClient.get('/grades/export');
+    if (!data.rows || data.rows.length === 0) {
+      toast.error('Nothing to export yet — no grades have been given.');
+      return null;
+    }
+    return data as { sheets: Sheet[]; rows: Record<string, string>[] };
+  };
+
+  const exportExcel = async () => {
+    try {
+      setExporting(true);
+      const data = await fetchReport();
+      if (!data) return;
+      const XLSX = await import('xlsx');
+      const wb = XLSX.utils.book_new();
+
+      const ws1 = XLSX.utils.json_to_sheet(data.rows.map((r) => ({
+        'Grading list': r.title,
+        Session: r.sessionName,
+        Student: r.studentName,
+        'Student ID': r.registrationNumber,
+        Section: r.section,
+        Grade: r.grade,
+        'Graded by': r.gradedByName,
+        'Graded on': r.gradedAt ? String(r.gradedAt).slice(0, 10) : '',
+        Remark: r.remark,
+        Email: r.email,
+      })));
+      ws1['!cols'] = [{ wch: 30 }, { wch: 24 }, { wch: 26 }, { wch: 14 }, { wch: 12 }, { wch: 8 }, { wch: 22 }, { wch: 12 }, { wch: 28 }, { wch: 30 }];
+      XLSX.utils.book_append_sheet(wb, ws1, 'Grades');
+
+      const ws2 = XLSX.utils.json_to_sheet(data.sheets.map((sh) => ({
+        'Grading list': sh.title,
+        Session: sh.sessionName,
+        'Created by': sh.createdByName,
+        'Students graded': sh.gradeCount,
+        Created: sh.createdAt ? String(sh.createdAt).slice(0, 10) : '',
+      })));
+      ws2['!cols'] = [{ wch: 30 }, { wch: 24 }, { wch: 22 }, { wch: 16 }, { wch: 12 }];
+      XLSX.utils.book_append_sheet(wb, ws2, 'Lists');
+
+      XLSX.writeFile(wb, `grading-report-${new Date().toISOString().slice(0, 10)}.xlsx`);
+      toast.success(`Exported ${data.rows.length} grade(s)`);
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Export failed');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const exportPdf = async () => {
+    try {
+      setExporting(true);
+      const data = await fetchReport();
+      if (!data) return;
+      const { jsPDF } = await import('jspdf');
+      const autoTable = (await import('jspdf-autotable')).default;
+      const doc = new jsPDF({ orientation: 'landscape' });
+      doc.setFontSize(16);
+      doc.text('Grading Report', 14, 16);
+      doc.setFontSize(10);
+      doc.text(`${data.rows.length} grade(s) across ${data.sheets.length} list(s) · ${new Date().toLocaleDateString()}`, 14, 23);
+      autoTable(doc, {
+        startY: 29,
+        head: [['Grading list', 'Student', 'Student ID', 'Section', 'Grade', 'Graded by']],
+        body: data.rows.map((r) => [r.title, r.studentName, r.registrationNumber, r.section, r.grade, r.gradedByName]),
+        styles: { fontSize: 8, cellPadding: 2 },
+        headStyles: { fillColor: [37, 99, 235] },
+      });
+      doc.save(`grading-report-${new Date().toISOString().slice(0, 10)}.pdf`);
+      toast.success('PDF downloaded');
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Export failed');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div className="mx-auto max-w-5xl space-y-4 p-4 sm:p-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -92,6 +173,14 @@ function Content() {
             <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search title, session…"
               className="w-60 rounded-lg border border-gray-200 bg-white py-2 pl-8 pr-3 text-sm text-gray-900" />
           </div>
+          <button type="button" onClick={exportExcel} disabled={exporting}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-60">
+            <FiDownload className="h-4 w-4" /> {exporting ? 'Preparing…' : 'Export report'}
+          </button>
+          <button type="button" onClick={exportPdf} disabled={exporting}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60">
+            <FiFileText className="h-4 w-4" /> PDF
+          </button>
           <button type="button" onClick={() => setCreating(true)}
             className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700">
             <FiPlus className="h-4 w-4" /> New List
