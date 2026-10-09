@@ -3,13 +3,19 @@ const router = express.Router();
 const examController = require('../controllers/examController');
 const { authenticateToken, authorizeRole } = require('../middleware/auth');
 
-// Hidden /exams sub-portal: every staff role may reach it, students never.
+// The /exams sub-portal is standalone: it signs people in itself (same
+// credentials as DOMS) and students are refused both here and at login.
+router.post('/login', examController.login);
+router.post('/refresh', examController.refresh);
+
 const STAFF_ROLES = [
   'ADMIN', 'HOD', 'FACULTY', 'CHAIR_HEAD',
   'COORDINATOR', 'PLACEMENT_COORDINATOR', 'TRAINER', 'MENTOR',
 ];
 router.use(authenticateToken, authorizeRole(...STAFF_ROLES));
 
+router.get('/me', examController.me);
+router.get('/sessions', examController.listSessions);
 router.get('/staff', examController.listStaff);
 
 router.get('/courses', examController.listCourses);

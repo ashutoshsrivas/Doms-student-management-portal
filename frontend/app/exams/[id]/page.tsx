@@ -7,7 +7,7 @@ import {
   FiArrowLeft, FiPlus, FiTrash2, FiEdit2, FiSearch, FiDownload,
   FiRefreshCw, FiUsers, FiTarget, FiHelpCircle, FiX,
 } from 'react-icons/fi';
-import apiClient from '@/app/lib/apiClient';
+import examsApi from '../lib/api';
 import ExamShell from '../ExamShell';
 
 type Course = { id: string; title: string; code: string; trimester: string; sessionName: string; questionCount: number };
@@ -48,7 +48,7 @@ function Content() {
   const load = useCallback(async () => {
     try {
       setLoading(true);
-      const { data } = await apiClient.get(`/exams/courses/${courseId}`);
+      const { data } = await examsApi.get(`/exams/courses/${courseId}`);
       setCourse(data.course);
       setOutcomes(data.outcomes || []);
       setQuestions(data.questions || []);
@@ -133,8 +133,8 @@ function QuestionBank({ courseId, questions, outcomes, reload }: {
         type: editing.type,
         courseOutcomeId: editing.courseOutcomeId || null,
       };
-      if (editing.id) await apiClient.patch(`/exams/questions/${editing.id}`, body);
-      else await apiClient.post(`/exams/courses/${courseId}/questions`, body);
+      if (editing.id) await examsApi.patch(`/exams/questions/${editing.id}`, body);
+      else await examsApi.post(`/exams/courses/${courseId}/questions`, body);
       toast.success(editing.id ? 'Question updated' : 'Question added');
       setEditing(null);
       await reload();
@@ -148,7 +148,7 @@ function QuestionBank({ courseId, questions, outcomes, reload }: {
   const remove = async (q: Question) => {
     if (!confirm('Remove this question from the bank?')) return;
     try {
-      await apiClient.delete(`/exams/questions/${q.id}`);
+      await examsApi.delete(`/exams/questions/${q.id}`);
       toast.success('Removed');
       await reload();
     } catch (e: any) {
@@ -269,7 +269,7 @@ function Outcomes({ courseId, outcomes, reload }: { courseId: string; outcomes: 
     if (!code.trim()) { toast.error('CO code is required'); return; }
     try {
       setSaving(true);
-      await apiClient.post(`/exams/courses/${courseId}/outcomes`, { code: code.trim(), description: description.trim() || null });
+      await examsApi.post(`/exams/courses/${courseId}/outcomes`, { code: code.trim(), description: description.trim() || null });
       toast.success('CO added');
       setCode(''); setDescription('');
       await reload();
@@ -283,7 +283,7 @@ function Outcomes({ courseId, outcomes, reload }: { courseId: string; outcomes: 
   const remove = async (o: Outcome) => {
     if (!confirm(`Remove ${o.code}? Questions keep their text but lose the CO tag.`)) return;
     try {
-      const { data } = await apiClient.delete(`/exams/outcomes/${o.id}`);
+      const { data } = await examsApi.delete(`/exams/outcomes/${o.id}`);
       toast.success(data.message || 'Removed');
       await reload();
     } catch (e: any) {
@@ -341,7 +341,7 @@ function People({ courseId, assignees, reload }: { courseId: string; assignees: 
   useEffect(() => {
     (async () => {
       try {
-        const { data } = await apiClient.get('/exams/staff');
+        const { data } = await examsApi.get('/exams/staff');
         setStaff(data.staff || []);
       } catch { /* ignore */ }
     })();
@@ -359,7 +359,7 @@ function People({ courseId, assignees, reload }: { courseId: string; assignees: 
     if (picked.length === 0) { toast.error('Pick at least one person'); return; }
     try {
       setSaving(true);
-      const { data } = await apiClient.post(`/exams/courses/${courseId}/assignees`, { userIds: picked });
+      const { data } = await examsApi.post(`/exams/courses/${courseId}/assignees`, { userIds: picked });
       toast.success(data.message || 'Assigned');
       setPicked([]);
       await reload();
@@ -373,7 +373,7 @@ function People({ courseId, assignees, reload }: { courseId: string; assignees: 
   const unassign = async (p: Person) => {
     if (!confirm(`Remove ${p.name} from this course?`)) return;
     try {
-      await apiClient.delete(`/exams/courses/${courseId}/assignees/${p.id}`);
+      await examsApi.delete(`/exams/courses/${courseId}/assignees/${p.id}`);
       toast.success('Removed');
       await reload();
     } catch (e: any) {
@@ -448,7 +448,7 @@ function PaperBuilder({ courseId, course }: { courseId: string; course: Course }
   const shuffle = async () => {
     try {
       setLoading(true);
-      const { data } = await apiClient.get(`/exams/courses/${courseId}/paper/preview`, { params: { difficulty } });
+      const { data } = await examsApi.get(`/exams/courses/${courseId}/paper/preview`, { params: { difficulty } });
       setPreview(data);
       if (data.shortfall?.length) toast.error(`Bank is short: ${data.shortfall.join(', ')}`, { duration: 6000 });
     } catch (e: any) {
@@ -464,7 +464,7 @@ function PaperBuilder({ courseId, course }: { courseId: string; course: Course }
     const ids = (preview.mains || []).flat().filter(Boolean).map((q: Question) => q.id);
     if (ids.length !== 9) { toast.error('Need 9 ten-mark questions of this difficulty in the bank'); return; }
     try {
-      const res = await apiClient.post(`/exams/courses/${courseId}/paper`,
+      const res = await examsApi.post(`/exams/courses/${courseId}/paper`,
         { questionIds: ids, caseStudyId: preview.caseStudy?.id || null, header },
         { responseType: 'blob' });
       const url = URL.createObjectURL(new Blob([res.data]));

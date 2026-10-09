@@ -1,8 +1,10 @@
 const { Op } = require('sequelize');
+const jwt = require('jsonwebtoken');
 const {
   Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
   AlignmentType, WidthType, BorderStyle, TabStopType, TabStopPosition,
 } = require('docx');
+const { effectiveRole } = require('../middleware/auth');
 const {
   sequelize,
   ExamCourse,
@@ -20,6 +22,30 @@ const {
 const isExamAdmin = (user) => ['ADMIN', 'HOD'].includes(user.role);
 const isStudent = (user) => user.role === 'STUDENT';
 const fullName = (u) => (u ? `${u.firstName || ''} ${u.lastName || ''}`.trim() : '');
+
+// The portal issues its own tokens. Same secret and payload as the DOMS
+// sign-in, so one set of credentials works in both places.
+const REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET;
+const signAccessToken = (user) => jwt.sign(
+  { id: user.id, email: user.email, role: user.approvedRole, status: user.status },
+  process.env.JWT_SECRET,
+  { expiresIn: '24h' },
+);
+const signRefreshToken = (user) => jwt.sign(
+  { id: user.id, email: user.email, typ: 'refresh' },
+  REFRESH_SECRET,
+  { expiresIn: '7d' },
+);
+const publicUser = (user) => ({
+  id: user.id,
+  email: user.email,
+  firstName: user.firstName,
+  lastName: user.lastName,
+  name: fullName(user),
+  role: effectiveRole(user.approvedRole),
+  approvedRole: user.approvedRole,
+  isAdmin: ['ADMIN', 'HOD'].includes(effectiveRole(user.approvedRole)),
+});
 
 async function assignedCourseIds(userId) {
   const rows = await ExamCourseAssignee.findAll({ where: { userId }, attributes: ['courseId'] });
@@ -605,6 +631,87 @@ const examController = {
     } catch (err) {
       console.error('exam.listStaff error:', err);
       res.status(500).json({ message: 'Failed to load staff' });
+    }
+  },
+
+  // POST /api/exams/login — the exams portal signs people in itself.
+  login: async (req, res) => {
+    const { email, password } = req.body || {};
+    if (!email || !password) {
+      return res.status(400).json({ message: 'Email and password are required' });
+    }
+    try {
+      const user = await User.findOne({ where: { email: String(email).trim() } });
+      if (!user) return res.status(401).json({ message: 'Invalid credentials' });
+
+      const ok = await user.comparePassword(password);
+      if (!ok) return res.status(401).json({ message: 'Invalid credentials' });
+
+      if (user.status === 'PENDING') return res.status(403).json({ message: 'Your account is pending approval' });
+      if (user.status === 'REJECTED') return res.status(403).json({ message: 'Your account request has been rejected' });
+      if (user.status === 'INACTIVE') return res.status(403).json({ message: 'Your account is inactive' });
+      if (!user.approvedRole) return res.status(403).json({ message: 'No role assigned to your account' });
+
+      // Students have no business in the exams portal — refused at the door.
+      if (effectiveRole(user.approvedRole) === 'STUDENT') {
+        return res.status(403).json({ message: 'The exams portal is for faculty and staff only' });
+      }
+
+      await user.update({ lastLogin: new Date() });
+      res.json({
+        message: 'Login successful',
+        token: signAccessToken(user),
+        refreshToken: signRefreshToken(user),
+        user: publicUser(user),
+      });
+    } catch (err) {
+      console.error('exam.login error:', err);
+      res.status(500).json({ message: 'Login failed' });
+    }
+  },
+
+  // POST /api/exams/refresh — keep a portal session alive without the DOMS app.
+  refresh: async (req, res) => {
+    const { refreshToken } = req.body || {};
+    if (!refreshToken) return res.status(400).json({ message: 'Refresh token is required' });
+    try {
+      const payload = jwt.verify(refreshToken, REFRESH_SECRET);
+      const user = await User.findByPk(payload.id);
+      if (!user || user.status !== 'ACTIVE' || !user.approvedRole) {
+        return res.status(401).json({ message: 'Session expired' });
+      }
+      if (effectiveRole(user.approvedRole) === 'STUDENT') {
+        return res.status(403).json({ message: 'The exams portal is for faculty and staff only' });
+      }
+      res.json({ token: signAccessToken(user), user: publicUser(user) });
+    } catch (err) {
+      res.status(401).json({ message: 'Session expired' });
+    }
+  },
+
+  // GET /api/exams/me — restore the signed-in user on reload.
+  me: async (req, res) => {
+    try {
+      const user = await User.findByPk(req.user.id);
+      if (!user) return res.status(401).json({ message: 'Session expired' });
+      res.json({ user: publicUser(user) });
+    } catch (err) {
+      console.error('exam.me error:', err);
+      res.status(500).json({ message: 'Failed to load your account' });
+    }
+  },
+
+  // GET /api/exams/sessions — sessions a course can belong to.
+  listSessions: async (req, res) => {
+    try {
+      const sessions = await AcademicSession.findAll({
+        attributes: ['id', 'name', 'isActive'],
+        order: [['isActive', 'DESC'], ['startDate', 'DESC']],
+      });
+      res.json({ sessions: sessions.map((s) => ({ id: s.id, name: s.name, isActive: !!s.isActive })) });
+    } catch (err) {
+      console.error('exam.listSessions error:', err);
+      res.status(500).json({ message: 'Failed to load sessions' });
     }
   },
 };

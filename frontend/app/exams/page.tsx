@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { FiPlus, FiBookOpen, FiUsers, FiTrash2, FiEdit2, FiSearch } from 'react-icons/fi';
-import apiClient from '@/app/lib/apiClient';
+import examsApi from './lib/api';
 import ExamShell from './ExamShell';
 
 type Course = {
@@ -32,7 +32,7 @@ function Content() {
   const load = useCallback(async () => {
     try {
       setLoading(true);
-      const { data } = await apiClient.get('/exams/courses');
+      const { data } = await examsApi.get('/exams/courses');
       setCourses(data.courses || []);
       setIsAdmin(!!data.isAdmin);
     } catch (e: any) {
@@ -46,7 +46,7 @@ function Content() {
     load();
     (async () => {
       try {
-        const { data } = await apiClient.get('/sessions', { params: { page: 1, limit: 100 } });
+        const { data } = await examsApi.get('/exams/sessions');
         setSessions(data.sessions || []);
       } catch { /* ignore */ }
     })();
@@ -64,8 +64,8 @@ function Content() {
         trimester: editing.trimester || null,
         academicSessionId: editing.academicSessionId,
       };
-      if (editing.id) await apiClient.patch(`/exams/courses/${editing.id}`, body);
-      else await apiClient.post('/exams/courses', body);
+      if (editing.id) await examsApi.patch(`/exams/courses/${editing.id}`, body);
+      else await examsApi.post('/exams/courses', body);
       toast.success(editing.id ? 'Course updated' : 'Course created');
       setEditing(null);
       await load();
@@ -79,7 +79,7 @@ function Content() {
   const remove = async (c: Course) => {
     if (!confirm(`Delete "${c.title}"? Its ${c.questionCount} question(s) and COs go too.`)) return;
     try {
-      const { data } = await apiClient.delete(`/exams/courses/${c.id}`);
+      const { data } = await examsApi.delete(`/exams/courses/${c.id}`);
       toast.success(data.message || 'Deleted');
       await load();
     } catch (e: any) {
