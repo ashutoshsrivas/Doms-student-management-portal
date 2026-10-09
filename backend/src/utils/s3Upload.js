@@ -29,6 +29,27 @@ const uploadToS3 = async (fileBuffer, fileName, mimeType, folder = 'profiles') =
   }
 };
 
+// Same as uploadToS3 but streams from a file on disk, so large videos never
+// have to be held in memory.
+const uploadFileToS3 = async (filePath, fileName, mimeType, folder = 'uploads') => {
+  const fs = require('fs');
+  const uniqueFileName = `${uuidv4()}-${Date.now()}${path.extname(fileName)}`;
+  const key = `${process.env.S3_PREFIX || ''}${folder}/${uniqueFileName}`;
+  const stream = fs.createReadStream(filePath);
+  try {
+    const result = await s3.upload({
+      Bucket: process.env.S3_BUCKET,
+      Key: key,
+      Body: stream,
+      ContentType: mimeType,
+      ACL: process.env.S3_ACL || 'public-read',
+    }).promise();
+    return result.Location;
+  } finally {
+    stream.destroy();
+  }
+};
+
 const deleteFromS3 = async (imageUrl) => {
   try {
     if (!imageUrl) return;
@@ -96,4 +117,5 @@ module.exports = {
   copyS3Object,
   getS3ObjectUrl,
   getS3ObjectStream,
+  uploadFileToS3,
 };

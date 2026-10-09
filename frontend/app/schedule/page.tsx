@@ -6,7 +6,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { FiSave, FiPlus, FiTrash2, FiX, FiPrinter, FiRotateCcw, FiStar, FiEdit2 } from 'react-icons/fi';
+import { FiSave, FiPlus, FiTrash2, FiX, FiPrinter, FiRotateCcw, FiStar, FiEdit2, FiUpload, FiImage, FiVideo } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 import useAuthStore from '@/app/store/authStore';
 import apiClient from '@/app/lib/apiClient';
@@ -601,19 +601,76 @@ function BlockModal({
 // ---------------------------------------------------------------------
 // Extra Contribution: self-contained CRUD panel below the grid.
 // (Backed by /schedule/achievements/* on the server; label change only.)
+interface ContributionMedia {
+  id: string;
+  url: string;
+  kind: 'IMAGE' | 'VIDEO';
+  fileName?: string | null;
+  sizeBytes?: number | null;
+}
 interface Contribution {
   id: string;
   title: string;
   category?: string | null;
   description?: string | null;
   achievedOn?: string | null;
+  Media?: ContributionMedia[];
 }
+
+const MAX_MEDIA = 10;
+const MAX_FILE_BYTES = 200 * 1024 * 1024;
+const prettySize = (b?: number | null) => {
+  if (!b) return '';
+  const mb = b / (1024 * 1024);
+  return mb >= 1 ? `${mb.toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`;
+};
 
 function ContributionsPanel() {
   const [items, setItems] = useState<Contribution[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Partial<Contribution> | null>(null);
   const [saving, setSaving] = useState(false);
+  const [uploadingFor, setUploadingFor] = useState<string | null>(null);
+
+  // Upload images/videos onto one contribution. Each file up to 200 MB,
+  // 10 files per contribution.
+  const uploadMedia = async (contributionId: string, fileList: FileList | null) => {
+    if (!fileList || fileList.length === 0) return;
+    const files = Array.from(fileList);
+    const tooBig = files.find((f) => f.size > MAX_FILE_BYTES);
+    if (tooBig) {
+      toast.error(`${tooBig.name} is larger than 200 MB`);
+      return;
+    }
+    const already = items.find((i) => i.id === contributionId)?.Media?.length || 0;
+    if (already + files.length > MAX_MEDIA) {
+      toast.error(`Up to ${MAX_MEDIA} files per contribution — this one already has ${already}`);
+      return;
+    }
+    const fd = new FormData();
+    files.forEach((f) => fd.append('files', f));
+    try {
+      setUploadingFor(contributionId);
+      const { data } = await apiClient.post(`/schedule/achievements/${contributionId}/media`, fd);
+      toast.success(data.message || 'Uploaded');
+      await load();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Upload failed');
+    } finally {
+      setUploadingFor(null);
+    }
+  };
+
+  const removeMedia = async (contributionId: string, mediaId: string) => {
+    if (!confirm('Remove this file?')) return;
+    try {
+      await apiClient.delete(`/schedule/achievements/${contributionId}/media/${mediaId}`);
+      toast.success('File removed');
+      await load();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Could not remove the file');
+    }
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -686,6 +743,7 @@ function ContributionsPanel() {
           </h2>
           <p className="text-xs text-gray-500">
             Publications, awards, workshops, certifications, patents — anything worth noting.
+            Attach photos or videos to each one.
           </p>
         </div>
         <button
@@ -723,6 +781,49 @@ function ContributionsPanel() {
                   {a.description && (
                     <div className="text-sm text-gray-600 mt-0.5 whitespace-pre-line">{a.description}</div>
                   )}
+
+                  {(a.Media?.length || 0) > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {a.Media!.map((m) => (
+                        <div key={m.id} className="relative group">
+                          <a href={m.url} target="_blank" rel="noopener noreferrer" title={m.fileName || ''}>
+                            {m.kind === 'IMAGE' ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={m.url} alt={m.fileName || 'photo'} className="h-16 w-16 rounded object-cover border border-gray-200" />
+                            ) : (
+                              <span className="flex h-16 w-16 flex-col items-center justify-center gap-1 rounded border border-gray-200 bg-gray-50 text-gray-600">
+                                <FiVideo className="h-5 w-5" />
+                                <span className="text-[9px]">{prettySize(m.sizeBytes)}</span>
+                              </span>
+                            )}
+                          </a>
+                          <button
+                            onClick={() => removeMedia(a.id, m.id)}
+                            title="Remove file"
+                            className="absolute -right-1.5 -top-1.5 hidden rounded-full bg-red-600 p-0.5 text-white group-hover:block"
+                          >
+                            <FiX className="h-3 w-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <label className="mt-2 inline-flex cursor-pointer items-center gap-1.5 text-xs font-semibold text-amber-700 hover:text-amber-900">
+                    <FiUpload className="h-3.5 w-3.5" />
+                    {uploadingFor === a.id ? 'Uploading…' : 'Add photos / videos'}
+                    <input
+                      type="file"
+                      accept="image/*,video/*"
+                      multiple
+                      className="hidden"
+                      disabled={uploadingFor === a.id}
+                      onChange={(e) => { uploadMedia(a.id, e.target.files); e.target.value = ''; }}
+                    />
+                  </label>
+                  <span className="ml-2 text-[11px] text-gray-400">
+                    {(a.Media?.length || 0)}/{MAX_MEDIA} files · up to 200 MB each
+                  </span>
                 </div>
                 <div className="flex items-center gap-1">
                   <button
@@ -798,6 +899,11 @@ function ContributionsPanel() {
                   maxLength={4000}
                 />
               </div>
+              <p className="text-[11px] text-gray-500">
+                {editing.id
+                  ? 'Photos and videos are added from the list below.'
+                  : 'Save first, then attach photos or videos from the list.'}
+              </p>
             </div>
             <div className="flex items-center justify-end gap-2 px-4 py-3 border-t bg-gray-50 rounded-b-xl">
               <button

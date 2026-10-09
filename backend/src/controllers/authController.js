@@ -215,6 +215,7 @@ const authController = {
           lastName: user.lastName,
           role: effectiveRole(user.approvedRole),
           approvedRole: user.approvedRole,
+          socialMediaManager: !!user.socialMediaManager,
           status: user.status,
           profileImage: user.profileImage,
         },
@@ -261,6 +262,7 @@ const authController = {
           lastName: user.lastName,
           role: effectiveRole(user.approvedRole),
           approvedRole: user.approvedRole,
+          socialMediaManager: !!user.socialMediaManager,
           status: user.status,
         },
       });
@@ -428,6 +430,7 @@ const authController = {
         department: user.department,
         employeeId: user.employeeId,
         registrationNumber: user.registrationNumber,
+        socialMediaManager: !!user.socialMediaManager,
         requestedRole: user.requestedRole,
         approvedRole: user.approvedRole,
         role: effectiveRole(user.approvedRole), // kept for components that read `role`

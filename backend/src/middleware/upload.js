@@ -1,5 +1,6 @@
 const multer = require('multer');
 const path = require('path');
+const os = require('os');
 
 // Configure multer for memory storage (file will be uploaded to S3)
 const storage = multer.memoryStorage();
@@ -128,4 +129,34 @@ const eventReportUpload = multer({
   limits: { fileSize: 25 * 1024 * 1024 },
 });
 
-module.exports = { upload, excelUpload, resumeUpload, assessmentUpload, eventMediaUpload, eventReportUpload };
+// Contribution media: images and videos up to 200 MB each. These go to a
+// temp file rather than memory — a 200 MB buffer (times several files) would
+// blow past the backend's memory ceiling. The controller streams each file to
+// S3 and deletes the temp file afterwards.
+// Temp files land on real disk, not the RAM-backed /tmp — a few 200 MB
+// uploads would otherwise exhaust memory. Override with UPLOAD_TMP_DIR.
+const uploadTmpDir = process.env.UPLOAD_TMP_DIR || path.join(os.tmpdir(), 'doms-uploads');
+try {
+  require('fs').mkdirSync(uploadTmpDir, { recursive: true });
+} catch (err) {
+  console.error('Could not create upload temp dir', uploadTmpDir, err.message);
+}
+
+const contributionMediaUpload = multer({
+  storage: multer.diskStorage({ destination: uploadTmpDir }),
+  fileFilter: (req, file, cb) => {
+    if (/^image\//.test(file.mimetype) || /^video\//.test(file.mimetype)) return cb(null, true);
+    return cb(new Error(`Only images and videos are allowed (got ${file.mimetype || 'unknown type'})`), false);
+  },
+  limits: { fileSize: 200 * 1024 * 1024, files: 10 },
+});
+
+module.exports = {
+  upload,
+  excelUpload,
+  resumeUpload,
+  assessmentUpload,
+  eventMediaUpload,
+  eventReportUpload,
+  contributionMediaUpload,
+};

@@ -57,7 +57,13 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
           setProfileImage(response.data.profileImage);
         }
         if (user) {
-          setUser({ ...user, profileImage: response.data.profileImage });
+          // Also refresh the social-media flag so a newly granted duty shows
+          // up without the person having to log out and back in.
+          setUser({
+            ...user,
+            profileImage: response.data.profileImage,
+            socialMediaManager: !!response.data.socialMediaManager,
+          });
         }
       } catch {
         // Silently fail
@@ -128,6 +134,8 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
           { name: 'All Schedules', href: '/schedule/manage', iconKey: 'list' },
         ] },
         { name: 'Announcements', href: '/admin/announcements', iconKey: 'bell', children: adminAnnouncementsChildren },
+        { name: 'Social Media', href: '/social-media', iconKey: 'zap' },
+        { name: 'Access Management', href: '/admin/access', iconKey: 'users' },
         { name: 'Landing Page', href: '/admin/landing', iconKey: 'fileText' },
       ],
       FACULTY: [
@@ -184,6 +192,8 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
         ] },
         { name: 'My Tasks', href: '/faculty/tasks', iconKey: 'clipboard' },
         { name: 'Announcements', href: '/admin/announcements', iconKey: 'bell', children: adminAnnouncementsChildren },
+        { name: 'Social Media', href: '/social-media', iconKey: 'zap' },
+        { name: 'Access Management', href: '/admin/access', iconKey: 'users' },
         { name: 'Landing Page', href: '/admin/landing', iconKey: 'fileText' },
       ],
       PLACEMENT_COORDINATOR: [
@@ -268,7 +278,15 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
     // role's sidebar (e.g. TRAINER → PLACEMENT_COORDINATOR).
     const rawRole = (user as { approvedRole?: string } | null)?.approvedRole;
     const navKey = rawRole === 'COORDINATOR' ? 'COORDINATOR' : (user?.role as string);
-    return [...(roleNav[navKey] || []), ...baseNav];
+    const nav = [...(roleNav[navKey] || [])];
+
+    // Social-media responsibility is granted per person on /admin/access, so
+    // it isn't part of any role's fixed menu.
+    const hasSocialDuty = !!(user as { socialMediaManager?: boolean } | null)?.socialMediaManager;
+    if (hasSocialDuty && !nav.some((i) => i.href === '/social-media')) {
+      nav.push({ name: 'Social Media', href: '/social-media', iconKey: 'zap' });
+    }
+    return [...nav, ...baseNav];
   };
 
   const getIcon = (iconKey: string) => {

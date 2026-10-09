@@ -35,6 +35,7 @@ const notificationPromptRoutes = require('./routes/notificationPromptRoutes');
 const nocRoutes = require('./routes/nocRoutes');
 const gradeRoutes = require('./routes/gradeRoutes');
 const sectionRoutes = require('./routes/sectionRoutes');
+const socialMediaRoutes = require('./routes/socialMediaRoutes');
 const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
@@ -94,6 +95,7 @@ app.use('/api/notification-prompts', notificationPromptRoutes);
 app.use('/api/noc', nocRoutes);
 app.use('/api/grades', gradeRoutes);
 app.use('/api/sections', sectionRoutes);
+app.use('/api/social-media', socialMediaRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
@@ -556,6 +558,16 @@ async function start() {
         // fresh install — sync creates the table with the right ENUM
       } else {
         console.error('Error updating student_grades.grade ENUM:', error.message);
+      }
+    }
+    try {
+      await sequelize.query(`ALTER TABLE users ADD COLUMN social_media_manager TINYINT(1) NOT NULL DEFAULT 0`);
+      console.log('Added social_media_manager column to users');
+    } catch (error) {
+      if (error.message && error.message.includes('Duplicate column')) {
+        console.log('social_media_manager column already exists on users');
+      } else {
+        console.error('Error adding social_media_manager to users:', error.message);
       }
     }
     try {

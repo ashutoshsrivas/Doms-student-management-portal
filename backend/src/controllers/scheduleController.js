@@ -1,5 +1,9 @@
 const { Op } = require('sequelize');
-const { sequelize, WorkBlock, User, FacultyAchievement } = require('../models');
+const fs = require('fs');
+const { sequelize, WorkBlock, User, FacultyAchievement, FacultyAchievementMedia } = require('../models');
+const { uploadFileToS3, deleteFromS3 } = require('../utils/s3Upload');
+
+const MAX_MEDIA_PER_ACHIEVEMENT = 10;
 
 // Grid bounds
 const GRID_START = 8 * 60;        // 8:00 → minute 480
@@ -24,6 +28,10 @@ const SCHEDULE_ROLES = [
 ];
 
 const isAdmin = (role) => role === 'ADMIN' || role === 'HOD';
+// Admins, HODs and whoever holds social-media responsibility may also manage
+// other people's contributions.
+const canManageAny = (user) => isAdmin(user.role) || !!user.socialMediaManager;
+const mediaInclude = { model: FacultyAchievementMedia, as: 'Media' };
 
 function validateBlocks(raw) {
   if (!Array.isArray(raw)) throw new Error('blocks must be an array');
@@ -230,6 +238,7 @@ function normaliseAchievement(body) {
 exports.listMyAchievements = async (req, res) => {
   const rows = await FacultyAchievement.findAll({
     where: { userId: req.user.id },
+    include: [mediaInclude],
     order: [['achievedOn', 'DESC'], ['createdAt', 'DESC']],
   });
   res.json({ achievements: rows });
@@ -246,7 +255,7 @@ exports.addMyAchievement = async (req, res) => {
 exports.updateAchievement = async (req, res) => {
   const row = await FacultyAchievement.findByPk(req.params.id);
   if (!row) return res.status(404).json({ message: 'Not found' });
-  if (row.userId !== req.user.id && !isAdmin(req.user.role)) {
+  if (row.userId !== req.user.id && !canManageAny(req.user)) {
     return res.status(403).json({ message: 'Forbidden' });
   }
   const clean = normaliseAchievement(req.body || {});
@@ -258,9 +267,74 @@ exports.updateAchievement = async (req, res) => {
 exports.deleteAchievement = async (req, res) => {
   const row = await FacultyAchievement.findByPk(req.params.id);
   if (!row) return res.status(404).json({ message: 'Not found' });
-  if (row.userId !== req.user.id && !isAdmin(req.user.role)) {
+  if (row.userId !== req.user.id && !canManageAny(req.user)) {
     return res.status(403).json({ message: 'Forbidden' });
   }
+  // Remove the attached files too, so nothing is orphaned in storage.
+  const media = await FacultyAchievementMedia.findAll({ where: { achievementId: row.id } });
+  for (const m of media) {
+    try { await deleteFromS3(m.url); } catch (e) { console.error('media cleanup failed:', e.message); }
+  }
+  await FacultyAchievementMedia.destroy({ where: { achievementId: row.id } });
   await row.destroy();
+  res.json({ ok: true, mediaRemoved: media.length });
+};
+
+// POST /api/schedule/achievements/:id/media  (multipart, field "files")
+exports.addAchievementMedia = async (req, res) => {
+  const files = req.files || [];
+  const cleanup = () => files.forEach((f) => { try { fs.unlinkSync(f.path); } catch { /* already gone */ } });
+  try {
+    const row = await FacultyAchievement.findByPk(req.params.id);
+    if (!row) { cleanup(); return res.status(404).json({ message: 'Not found' }); }
+    if (row.userId !== req.user.id && !canManageAny(req.user)) {
+      cleanup();
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+    if (files.length === 0) return res.status(400).json({ message: 'No files uploaded' });
+
+    const existing = await FacultyAchievementMedia.count({ where: { achievementId: row.id } });
+    if (existing + files.length > MAX_MEDIA_PER_ACHIEVEMENT) {
+      cleanup();
+      return res.status(400).json({
+        message: `A contribution can hold ${MAX_MEDIA_PER_ACHIEVEMENT} files — it already has ${existing}.`,
+      });
+    }
+
+    const saved = [];
+    for (const f of files) {
+      const url = await uploadFileToS3(f.path, f.originalname, f.mimetype, 'contributions');
+      saved.push(await FacultyAchievementMedia.create({
+        achievementId: row.id,
+        url,
+        fileName: f.originalname,
+        mimeType: f.mimetype,
+        kind: /^video\//.test(f.mimetype) ? 'VIDEO' : 'IMAGE',
+        sizeBytes: f.size,
+        uploadedBy: req.user.id,
+      }));
+    }
+    cleanup();
+    res.status(201).json({ message: `${saved.length} file(s) uploaded`, media: saved });
+  } catch (error) {
+    cleanup();
+    console.error('addAchievementMedia error:', error);
+    res.status(500).json({ message: error.message || 'Failed to upload files' });
+  }
+};
+
+// DELETE /api/schedule/achievements/:id/media/:mediaId
+exports.deleteAchievementMedia = async (req, res) => {
+  const row = await FacultyAchievement.findByPk(req.params.id);
+  if (!row) return res.status(404).json({ message: 'Not found' });
+  if (row.userId !== req.user.id && !canManageAny(req.user)) {
+    return res.status(403).json({ message: 'Forbidden' });
+  }
+  const media = await FacultyAchievementMedia.findOne({
+    where: { id: req.params.mediaId, achievementId: row.id },
+  });
+  if (!media) return res.status(404).json({ message: 'File not found' });
+  try { await deleteFromS3(media.url); } catch (e) { console.error('media delete failed:', e.message); }
+  await media.destroy();
   res.json({ ok: true });
 };

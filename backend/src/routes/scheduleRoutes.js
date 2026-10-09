@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const scheduleController = require('../controllers/scheduleController');
 const { authenticateToken, authorizeRole } = require('../middleware/auth');
+const { contributionMediaUpload } = require('../middleware/upload');
 
 router.use(authenticateToken);
 
@@ -21,6 +22,15 @@ router.get('/achievements/me', authorizeRole(...OWN_ROLES), scheduleController.l
 router.post('/achievements/me', authorizeRole(...OWN_ROLES), scheduleController.addMyAchievement);
 router.patch('/achievements/:id', authorizeRole(...OWN_ROLES), scheduleController.updateAchievement);
 router.delete('/achievements/:id', authorizeRole(...OWN_ROLES), scheduleController.deleteAchievement);
+
+// Photos/videos on a contribution — up to 10 files, 200 MB each.
+router.post(
+  '/achievements/:id/media',
+  authorizeRole(...OWN_ROLES),
+  contributionMediaUpload.array('files', 10),
+  scheduleController.addAchievementMedia,
+);
+router.delete('/achievements/:id/media/:mediaId', authorizeRole(...OWN_ROLES), scheduleController.deleteAchievementMedia);
 
 // Admin/HOD only
 router.get('/users', authorizeRole('ADMIN', 'HOD'), scheduleController.listUsers);

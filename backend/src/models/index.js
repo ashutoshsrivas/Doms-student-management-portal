@@ -119,6 +119,13 @@ const User = sequelize.define('User', {
   lastPasswordChange: {
     type: DataTypes.DATE,
   },
+  // Social-media responsibility: see every contribution and event, export
+   // reports, and edit them. Granted by an admin on /admin/access.
+  socialMediaManager: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false,
+    allowNull: false,
+  },
   isVerified: {
     type: DataTypes.BOOLEAN,
     defaultValue: false,
@@ -2293,6 +2300,28 @@ const FacultyAchievement = sequelize.define('FacultyAchievement', {
   indexes: [{ fields: ['user_id'] }],
 });
 
+// Photos/videos attached to a contribution. Kept in its own table so files
+// can be added and removed one at a time. No FK constraints — the controller
+// cleans up, and losing a user never silently deletes media rows.
+const FacultyAchievementMedia = sequelize.define('FacultyAchievementMedia', {
+  id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
+  achievementId: { type: DataTypes.UUID, allowNull: false },
+  url: { type: DataTypes.STRING(1024), allowNull: false },
+  fileName: { type: DataTypes.STRING, allowNull: true },
+  mimeType: { type: DataTypes.STRING, allowNull: true },
+  kind: { type: DataTypes.ENUM('IMAGE', 'VIDEO'), allowNull: false },
+  sizeBytes: { type: DataTypes.BIGINT, allowNull: true },
+  uploadedBy: { type: DataTypes.UUID, allowNull: true },
+}, {
+  tableName: 'faculty_achievement_media',
+  timestamps: true,
+  underscored: true,
+  indexes: [{ fields: ['achievement_id'] }],
+});
+
+FacultyAchievement.hasMany(FacultyAchievementMedia, { foreignKey: 'achievementId', as: 'Media', constraints: false });
+FacultyAchievementMedia.belongsTo(FacultyAchievement, { foreignKey: 'achievementId', constraints: false });
+
 FacultyAchievement.belongsTo(User, { foreignKey: 'userId', as: 'Owner' });
 User.hasMany(FacultyAchievement, { foreignKey: 'userId', as: 'Achievements', onDelete: 'CASCADE' });
 
@@ -2403,6 +2432,7 @@ NotificationPromptResponse.belongsTo(User, { foreignKey: 'studentUserId', as: 'S
 
 module.exports = {
   sequelize,
+  FacultyAchievementMedia,
   SessionSection,
   GradeSheet,
   StudentGrade,

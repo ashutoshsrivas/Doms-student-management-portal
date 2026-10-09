@@ -82,6 +82,7 @@ const authenticateToken = async (req, res, next) => {
       lastName: dbUser.lastName,
       role: effectiveRole(dbUser.approvedRole),
       rawRole: dbUser.approvedRole,
+      socialMediaManager: !!dbUser.socialMediaManager,
       status: dbUser.status,
     };
 
