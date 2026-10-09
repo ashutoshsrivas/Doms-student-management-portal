@@ -36,6 +36,7 @@ const nocRoutes = require('./routes/nocRoutes');
 const gradeRoutes = require('./routes/gradeRoutes');
 const sectionRoutes = require('./routes/sectionRoutes');
 const socialMediaRoutes = require('./routes/socialMediaRoutes');
+const examRoutes = require('./routes/examRoutes');
 const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
@@ -96,6 +97,7 @@ app.use('/api/noc', nocRoutes);
 app.use('/api/grades', gradeRoutes);
 app.use('/api/sections', sectionRoutes);
 app.use('/api/social-media', socialMediaRoutes);
+app.use('/api/exams', examRoutes);
 
 // Health check
 app.get('/health', (req, res) => {

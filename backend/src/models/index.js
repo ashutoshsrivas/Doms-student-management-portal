@@ -1534,6 +1534,78 @@ const SIPQuestionAnswer = sequelize.define('SIPQuestionAnswer', {
   underscored: true,
 });
 
+// ============ EXAMS (hidden /exams sub-portal) ============
+// Courses with a question bank. Admins create courses and assign staff;
+// assigned staff add course outcomes and questions; admins generate papers.
+const ExamCourse = sequelize.define('ExamCourse', {
+  id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
+  title: { type: DataTypes.STRING, allowNull: false },
+  code: { type: DataTypes.STRING(60), allowNull: false },
+  academicSessionId: { type: DataTypes.UUID, allowNull: false },
+  trimester: { type: DataTypes.STRING(40), allowNull: true },
+  createdBy: { type: DataTypes.UUID, allowNull: true },
+}, {
+  tableName: 'exam_courses',
+  timestamps: true,
+  underscored: true,
+  indexes: [{ unique: true, fields: ['academic_session_id', 'code'] }],
+});
+
+const ExamCourseAssignee = sequelize.define('ExamCourseAssignee', {
+  id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
+  courseId: { type: DataTypes.UUID, allowNull: false },
+  userId: { type: DataTypes.UUID, allowNull: false },
+  assignedBy: { type: DataTypes.UUID, allowNull: true },
+}, {
+  tableName: 'exam_course_assignees',
+  timestamps: true,
+  underscored: true,
+  indexes: [{ unique: true, fields: ['course_id', 'user_id'] }],
+});
+
+const CourseOutcome = sequelize.define('CourseOutcome', {
+  id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
+  courseId: { type: DataTypes.UUID, allowNull: false },
+  code: { type: DataTypes.STRING(20), allowNull: false },
+  description: { type: DataTypes.TEXT, allowNull: true },
+  createdBy: { type: DataTypes.UUID, allowNull: true },
+}, {
+  tableName: 'course_outcomes',
+  timestamps: true,
+  underscored: true,
+  indexes: [{ unique: true, fields: ['course_id', 'code'] }],
+});
+
+const QUESTION_DIFFICULTIES = ['EASY', 'MEDIUM', 'HARD'];
+const QUESTION_TYPES = ['TEN_MARK', 'TWENTY_MARK', 'CASE_STUDY'];
+
+const ExamQuestion = sequelize.define('ExamQuestion', {
+  id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
+  courseId: { type: DataTypes.UUID, allowNull: false },
+  courseOutcomeId: { type: DataTypes.UUID, allowNull: true },
+  text: { type: DataTypes.TEXT, allowNull: false },
+  difficulty: { type: DataTypes.ENUM(...QUESTION_DIFFICULTIES), allowNull: false },
+  type: { type: DataTypes.ENUM(...QUESTION_TYPES), allowNull: false },
+  createdBy: { type: DataTypes.UUID, allowNull: true },
+}, {
+  tableName: 'exam_questions',
+  timestamps: true,
+  underscored: true,
+  indexes: [{ fields: ['course_id'] }],
+});
+
+ExamCourse.belongsTo(AcademicSession, { foreignKey: 'academicSessionId', constraints: false });
+ExamCourse.belongsTo(User, { as: 'Creator', foreignKey: 'createdBy', constraints: false });
+ExamCourse.hasMany(ExamCourseAssignee, { as: 'Assignees', foreignKey: 'courseId', constraints: false });
+ExamCourseAssignee.belongsTo(ExamCourse, { foreignKey: 'courseId', constraints: false });
+ExamCourseAssignee.belongsTo(User, { as: 'User', foreignKey: 'userId', constraints: false });
+ExamCourse.hasMany(CourseOutcome, { as: 'Outcomes', foreignKey: 'courseId', constraints: false });
+CourseOutcome.belongsTo(ExamCourse, { foreignKey: 'courseId', constraints: false });
+ExamCourse.hasMany(ExamQuestion, { as: 'Questions', foreignKey: 'courseId', constraints: false });
+ExamQuestion.belongsTo(ExamCourse, { foreignKey: 'courseId', constraints: false });
+ExamQuestion.belongsTo(CourseOutcome, { as: 'Outcome', foreignKey: 'courseOutcomeId', constraints: false });
+ExamQuestion.belongsTo(User, { as: 'Author', foreignKey: 'createdBy', constraints: false });
+
 // ============ SECTIONS ============
 // Named sections inside an academic session (SEC-A, AI&DS, …). A student
 // enrolment points at one section; nothing else in the app reads it.
@@ -2432,6 +2504,12 @@ NotificationPromptResponse.belongsTo(User, { foreignKey: 'studentUserId', as: 'S
 
 module.exports = {
   sequelize,
+  ExamCourse,
+  ExamCourseAssignee,
+  CourseOutcome,
+  ExamQuestion,
+  QUESTION_DIFFICULTIES,
+  QUESTION_TYPES,
   FacultyAchievementMedia,
   SessionSection,
   GradeSheet,
