@@ -1,4 +1,4 @@
-const { Op } = require('sequelize');
+const { Op, literal } = require('sequelize');
 const {
   User,
   FacultyAchievement,
@@ -21,6 +21,15 @@ const windowFor = (from, to, field) => {
   return where;
 };
 
+// A contribution may carry no achievement date — people often leave it blank.
+// Those still belong in the report, placed by the day they were added.
+const contributionWindow = (from, to) => {
+  if (!from && !to) return {};
+  const byAchieved = windowFor(from, to, 'achievedOn').achievedOn;
+  const byCreated = windowFor(from, to ? `${to} 23:59:59` : to, 'createdAt').createdAt;
+  return { [Op.or]: [{ achievedOn: byAchieved }, { achievedOn: null, createdAt: byCreated }] };
+};
+
 const socialMediaController = {
   // GET /api/social-media/overview?from=&to=
   overview: async (req, res) => {
@@ -29,12 +38,12 @@ const socialMediaController = {
       const { from, to } = req.query;
 
       const contributions = await FacultyAchievement.findAll({
-        where: windowFor(from, to, 'achievedOn'),
+        where: contributionWindow(from, to),
         include: [
           { model: User, as: 'Owner', attributes: ['id', 'firstName', 'lastName', 'email', 'approvedRole', 'department'] },
           { model: FacultyAchievementMedia, as: 'Media' },
         ],
-        order: [['achievedOn', 'DESC'], ['createdAt', 'DESC']],
+        order: [[literal('COALESCE(`FacultyAchievement`.`achieved_on`, DATE(`FacultyAchievement`.`created_at`))'), 'DESC'], ['createdAt', 'DESC']],
       });
 
       const events = await Event.findAll({
@@ -52,6 +61,7 @@ const socialMediaController = {
             category: p.category || '',
             description: p.description || '',
             achievedOn: p.achievedOn,
+            addedOn: p.createdAt,
             ownerId: p.Owner?.id || null,
             ownerName: fullName(p.Owner),
             ownerEmail: p.Owner?.email || '',

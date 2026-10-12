@@ -11,6 +11,7 @@ import useAuthStore from '@/app/store/authStore';
 type Media = { id: string; url: string; kind: 'IMAGE' | 'VIDEO'; fileName: string; sizeBytes: number | null };
 type Contribution = {
   id: string; title: string; category: string; description: string; achievedOn: string | null;
+  addedOn: string | null;
   ownerName: string; ownerEmail: string; ownerRole: string; department: string; media: Media[];
 };
 type EventRow = {
@@ -23,6 +24,8 @@ const fmt = (iso: string | null) => {
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? String(iso) : d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: '2-digit' });
 };
+// Contributions without an achievement date fall back to the day they were added.
+const dateOf = (c: Contribution) => c.achievedOn || (c.addedOn ? String(c.addedOn).slice(0, 10) : '');
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const monthsAgoISO = (n: number) => {
   const d = new Date();
@@ -32,8 +35,9 @@ const monthsAgoISO = (n: number) => {
 
 function Content() {
   const { user } = useAuthStore();
-  const [from, setFrom] = useState(monthsAgoISO(3));
-  const [to, setTo] = useState(todayISO());
+  // Default to everything — a report page should open with the data in it.
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
   const [contributions, setContributions] = useState<Contribution[]>([]);
   const [events, setEvents] = useState<EventRow[]>([]);
   const [tab, setTab] = useState<'contributions' | 'events'>('contributions');
@@ -72,7 +76,7 @@ function Content() {
     return events.filter((e) => [e.title, e.venue, e.description].some((v) => (v || '').toLowerCase().includes(q)));
   }, [events, query]);
 
-  const rangeLabel = `${fmt(from) || 'start'} to ${fmt(to) || 'today'}`;
+  const rangeLabel = !from && !to ? 'All time' : `${fmt(from) || 'start'} to ${fmt(to) || 'today'}`;
 
   const exportExcel = async () => {
     try {
@@ -80,7 +84,7 @@ function Content() {
       const wb = XLSX.utils.book_new();
 
       const cRows = visibleContributions.map((c) => ({
-        Date: c.achievedOn || '',
+        Date: dateOf(c),
         Title: c.title,
         Category: c.category,
         'Faculty': c.ownerName,
@@ -144,7 +148,7 @@ function Content() {
         startY: 29,
         head: [['Date', 'Title', 'Category', 'Faculty', 'Photos', 'Videos']],
         body: visibleContributions.map((c) => [
-          c.achievedOn || '', c.title, c.category, c.ownerName,
+          dateOf(c), c.title, c.category, c.ownerName,
           String(c.media.filter((m) => m.kind === 'IMAGE').length),
           String(c.media.filter((m) => m.kind === 'VIDEO').length),
         ]),
@@ -287,7 +291,7 @@ function Content() {
       ) : tab === 'contributions' ? (
         visibleContributions.length === 0 ? (
           <div className="rounded-xl border border-dashed border-gray-200 bg-white px-4 py-12 text-center text-sm text-gray-500">
-            No contributions in this range.
+            {!from && !to ? 'No contributions have been added yet.' : 'No contributions in this range.'}
           </div>
         ) : (
           <ul className="space-y-3">
@@ -299,7 +303,9 @@ function Content() {
                       <FiStar className="h-4 w-4 text-amber-500" />
                       <span className="font-semibold text-gray-900">{c.title}</span>
                       {c.category && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] text-amber-800">{c.category}</span>}
-                      {c.achievedOn && <span className="text-xs text-gray-500">{fmt(c.achievedOn)}</span>}
+                      <span className="text-xs text-gray-500">
+                        {c.achievedOn ? fmt(c.achievedOn) : c.addedOn ? `Added ${fmt(c.addedOn)}` : ''}
+                      </span>
                     </div>
                     <div className="mt-0.5 text-xs text-gray-600">
                       {c.ownerName}{c.department ? ` · ${c.department}` : ''}
@@ -337,7 +343,7 @@ function Content() {
         )
       ) : visibleEvents.length === 0 ? (
         <div className="rounded-xl border border-dashed border-gray-200 bg-white px-4 py-12 text-center text-sm text-gray-500">
-          No events in this range.
+          {!from && !to ? 'No events have been added yet.' : 'No events in this range.'}
         </div>
       ) : (
         <ul className="space-y-3">
