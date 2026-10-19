@@ -127,6 +127,103 @@ function Content() {
     }
   };
 
+  // Student-wise grid: students down the rows, grading lists across the
+  // columns. One worksheet per session, so a student's row only spans the
+  // lists that belong to their own session.
+  const exportStudentWise = async () => {
+    try {
+      setExporting(true);
+      const data = await fetchReport(true);
+      if (!data) return;
+      const XLSX = await import('xlsx');
+      const wb = XLSX.utils.book_new();
+
+      const sessionsInScope = Array.from(new Set([
+        ...data.sheets.map((sh) => sh.sessionName || 'No session'),
+        ...data.rows.map((r) => r.sessionName || 'No session'),
+      ])).sort();
+
+      let sheetsWritten = 0;
+      let studentsWritten = 0;
+
+      sessionsInScope.forEach((sessionName) => {
+        const lists = data.sheets
+          .filter((sh) => (sh.sessionName || 'No session') === sessionName)
+          .sort((a, b) => a.title.localeCompare(b.title));
+        const grades = data.rows.filter((r) => (r.sessionName || 'No session') === sessionName);
+        if (lists.length === 0 || grades.length === 0) return;
+
+        // Two faculty can use the same title, so repeats carry the name.
+        const seen = new Map<string, number>();
+        const header = new Map<string, string>();
+        lists.forEach((sh) => {
+          let label = sh.title;
+          if (lists.filter((o) => o.title === sh.title).length > 1) {
+            label = `${sh.title} (${sh.createdByName || 'unknown'})`;
+          }
+          const used = seen.get(label) || 0;
+          seen.set(label, used + 1);
+          header.set(sh.id, used === 0 ? label : `${label} #${used + 1}`);
+        });
+
+        type Row = { id: string; name: string; email: string; section: string; cells: Record<string, string> };
+        const byStudent = new Map<string, Row>();
+        grades.forEach((g) => {
+          const key = g.registrationNumber || g.email || g.studentName;
+          if (!key) return;
+          const row = byStudent.get(key) || {
+            id: g.registrationNumber || '',
+            name: g.studentName || '',
+            email: g.email || '',
+            section: g.section || '',
+            cells: {},
+          };
+          const column = header.get(g.sheetId);
+          if (column) row.cells[column] = g.grade || '';
+          if (!row.section && g.section) row.section = g.section;
+          byStudent.set(key, row);
+        });
+
+        const columns = ['Student ID', 'Student', 'Section', 'Email', ...lists.map((sh) => header.get(sh.id) as string), 'Lists graded'];
+        const body = Array.from(byStudent.values())
+          .sort((a, b) => a.section.localeCompare(b.section) || a.name.localeCompare(b.name))
+          .map((r) => {
+            const out: Record<string, string | number> = {
+              'Student ID': r.id, Student: r.name, Section: r.section, Email: r.email,
+            };
+            lists.forEach((sh) => {
+              const column = header.get(sh.id) as string;
+              out[column] = r.cells[column] || '';
+            });
+            out['Lists graded'] = Object.values(r.cells).filter(Boolean).length;
+            return out;
+          });
+
+        const ws = XLSX.utils.json_to_sheet(body, { header: columns });
+        ws['!cols'] = [{ wch: 14 }, { wch: 26 }, { wch: 10 }, { wch: 30 },
+          ...lists.map(() => ({ wch: 16 })), { wch: 12 }];
+        ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: body.length, c: columns.length - 1 } }) };
+        // Excel sheet names: 31 characters, none of []:*?/\
+        const tabName = (sessionName.replace(/[\[\]:*?/\\]/g, ' ').trim() || 'Session').slice(0, 31);
+        XLSX.utils.book_append_sheet(wb, ws, tabName);
+        sheetsWritten += 1;
+        studentsWritten += body.length;
+      });
+
+      if (sheetsWritten === 0) {
+        toast.error('Nothing to export yet — no grades have been given.');
+        return;
+      }
+      XLSX.writeFile(wb, `grading-studentwise-${new Date().toISOString().slice(0, 10)}.xlsx`);
+      toast.success(`Exported ${studentsWritten} student row(s) across ${sheetsWritten} session sheet(s)`);
+      setShowExport(false);
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Export failed');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const exportExcel = async () => {
     try {
       setExporting(true);
@@ -274,6 +371,7 @@ function Content() {
           onSessionChange={setExportSessionId}
           busy={exporting}
           onSummary={exportSummary}
+          onStudentWise={exportStudentWise}
           onExcel={exportExcel}
           onPdf={exportPdf}
           onClose={() => setShowExport(false)}
@@ -292,12 +390,13 @@ function Content() {
   );
 }
 
-function ExportModal({ sessions, sessionId, onSessionChange, busy, onSummary, onExcel, onPdf, onClose }: {
+function ExportModal({ sessions, sessionId, onSessionChange, busy, onSummary, onStudentWise, onExcel, onPdf, onClose }: {
   sessions: Session[];
   sessionId: string;
   onSessionChange: (id: string) => void;
   busy: boolean;
   onSummary: () => void;
+  onStudentWise: () => void;
   onExcel: () => void;
   onPdf: () => void;
   onClose: () => void;
@@ -309,6 +408,13 @@ function ExportModal({ sessions, sessionId, onSessionChange, busy, onSummary, on
       title: 'Grading lists summary (Excel)',
       detail: 'One row per list: title, description, faculty, session and how many students were graded.',
       onPick: onSummary,
+    },
+    {
+      key: 'studentwise',
+      icon: <FiUsers className="h-5 w-5 text-indigo-600" />,
+      title: 'Student-wise grid (Excel)',
+      detail: 'Students down the rows, grading lists across the columns, grade in each cell. One sheet per session.',
+      onPick: onStudentWise,
     },
     {
       key: 'grades',
