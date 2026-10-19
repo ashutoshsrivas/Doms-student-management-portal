@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
-import { FiPlus, FiSearch, FiUsers, FiCalendar, FiTrash2, FiEdit2, FiDownload, FiFileText } from 'react-icons/fi';
+import { FiPlus, FiSearch, FiUsers, FiCalendar, FiTrash2, FiEdit2, FiDownload, FiFileText, FiX, FiList, FiGrid } from 'react-icons/fi';
 import apiClient from '@/app/lib/apiClient';
 import DashboardLayout from '@/app/components/DashboardLayout';
 import ProtectedRoute from '@/app/components/ProtectedRoute';
@@ -35,6 +35,8 @@ function Content() {
   const [query, setQuery] = useState('');
   const [creating, setCreating] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [showExport, setShowExport] = useState(false);
+  const [exportSessionId, setExportSessionId] = useState('');
   const [editing, setEditing] = useState<Sheet | null>(null);
 
   const load = async () => {
@@ -78,20 +80,57 @@ function Content() {
 
   const canEdit = (s: Sheet) => s.createdBy === user?.id || ['ADMIN', 'HOD'].includes(user?.role || '');
 
-  // Report over every grading list this user can see.
-  const fetchReport = async () => {
-    const { data } = await apiClient.get('/grades/export');
-    if (!data.rows || data.rows.length === 0) {
+  // Report over every grading list this user can see, optionally one session.
+  const fetchReport = async (needsGrades: boolean) => {
+    const { data } = await apiClient.get('/grades/export', {
+      params: exportSessionId ? { sessionId: exportSessionId } : {},
+    });
+    if (!data.sheets || data.sheets.length === 0) {
+      toast.error('No grading lists to export yet.');
+      return null;
+    }
+    if (needsGrades && (!data.rows || data.rows.length === 0)) {
       toast.error('Nothing to export yet — no grades have been given.');
       return null;
     }
     return data as { sheets: Sheet[]; rows: Record<string, string>[] };
   };
 
+  // One row per grading list: what it is, who ran it, and how many students
+  // came out of it.
+  const exportSummary = async () => {
+    try {
+      setExporting(true);
+      const data = await fetchReport(false);
+      if (!data) return;
+      const XLSX = await import('xlsx');
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(data.sheets.map((sh) => ({
+        Title: sh.title,
+        Description: sh.description || '',
+        Faculty: sh.createdByName || '',
+        Session: sh.sessionName || '',
+        'Students graded': sh.gradeCount,
+        'Created on': sh.createdAt ? String(sh.createdAt).slice(0, 10) : '',
+      })));
+      ws['!cols'] = [{ wch: 32 }, { wch: 46 }, { wch: 24 }, { wch: 24 }, { wch: 16 }, { wch: 12 }];
+      ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: data.sheets.length, c: 5 } }) };
+      XLSX.utils.book_append_sheet(wb, ws, 'Grading lists');
+      XLSX.writeFile(wb, `grading-lists-summary-${new Date().toISOString().slice(0, 10)}.xlsx`);
+      const graded = data.sheets.reduce((n, sh) => n + (sh.gradeCount || 0), 0);
+      toast.success(`Exported ${data.sheets.length} list(s) · ${graded} student grade(s)`);
+      setShowExport(false);
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Export failed');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const exportExcel = async () => {
     try {
       setExporting(true);
-      const data = await fetchReport();
+      const data = await fetchReport(true);
       if (!data) return;
       const XLSX = await import('xlsx');
       const wb = XLSX.utils.book_new();
@@ -123,6 +162,7 @@ function Content() {
 
       XLSX.writeFile(wb, `grading-report-${new Date().toISOString().slice(0, 10)}.xlsx`);
       toast.success(`Exported ${data.rows.length} grade(s)`);
+      setShowExport(false);
     } catch (e: any) {
       toast.error(e?.response?.data?.message || 'Export failed');
     } finally {
@@ -133,7 +173,7 @@ function Content() {
   const exportPdf = async () => {
     try {
       setExporting(true);
-      const data = await fetchReport();
+      const data = await fetchReport(true);
       if (!data) return;
       const { jsPDF } = await import('jspdf');
       const autoTable = (await import('jspdf-autotable')).default;
@@ -151,6 +191,7 @@ function Content() {
       });
       doc.save(`grading-report-${new Date().toISOString().slice(0, 10)}.pdf`);
       toast.success('PDF downloaded');
+      setShowExport(false);
     } catch (e: any) {
       toast.error(e?.response?.data?.message || 'Export failed');
     } finally {
@@ -173,13 +214,9 @@ function Content() {
             <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search title, session…"
               className="w-60 rounded-lg border border-gray-200 bg-white py-2 pl-8 pr-3 text-sm text-gray-900" />
           </div>
-          <button type="button" onClick={exportExcel} disabled={exporting}
+          <button type="button" onClick={() => setShowExport(true)} disabled={exporting}
             className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-60">
             <FiDownload className="h-4 w-4" /> {exporting ? 'Preparing…' : 'Export report'}
-          </button>
-          <button type="button" onClick={exportPdf} disabled={exporting}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60">
-            <FiFileText className="h-4 w-4" /> PDF
           </button>
           <button type="button" onClick={() => setCreating(true)}
             className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700">
@@ -230,6 +267,19 @@ function Content() {
         </div>
       )}
 
+      {showExport && (
+        <ExportModal
+          sessions={sessions}
+          sessionId={exportSessionId}
+          onSessionChange={setExportSessionId}
+          busy={exporting}
+          onSummary={exportSummary}
+          onExcel={exportExcel}
+          onPdf={exportPdf}
+          onClose={() => setShowExport(false)}
+        />
+      )}
+
       {(creating || editing) && (
         <SheetModal
           sheet={editing}
@@ -238,6 +288,79 @@ function Content() {
           onSaved={async () => { setCreating(false); setEditing(null); await load(); }}
         />
       )}
+    </div>
+  );
+}
+
+function ExportModal({ sessions, sessionId, onSessionChange, busy, onSummary, onExcel, onPdf, onClose }: {
+  sessions: Session[];
+  sessionId: string;
+  onSessionChange: (id: string) => void;
+  busy: boolean;
+  onSummary: () => void;
+  onExcel: () => void;
+  onPdf: () => void;
+  onClose: () => void;
+}) {
+  const options = [
+    {
+      key: 'summary',
+      icon: <FiList className="h-5 w-5 text-green-600" />,
+      title: 'Grading lists summary (Excel)',
+      detail: 'One row per list: title, description, faculty, session and how many students were graded.',
+      onPick: onSummary,
+    },
+    {
+      key: 'grades',
+      icon: <FiGrid className="h-5 w-5 text-blue-600" />,
+      title: 'Every grade (Excel)',
+      detail: 'Each student with their grade, section, remark and who graded them, plus a list summary sheet.',
+      onPick: onExcel,
+    },
+    {
+      key: 'pdf',
+      icon: <FiFileText className="h-5 w-5 text-rose-600" />,
+      title: 'Every grade (PDF)',
+      detail: 'The same grades as a printable table.',
+      onPick: onPdf,
+    },
+  ];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="w-full max-w-lg rounded-xl bg-white shadow-lg">
+        <div className="flex items-center justify-between border-b px-4 py-3">
+          <h3 className="text-base font-semibold text-gray-900">Export report</h3>
+          <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600"><FiX className="h-5 w-5" /></button>
+        </div>
+        <div className="space-y-3 p-4">
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 mb-1">Session</label>
+            <select value={sessionId} onChange={(e) => onSessionChange(e.target.value)}
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm text-gray-900">
+              <option value="">All sessions</option>
+              {sessions.map((s) => (<option key={s.id} value={s.id}>{s.name}</option>))}
+            </select>
+          </div>
+          <div className="space-y-2">
+            {options.map((o) => (
+              <button key={o.key} type="button" onClick={o.onPick} disabled={busy}
+                className="flex w-full items-start gap-3 rounded-lg border border-gray-200 px-3 py-3 text-left hover:bg-gray-50 disabled:opacity-60">
+                <span className="mt-0.5">{o.icon}</span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold text-gray-900">{o.title}</span>
+                  <span className="mt-0.5 block text-xs text-gray-500">{o.detail}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+          {busy && <p className="text-xs text-gray-500">Preparing your file…</p>}
+        </div>
+        <div className="flex justify-end border-t px-4 py-3">
+          <button type="button" onClick={onClose}
+            className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">Close</button>
+        </div>
+      </div>
     </div>
   );
 }
