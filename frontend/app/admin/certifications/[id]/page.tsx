@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import {
-  FiArrowLeft, FiUploadCloud, FiSave, FiPlus, FiTrash2, FiUsers, FiX, FiSearch, FiCheck, FiEye, FiDownload,
+  FiArrowLeft, FiUploadCloud, FiSave, FiPlus, FiTrash2, FiUsers, FiX, FiSearch, FiCheck, FiEye, FiDownload, FiClock,
 } from 'react-icons/fi';
 import apiClient from '@/app/lib/apiClient';
 import DashboardLayout from '@/app/components/DashboardLayout';
@@ -26,9 +26,30 @@ type Assignment = {
   id: string;
   certificateNumber: string;
   issuedAt: string;
+  status: string;
+  decisionNote?: string | null;
+  requestedByName?: string;
+  approvedByName?: string;
+  approvedAt?: string | null;
+  canRemove?: boolean;
   fieldValues?: Record<string, string>;
   Student: Recipient | null;
   IssuedByUser: { firstName: string | null; lastName: string | null } | null;
+};
+
+const STAFF_ROLES = ['ADMIN', 'HOD', 'FACULTY', 'CHAIR_HEAD', 'COORDINATOR', 'PLACEMENT_COORDINATOR', 'TRAINER', 'MENTOR'];
+
+const STATUS_STYLE: Record<string, string> = {
+  ISSUED: 'bg-emerald-50 text-emerald-700',
+  PENDING: 'bg-amber-50 text-amber-800',
+  REJECTED: 'bg-red-50 text-red-700',
+  REVOKED: 'bg-gray-100 text-gray-600',
+};
+const STATUS_LABEL: Record<string, string> = {
+  ISSUED: 'Visible to student',
+  PENDING: 'Awaiting approval',
+  REJECTED: 'Rejected',
+  REVOKED: 'Revoked',
 };
 
 const FIELD_TYPES: { type: string; label: string }[] = [
@@ -73,11 +94,14 @@ function Builder() {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [snap, setSnap] = useState(true);
   const [viewing, setViewing] = useState<Assignment | null>(null);
+  const [canEdit, setCanEdit] = useState(true);
+  const [canApprove, setCanApprove] = useState(false);
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const draggingId = useRef<string | null>(null);
   const snapRef = useRef(snap);
   useEffect(() => { snapRef.current = snap; }, [snap]);
+  const canEditRef = useRef(true);
 
   const load = useCallback(async () => {
     try {
@@ -85,6 +109,9 @@ function Builder() {
       const res = await apiClient.get(`/certifications/${id}`);
       const c: Certification = res.data.certification;
       setCert(c);
+      setCanEdit(res.data.canEdit !== false);
+      canEditRef.current = res.data.canEdit !== false;
+      setCanApprove(!!res.data.canApprove);
       setTitle(c.title || '');
       setDescription(c.description || '');
       setFields(Array.isArray(c.fields) ? c.fields : []);
@@ -99,6 +126,7 @@ function Builder() {
     try {
       const res = await apiClient.get(`/certifications/${id}/assignments`);
       setAssignments(res.data.assignments || []);
+      if (res.data.canApprove !== undefined) setCanApprove(!!res.data.canApprove);
     } catch { /* ignore */ }
   }, [id]);
 
@@ -127,6 +155,8 @@ function Builder() {
   const startDrag = (e: React.PointerEvent, fid: string) => {
     e.preventDefault();
     setSelectedId(fid);
+    if (!canEditRef.current) return; // someone else's design — look, don't move
+
     draggingId.current = fid;
     window.addEventListener('pointermove', onPointerMove);
     window.addEventListener('pointerup', onPointerUp);
@@ -209,15 +239,22 @@ function Builder() {
       {/* Header */}
       <div className="flex flex-wrap items-center gap-3">
         <button type="button" onClick={() => router.push('/admin/certifications')} className="rounded-lg p-2 text-gray-600 hover:bg-gray-100"><FiArrowLeft className="h-5 w-5" /></button>
-        <h1 className="text-xl font-bold text-gray-900">Design certificate</h1>
+        <h1 className="text-xl font-bold text-gray-900">{canEdit ? 'Design certificate' : 'Certificate'}</h1>
+        {!canEdit && (
+          <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-semibold text-gray-600">
+            Design locked — made by someone else
+          </span>
+        )}
         <div className="ml-auto flex gap-2">
-          <button type="button" onClick={save} disabled={saving} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60">
-            <FiSave className="h-4 w-4" /> {saving ? 'Saving…' : 'Save'}
-          </button>
+          {canEdit && (
+            <button type="button" onClick={save} disabled={saving} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60">
+              <FiSave className="h-4 w-4" /> {saving ? 'Saving…' : 'Save'}
+            </button>
+          )}
           <button type="button" onClick={() => setShowAssign(true)} disabled={!cert.templateImageUrl}
             title={!cert.templateImageUrl ? 'Upload a template first' : ''}
             className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50">
-            <FiUsers className="h-4 w-4" /> Assign
+            <FiUsers className="h-4 w-4" /> {canApprove ? 'Assign' : 'Grant'}
           </button>
         </div>
       </div>
@@ -226,11 +263,11 @@ function Builder() {
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div>
           <label className="block text-xs font-semibold text-gray-700 mb-1">Title *</label>
-          <input value={title} onChange={(e) => setTitle(e.target.value)} className="w-full rounded border border-gray-300 px-3 py-2 text-sm text-gray-900" />
+          <input value={title} onChange={(e) => setTitle(e.target.value)} readOnly={!canEdit} className={`w-full rounded border border-gray-300 px-3 py-2 text-sm text-gray-900 ${canEdit ? '' : 'bg-gray-50'}`} />
         </div>
         <div>
           <label className="block text-xs font-semibold text-gray-700 mb-1">Description</label>
-          <input value={description} onChange={(e) => setDescription(e.target.value)} className="w-full rounded border border-gray-300 px-3 py-2 text-sm text-gray-900" />
+          <input value={description} onChange={(e) => setDescription(e.target.value)} readOnly={!canEdit} className={`w-full rounded border border-gray-300 px-3 py-2 text-sm text-gray-900 ${canEdit ? '' : 'bg-gray-50'}`} />
         </div>
       </div>
 
@@ -243,10 +280,12 @@ function Builder() {
               <label className="inline-flex cursor-pointer select-none items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-100">
                 <input type="checkbox" checked={snap} onChange={(e) => setSnap(e.target.checked)} /> Grid &amp; snap
               </label>
-              <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-200">
-                <FiUploadCloud className="h-3.5 w-3.5" /> {uploading ? 'Uploading…' : cert.templateImageUrl ? 'Replace image' : 'Upload image'}
-                <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) onUpload(f); e.currentTarget.value = ''; }} />
-              </label>
+              {canEdit && (
+                <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-200">
+                  <FiUploadCloud className="h-3.5 w-3.5" /> {uploading ? 'Uploading…' : cert.templateImageUrl ? 'Replace image' : 'Upload image'}
+                  <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) onUpload(f); e.currentTarget.value = ''; }} />
+                </label>
+              )}
             </div>
           </div>
 
@@ -289,18 +328,28 @@ function Builder() {
               })}
             </div>
           ) : (
-            <label className="flex aspect-[1.414/1] w-full cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 text-gray-400 hover:border-blue-400 hover:text-blue-500">
-              <FiUploadCloud className="h-10 w-10" />
-              <span className="mt-2 text-sm font-semibold">Upload the certificate template image</span>
-              <span className="text-xs">PNG or JPG · your final design without the dynamic text</span>
-              <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) onUpload(f); e.currentTarget.value = ''; }} />
-            </label>
+            canEdit ? (
+              <label className="flex aspect-[1.414/1] w-full cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 text-gray-400 hover:border-blue-400 hover:text-blue-500">
+                <FiUploadCloud className="h-10 w-10" />
+                <span className="mt-2 text-sm font-semibold">Upload the certificate template image</span>
+                <span className="text-xs">PNG or JPG · your final design without the dynamic text</span>
+                <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) onUpload(f); e.currentTarget.value = ''; }} />
+              </label>
+            ) : (
+              <div className="flex aspect-[1.414/1] w-full flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-200 bg-gray-50 text-sm text-gray-400">
+                No template image yet.
+              </div>
+            )
           )}
-          <p className="text-[11px] text-gray-400">Tip: drag each field onto the template to position it. Sizes are relative, so the PDF matches this preview.</p>
+          <p className="text-[11px] text-gray-400">
+            {canEdit
+              ? 'Tip: drag each field onto the template to position it. Sizes are relative, so the PDF matches this preview.'
+              : 'This is how the certificate will look. Only its creator or an approver can change the design.'}
+          </p>
         </div>
 
         {/* Fields sidebar */}
-        <div className="space-y-3">
+        <div className={`space-y-3 ${canEdit ? '' : 'hidden'}`}>
           <div className="rounded-lg border border-gray-200 bg-white p-3">
             <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Add field</div>
             <div className="flex flex-wrap gap-1.5">
@@ -389,17 +438,27 @@ function Builder() {
       <div className="rounded-xl border border-gray-200 bg-white p-4">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-sm font-bold text-gray-900">Recipients ({assignments.length})</h2>
+          {assignments.some((a) => a.status === 'PENDING') && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+              <FiClock className="h-3 w-3" />
+              {assignments.filter((a) => a.status === 'PENDING').length} awaiting approval
+            </span>
+          )}
         </div>
         {assignments.length === 0 ? (
-          <div className="py-6 text-center text-sm italic text-gray-400">No certificates issued yet. Use “Assign” to issue to students.</div>
+          <div className="py-6 text-center text-sm italic text-gray-400">
+            Nobody has this certificate yet. Use “Assign” to grant it{canApprove ? '' : ' — it goes for approval first'}.
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-[640px] w-full text-sm">
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-3 py-2 text-left font-semibold text-gray-700">Student</th>
+                  <th className="px-3 py-2 text-left font-semibold text-gray-700">Status</th>
                   <th className="px-3 py-2 text-left font-semibold text-gray-700">Certificate No.</th>
-                  <th className="px-3 py-2 text-left font-semibold text-gray-700">Issued</th>
+                  <th className="px-3 py-2 text-left font-semibold text-gray-700">Granted by</th>
+                  <th className="px-3 py-2 text-left font-semibold text-gray-700">Date</th>
                   <th className="px-3 py-2 text-left font-semibold text-gray-700"></th>
                 </tr>
               </thead>
@@ -410,20 +469,40 @@ function Builder() {
                       <div className="font-medium text-gray-900">{nameOf(a.Student)}</div>
                       <div className="text-[11px] text-gray-500">{a.Student?.email}</div>
                     </td>
+                    <td className="px-3 py-2">
+                      <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${STATUS_STYLE[a.status] || 'bg-gray-100 text-gray-600'}`}>
+                        {STATUS_LABEL[a.status] || a.status}
+                      </span>
+                      {a.status === 'REJECTED' && a.decisionNote && (
+                        <div className="mt-0.5 text-[11px] text-red-600">{a.decisionNote}</div>
+                      )}
+                    </td>
                     <td className="px-3 py-2 text-xs text-gray-700">{a.certificateNumber}</td>
+                    <td className="px-3 py-2 text-xs text-gray-600">
+                      {a.requestedByName || '—'}
+                      {a.approvedByName && <div className="text-[11px] text-gray-400">approved by {a.approvedByName}</div>}
+                    </td>
                     <td className="px-3 py-2 text-xs text-gray-600">{new Date(a.issuedAt).toLocaleDateString()}</td>
                     <td className="px-3 py-2 text-right">
                       <div className="flex items-center justify-end gap-1">
                         <button type="button" onClick={() => setViewing(a)} className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50">
                           <FiEye className="h-3 w-3" /> View
                         </button>
-                        <button type="button" onClick={async () => {
-                          if (!confirm(`Revoke this certificate from ${nameOf(a.Student)}?`)) return;
-                          try { await apiClient.delete(`/certifications/assignments/${a.id}`); toast.success('Revoked'); await loadAssignments(); }
-                          catch (e: any) { toast.error(e?.response?.data?.message || 'Failed to revoke'); }
-                        }} className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50">
-                          <FiTrash2 className="h-3 w-3" /> Revoke
-                        </button>
+                        {a.canRemove !== false && (
+                          <button type="button" onClick={async () => {
+                            const withdrawing = a.status === 'PENDING' && !canApprove;
+                            if (!confirm(withdrawing
+                              ? `Withdraw the request for ${nameOf(a.Student)}?`
+                              : `Remove this certificate from ${nameOf(a.Student)}?`)) return;
+                            try {
+                              const res = await apiClient.delete(`/certifications/assignments/${a.id}`);
+                              toast.success(res.data?.message || 'Removed');
+                              await loadAssignments();
+                            } catch (e: any) { toast.error(e?.response?.data?.message || 'Failed to remove'); }
+                          }} className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50">
+                            <FiTrash2 className="h-3 w-3" /> {a.status === 'PENDING' && !canApprove ? 'Withdraw' : 'Remove'}
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -437,6 +516,7 @@ function Builder() {
       {showAssign && (
         <AssignModal
           certificationId={id}
+          canApprove={canApprove}
           onClose={() => setShowAssign(false)}
           onAssigned={async () => { setShowAssign(false); await loadAssignments(); await load(); }}
         />
@@ -468,7 +548,7 @@ function Builder() {
   );
 }
 
-function AssignModal({ certificationId, onClose, onAssigned }: { certificationId: string; onClose: () => void; onAssigned: () => void }) {
+function AssignModal({ certificationId, canApprove, onClose, onAssigned }: { certificationId: string; canApprove: boolean; onClose: () => void; onAssigned: () => void }) {
   const [search, setSearch] = useState('');
   const [candidates, setCandidates] = useState<Recipient[]>([]);
   const [selected, setSelected] = useState<Record<string, Recipient>>({});
@@ -515,8 +595,9 @@ function AssignModal({ certificationId, onClose, onAssigned }: { certificationId
       const fd = new FormData();
       fd.append('file', file);
       const res = await apiClient.post(`/certifications/${certificationId}/assign-excel`, fd);
-      const { created, skipped, unmatched } = res.data;
-      toast.success(`Issued ${created}${skipped ? ` · ${skipped} already had it` : ''}${unmatched ? ` · ${unmatched} rows unmatched` : ''}`);
+      const { created, skipped, unmatched, resubmitted, pendingApproval } = res.data;
+      const verb = pendingApproval ? 'Sent for approval' : 'Issued';
+      toast.success(`${verb}: ${created + (resubmitted || 0)}${skipped ? ` · ${skipped} already had it` : ''}${unmatched ? ` · ${unmatched} rows unmatched` : ''}`);
       onAssigned();
     } catch (e: any) {
       toast.error(e?.response?.data?.message || 'Failed to process Excel');
@@ -549,8 +630,9 @@ function AssignModal({ certificationId, onClose, onAssigned }: { certificationId
     try {
       setAssigning(true);
       const res = await apiClient.post(`/certifications/${certificationId}/assign`, { studentIds: selectedList.map((u) => u.id) });
-      const { created, skipped } = res.data;
-      toast.success(`Issued ${created} certificate${created === 1 ? '' : 's'}${skipped ? ` · ${skipped} already had it` : ''}`);
+      const { created, skipped, resubmitted, pendingApproval } = res.data;
+      const n = created + (resubmitted || 0);
+      toast.success(`${pendingApproval ? 'Sent for approval' : 'Issued'}: ${n} certificate${n === 1 ? '' : 's'}${skipped ? ` · ${skipped} already had it` : ''}`);
       onAssigned();
     } catch (e: any) {
       toast.error(e?.response?.data?.message || 'Failed to assign');
@@ -563,9 +645,15 @@ function AssignModal({ certificationId, onClose, onAssigned }: { certificationId
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
       <div className="flex max-h-[88vh] w-full max-w-lg flex-col rounded-xl bg-white p-5 shadow-2xl">
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-lg font-bold text-gray-900">Assign certificate</h2>
+          <h2 className="text-lg font-bold text-gray-900">{canApprove ? 'Assign certificate' : 'Grant certificate'}</h2>
           <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100"><FiX className="h-5 w-5" /></button>
         </div>
+
+        {!canApprove && (
+          <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-900">
+            Whoever you pick goes to an admin, HOD or coordinator for approval. The students see nothing until it is approved.
+          </div>
+        )}
 
         {/* Bulk via Excel */}
         <div className="mb-3 rounded-lg border border-gray-200 bg-gray-50 p-3">
@@ -581,7 +669,7 @@ function AssignModal({ certificationId, onClose, onAssigned }: { certificationId
               <FiDownload className="h-3.5 w-3.5" /> {downloading ? 'Preparing…' : 'Download template'}
             </button>
             <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700">
-              <FiUploadCloud className="h-3.5 w-3.5" /> {uploading ? 'Uploading…' : 'Upload & assign'}
+              <FiUploadCloud className="h-3.5 w-3.5" /> {uploading ? 'Uploading…' : (canApprove ? 'Upload & assign' : 'Upload & send')}
               <input type="file" accept=".xlsx,.xls,.csv" className="hidden"
                 onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadExcel(f); e.currentTarget.value = ''; }} />
             </label>
@@ -618,7 +706,9 @@ function AssignModal({ certificationId, onClose, onAssigned }: { certificationId
         <div className="mt-4 flex justify-end gap-2">
           <button type="button" onClick={onClose} className="rounded border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">Cancel</button>
           <button type="button" onClick={assign} disabled={assigning || selectedList.length === 0} className="rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60">
-            {assigning ? 'Assigning…' : `Assign${selectedList.length ? ` (${selectedList.length})` : ''}`}
+            {assigning
+              ? (canApprove ? 'Assigning…' : 'Sending…')
+              : `${canApprove ? 'Assign' : 'Send for approval'}${selectedList.length ? ` (${selectedList.length})` : ''}`}
           </button>
         </div>
       </div>
@@ -628,7 +718,7 @@ function AssignModal({ certificationId, onClose, onAssigned }: { certificationId
 
 export default function CertificationBuilderPage() {
   return (
-    <ProtectedRoute requiredRoles={['ADMIN', 'HOD']}>
+    <ProtectedRoute requiredRoles={STAFF_ROLES}>
       <DashboardLayout>
         <Builder />
       </DashboardLayout>

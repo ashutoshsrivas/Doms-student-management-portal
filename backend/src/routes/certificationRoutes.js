@@ -8,6 +8,8 @@ router.use(authenticateToken);
 
 // Specific paths first — MUST come before /:id.
 router.get('/my', ctrl.myCertificates);                     // student: own certificates
+router.get('/requests', ctrl.requests);                     // approval queue / own submissions
+router.post('/requests/decide', ctrl.decideRequests);       // approve or reject
 router.get('/recipients', ctrl.recipients);                 // admin: student picker
 router.get('/session-template', ctrl.sessionTemplate);      // admin: xlsx of a session's students
 router.get('/student/:studentId', ctrl.studentCertificates); // staff or self

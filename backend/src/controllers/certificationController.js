@@ -10,11 +10,19 @@ const {
 const { Op } = require('sequelize');
 const { uploadToS3, deleteFromS3 } = require('../utils/s3Upload');
 
-const MANAGE_ROLES = ['ADMIN', 'HOD'];
+// Who signs certificates off. COORDINATOR (the academic coordinator) is
+// aliased to ADMIN by the auth middleware, so it is covered here.
+const APPROVE_ROLES = ['ADMIN', 'HOD'];
+// Any member of staff may grant a certificate; theirs waits for approval.
+const GIVE_ROLES = ['ADMIN', 'HOD', 'FACULTY', 'CHAIR_HEAD', 'COORDINATOR', 'PLACEMENT_COORDINATOR', 'TRAINER', 'MENTOR'];
 // Roles that may view any student's earned certificates.
 const STAFF_VIEW_ROLES = ['ADMIN', 'HOD', 'FACULTY', 'CHAIR_HEAD', 'PLACEMENT_COORDINATOR', 'COORDINATOR', 'MENTOR'];
 
-const canManage = (role) => MANAGE_ROLES.includes(role);
+const canApprove = (user) => APPROVE_ROLES.includes(user.role);
+const canGive = (user) => GIVE_ROLES.includes(user.role);
+// A template may be redesigned by an approver or by whoever made it.
+const canEditCert = (cert, user) => canApprove(user) || cert.createdBy === user.id;
+const canManage = (role) => APPROVE_ROLES.includes(role);
 
 const fullName = (u) =>
   `${u?.firstName || ''} ${u?.lastName || ''}`.trim() || u?.email || '';
@@ -50,18 +58,42 @@ function genCertificateNumber() {
   return `GESoM-${year}-${rand}`;
 }
 
-// Issue `cert` to each student (idempotent per student), snapshotting field
-// values. Returns { created, skipped }. Shared by the manual and Excel flows.
-async function issueCertificatesTo(cert, students, issuedById) {
+// Grant `cert` to each student (idempotent per student), snapshotting field
+// values. `status` is PENDING for a request awaiting approval and ISSUED when
+// an approver grants it directly. Returns { created, skipped, resubmitted }.
+// Shared by the manual and Excel flows.
+async function issueCertificatesTo(cert, students, issuedById, opts = {}) {
+  const status = opts.status === 'PENDING' ? 'PENDING' : 'ISSUED';
+  const batchId = opts.batchId || null;
+  const approvedBy = status === 'ISSUED' ? (opts.approvedBy || issuedById) : null;
   const fields = shapeCertification(cert).fields;
   const issueDateStr = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
   let created = 0;
   let skipped = 0;
+  let resubmitted = 0;
   for (const student of students) {
     const existing = await CertificateAssignment.findOne({
       where: { certificationId: cert.id, studentId: student.id },
     });
-    if (existing) { skipped += 1; continue; }
+    // One row per (certificate, student). A rejected one can be put forward
+    // again; anything else is left exactly as it is.
+    if (existing) {
+      if (existing.status === 'REJECTED') {
+        await existing.update({
+          status,
+          issuedBy: issuedById,
+          issuedAt: new Date(),
+          approvedBy,
+          approvedAt: status === 'ISSUED' ? new Date() : null,
+          decisionNote: null,
+          batchId,
+        });
+        resubmitted += 1;
+      } else {
+        skipped += 1;
+      }
+      continue;
+    }
 
     let certificateNumber = genCertificateNumber();
     const fieldValues = {};
@@ -75,8 +107,12 @@ async function issueCertificatesTo(cert, students, issuedById) {
           studentId: student.id,
           certificateNumber,
           fieldValues,
+          status,
           issuedBy: issuedById,
           issuedAt: new Date(),
+          approvedBy,
+          approvedAt: status === 'ISSUED' ? new Date() : null,
+          batchId,
         });
         created += 1;
         break;
@@ -94,7 +130,7 @@ async function issueCertificatesTo(cert, students, issuedById) {
       }
     }
   }
-  return { created, skipped };
+  return { created, skipped, resubmitted };
 }
 
 // Shape a certification for API responses (parse fields defensively).
@@ -121,7 +157,7 @@ module.exports = {
   // POST /api/certifications
   create: async (req, res) => {
     try {
-      if (!canManage(req.user.role)) return res.status(403).json({ message: 'Not authorized' });
+      if (!canGive(req.user)) return res.status(403).json({ message: 'Not authorized' });
       const { title, description } = req.body;
       if (!title || !title.trim()) return res.status(400).json({ message: 'Title is required' });
       const cert = await Certification.create({
@@ -139,22 +175,45 @@ module.exports = {
   // GET /api/certifications
   list: async (req, res) => {
     try {
-      if (!canManage(req.user.role)) return res.status(403).json({ message: 'Not authorized' });
+      if (!canGive(req.user)) return res.status(403).json({ message: 'Not authorized' });
+      // Approvers see every template. Everyone else sees the ones in use plus
+      // their own, including their drafts.
+      const where = canApprove(req.user)
+        ? {}
+        : { [Op.or]: [{ status: 'ACTIVE' }, { createdBy: req.user.id }] };
       const certs = await Certification.findAll({
+        where,
         include: [{ model: User, as: 'Creator', attributes: ['id', 'firstName', 'lastName'] }],
         order: [['createdAt', 'DESC']],
       });
-      // Attach issued counts.
+      // Attach issued and awaiting-approval counts.
       const counts = await CertificateAssignment.findAll({
-        attributes: ['certificationId', [sequelize.fn('COUNT', sequelize.col('id')), 'cnt']],
-        where: { status: 'ISSUED' },
-        group: ['certificationId'],
+        attributes: ['certificationId', 'status', [sequelize.fn('COUNT', sequelize.col('id')), 'cnt']],
+        where: { status: { [Op.in]: ['ISSUED', 'PENDING'] } },
+        group: ['certificationId', 'status'],
         raw: true,
       });
-      const countMap = {};
-      counts.forEach((r) => { countMap[r.certificationId] = parseInt(r.cnt, 10) || 0; });
-      const shaped = certs.map((c) => ({ ...shapeCertification(c), issuedCount: countMap[c.id] || 0 }));
-      res.json({ certifications: shaped });
+      const issuedMap = {};
+      const pendingMap = {};
+      counts.forEach((r) => {
+        const n = parseInt(r.cnt, 10) || 0;
+        if (r.status === 'ISSUED') issuedMap[r.certificationId] = n;
+        else pendingMap[r.certificationId] = n;
+      });
+      const shaped = certs.map((c) => ({
+        ...shapeCertification(c),
+        issuedCount: issuedMap[c.id] || 0,
+        pendingCount: pendingMap[c.id] || 0,
+        creatorName: fullName(c.Creator),
+        mine: c.createdBy === req.user.id,
+        canEdit: canEditCert(c, req.user),
+      }));
+      // How many requests are waiting on this user (approvers) or on an
+      // approver (everyone else) — drives the banner on the list page.
+      const myPending = canApprove(req.user)
+        ? await CertificateAssignment.count({ where: { status: 'PENDING' } })
+        : await CertificateAssignment.count({ where: { status: 'PENDING', issuedBy: req.user.id } });
+      res.json({ certifications: shaped, canApprove: canApprove(req.user), pendingCount: myPending });
     } catch (err) {
       console.error('certification.list error:', err);
       res.status(500).json({ message: 'Failed to list certifications' });
@@ -164,10 +223,14 @@ module.exports = {
   // GET /api/certifications/:id
   getOne: async (req, res) => {
     try {
-      if (!canManage(req.user.role)) return res.status(403).json({ message: 'Not authorized' });
+      if (!canGive(req.user)) return res.status(403).json({ message: 'Not authorized' });
       const cert = await Certification.findByPk(req.params.id);
       if (!cert) return res.status(404).json({ message: 'Certification not found' });
-      res.json({ certification: shapeCertification(cert) });
+      res.json({
+        certification: shapeCertification(cert),
+        canEdit: canEditCert(cert, req.user),
+        canApprove: canApprove(req.user),
+      });
     } catch (err) {
       console.error('certification.getOne error:', err);
       res.status(500).json({ message: 'Failed to fetch certification' });
@@ -177,9 +240,12 @@ module.exports = {
   // PATCH /api/certifications/:id — title/description/fields/status
   update: async (req, res) => {
     try {
-      if (!canManage(req.user.role)) return res.status(403).json({ message: 'Not authorized' });
+      if (!canGive(req.user)) return res.status(403).json({ message: 'Not authorized' });
       const cert = await Certification.findByPk(req.params.id);
       if (!cert) return res.status(404).json({ message: 'Certification not found' });
+      if (!canEditCert(cert, req.user)) {
+        return res.status(403).json({ message: 'Only the person who created this certificate, or an approver, can change its design' });
+      }
       const patch = {};
       if (req.body.title !== undefined) patch.title = String(req.body.title).trim();
       if (req.body.description !== undefined) patch.description = req.body.description ? String(req.body.description) : null;
@@ -196,9 +262,12 @@ module.exports = {
   // POST /api/certifications/:id/template — multipart image + width/height
   uploadTemplate: async (req, res) => {
     try {
-      if (!canManage(req.user.role)) return res.status(403).json({ message: 'Not authorized' });
+      if (!canGive(req.user)) return res.status(403).json({ message: 'Not authorized' });
       const cert = await Certification.findByPk(req.params.id);
       if (!cert) return res.status(404).json({ message: 'Certification not found' });
+      if (!canEditCert(cert, req.user)) {
+        return res.status(403).json({ message: 'Only the person who created this certificate, or an approver, can change its design' });
+      }
       if (!req.file) return res.status(400).json({ message: 'No image uploaded' });
       const url = await uploadToS3(req.file.buffer, req.file.originalname, req.file.mimetype, 'certifications');
       const w = parseInt(req.body.width, 10) || null;
@@ -218,9 +287,13 @@ module.exports = {
   remove: async (req, res) => {
     const t = await sequelize.transaction();
     try {
-      if (!canManage(req.user.role)) { await t.rollback(); return res.status(403).json({ message: 'Not authorized' }); }
+      if (!canGive(req.user)) { await t.rollback(); return res.status(403).json({ message: 'Not authorized' }); }
       const cert = await Certification.findByPk(req.params.id);
       if (!cert) { await t.rollback(); return res.status(404).json({ message: 'Certification not found' }); }
+      if (!canEditCert(cert, req.user)) {
+        await t.rollback();
+        return res.status(403).json({ message: 'Only the person who created this certificate, or an approver, can delete it' });
+      }
       await CertificateAssignment.destroy({ where: { certificationId: cert.id }, transaction: t });
       const imageUrl = cert.templateImageUrl;
       await cert.destroy({ transaction: t });
@@ -256,7 +329,7 @@ module.exports = {
   // GET /api/certifications/recipients?search=
   recipients: async (req, res) => {
     try {
-      if (!canManage(req.user.role)) return res.status(403).json({ message: 'Not authorized' });
+      if (!canGive(req.user)) return res.status(403).json({ message: 'Not authorized' });
       const search = (req.query.search || '').trim();
       const where = { approvedRole: 'STUDENT' };
       if (search) {
@@ -283,7 +356,7 @@ module.exports = {
   // POST /api/certifications/:id/assign — { studentIds: [] }
   assign: async (req, res) => {
     try {
-      if (!canManage(req.user.role)) return res.status(403).json({ message: 'Not authorized' });
+      if (!canGive(req.user)) return res.status(403).json({ message: 'Not authorized' });
       const cert = await Certification.findByPk(req.params.id);
       if (!cert) return res.status(404).json({ message: 'Certification not found' });
       if (!cert.templateImageUrl) return res.status(400).json({ message: 'Upload a template image before assigning' });
@@ -292,12 +365,22 @@ module.exports = {
       if (!studentIds.length) return res.status(400).json({ message: 'Select at least one recipient' });
 
       const students = await User.findAll({ where: { id: { [Op.in]: studentIds }, approvedRole: 'STUDENT' } });
-      const { created, skipped } = await issueCertificatesTo(cert, students, req.user.id);
+      const needsApproval = !canApprove(req.user);
+      const { created, skipped, resubmitted } = await issueCertificatesTo(cert, students, req.user.id, {
+        status: needsApproval ? 'PENDING' : 'ISSUED',
+        batchId: crypto.randomUUID(),
+      });
 
-      // Mark the certification ACTIVE once it has been used.
-      if (created > 0 && cert.status !== 'ACTIVE') await cert.update({ status: 'ACTIVE' });
+      // Mark the certification ACTIVE once certificates from it are live.
+      if (!needsApproval && created > 0 && cert.status !== 'ACTIVE') await cert.update({ status: 'ACTIVE' });
 
-      res.json({ message: 'Assignment complete', created, skipped });
+      res.json({
+        message: needsApproval ? 'Sent for approval' : 'Assignment complete',
+        pendingApproval: needsApproval,
+        created,
+        skipped,
+        resubmitted,
+      });
     } catch (err) {
       console.error('certification.assign error:', err);
       res.status(500).json({ message: 'Failed to assign certificate' });
@@ -308,7 +391,7 @@ module.exports = {
   // every student in a session, pre-filled, for bulk assignment.
   sessionTemplate: async (req, res) => {
     try {
-      if (!canManage(req.user.role)) return res.status(403).json({ message: 'Not authorized' });
+      if (!canGive(req.user)) return res.status(403).json({ message: 'Not authorized' });
       const { sessionId } = req.query;
       if (!sessionId) return res.status(400).json({ message: 'sessionId is required' });
       const rows = await StudentSession.findAll({
@@ -340,7 +423,7 @@ module.exports = {
   // POST /api/certifications/:id/assign-excel — multipart .xlsx of recipients.
   assignExcel: async (req, res) => {
     try {
-      if (!canManage(req.user.role)) return res.status(403).json({ message: 'Not authorized' });
+      if (!canGive(req.user)) return res.status(403).json({ message: 'Not authorized' });
       const cert = await Certification.findByPk(req.params.id);
       if (!cert) return res.status(404).json({ message: 'Certification not found' });
       if (!cert.templateImageUrl) return res.status(400).json({ message: 'Upload a template image before assigning' });
@@ -383,10 +466,23 @@ module.exports = {
 
       const matchedCount = students.length;
       const unmatched = Math.max(0, rowCount - matchedCount);
-      const { created, skipped } = await issueCertificatesTo(cert, students, req.user.id);
-      if (created > 0 && cert.status !== 'ACTIVE') await cert.update({ status: 'ACTIVE' });
+      const needsApproval = !canApprove(req.user);
+      const { created, skipped, resubmitted } = await issueCertificatesTo(cert, students, req.user.id, {
+        status: needsApproval ? 'PENDING' : 'ISSUED',
+        batchId: crypto.randomUUID(),
+      });
+      if (!needsApproval && created > 0 && cert.status !== 'ACTIVE') await cert.update({ status: 'ACTIVE' });
 
-      res.json({ message: 'Bulk assignment complete', rows: rowCount, matched: matchedCount, created, skipped, unmatched });
+      res.json({
+        message: needsApproval ? 'Sent for approval' : 'Bulk assignment complete',
+        pendingApproval: needsApproval,
+        rows: rowCount,
+        matched: matchedCount,
+        created,
+        skipped,
+        resubmitted,
+        unmatched,
+      });
     } catch (err) {
       console.error('certification.assignExcel error:', err);
       res.status(500).json({ message: 'Failed to process the Excel file' });
@@ -396,7 +492,7 @@ module.exports = {
   // GET /api/certifications/:id/assignments — recipients of one certification
   listAssignments: async (req, res) => {
     try {
-      if (!canManage(req.user.role)) return res.status(403).json({ message: 'Not authorized' });
+      if (!canGive(req.user)) return res.status(403).json({ message: 'Not authorized' });
       const cert = await Certification.findByPk(req.params.id);
       if (!cert) return res.status(404).json({ message: 'Certification not found' });
       const rows = await CertificateAssignment.findAll({
@@ -404,15 +500,21 @@ module.exports = {
         include: [
           { model: User, as: 'Student', attributes: ['id', 'firstName', 'lastName', 'email', 'registrationNumber'] },
           { model: User, as: 'IssuedByUser', attributes: ['id', 'firstName', 'lastName'] },
+          { model: User, as: 'ApprovedByUser', attributes: ['id', 'firstName', 'lastName'] },
         ],
         order: [['issuedAt', 'DESC']],
       });
       const shaped = rows.map((r) => {
         const a = shapeAssignment(r);
         a.fieldValues = resolvedValuesFor(cert, a, a.Student); // reflect current design
+        a.requestedByName = fullName(a.IssuedByUser);
+        a.approvedByName = fullName(a.ApprovedByUser);
+        // An approver may act on anything; a requester may withdraw their own
+        // request while it is still waiting.
+        a.canRemove = canApprove(req.user) || (a.status === 'PENDING' && a.issuedBy === req.user.id);
         return a;
       });
-      res.json({ assignments: shaped });
+      res.json({ assignments: shaped, canApprove: canApprove(req.user), canEdit: canEditCert(cert, req.user) });
     } catch (err) {
       console.error('certification.listAssignments error:', err);
       res.status(500).json({ message: 'Failed to list recipients' });
@@ -422,14 +524,137 @@ module.exports = {
   // DELETE /api/certifications/assignments/:assignmentId — revoke (remove) an issued cert
   revokeAssignment: async (req, res) => {
     try {
-      if (!canManage(req.user.role)) return res.status(403).json({ message: 'Not authorized' });
+      if (!canGive(req.user)) return res.status(403).json({ message: 'Not authorized' });
       const row = await CertificateAssignment.findByPk(req.params.assignmentId);
       if (!row) return res.status(404).json({ message: 'Assignment not found' });
+      const isOwnPending = row.status === 'PENDING' && row.issuedBy === req.user.id;
+      if (!canApprove(req.user) && !isOwnPending) {
+        return res.status(403).json({ message: 'Only an approver can remove a certificate that has been granted' });
+      }
       await row.destroy();
-      res.json({ message: 'Certificate revoked' });
+      res.json({ message: isOwnPending && !canApprove(req.user) ? 'Request withdrawn' : 'Certificate revoked' });
     } catch (err) {
       console.error('certification.revokeAssignment error:', err);
       res.status(500).json({ message: 'Failed to revoke certificate' });
+    }
+  },
+
+  // ── Approval queue ────────────────────────────────────────────
+  // GET /api/certifications/requests?status=PENDING|ALL
+  // Approvers get everyone's requests; everyone else gets their own, so a
+  // faculty member can follow what they submitted.
+  requests: async (req, res) => {
+    try {
+      if (!canGive(req.user)) return res.status(403).json({ message: 'Not authorized' });
+      const approver = canApprove(req.user);
+      const wantAll = String(req.query.status || '').toUpperCase() === 'ALL';
+
+      const where = {};
+      if (!approver) where.issuedBy = req.user.id;
+      if (!wantAll) where.status = 'PENDING';
+      else if (!approver) where.status = { [Op.in]: ['PENDING', 'ISSUED', 'REJECTED'] };
+
+      const rows = await CertificateAssignment.findAll({
+        where,
+        include: [
+          { model: Certification, as: 'Certification', attributes: ['id', 'title', 'templateImageUrl'] },
+          { model: User, as: 'Student', attributes: ['id', 'firstName', 'lastName', 'email', 'registrationNumber'] },
+          { model: User, as: 'IssuedByUser', attributes: ['id', 'firstName', 'lastName', 'approvedRole'] },
+          { model: User, as: 'ApprovedByUser', attributes: ['id', 'firstName', 'lastName'] },
+        ],
+        order: [['issuedAt', 'DESC']],
+        limit: 2000,
+      });
+
+      res.json({
+        canApprove: approver,
+        requests: rows.map((r) => {
+          const a = shapeAssignment(r);
+          return {
+            id: a.id,
+            status: a.status,
+            batchId: a.batchId,
+            certificationId: a.certificationId,
+            certificationTitle: a.Certification?.title || '—',
+            certificateNumber: a.certificateNumber,
+            studentId: a.studentId,
+            studentName: fullName(a.Student),
+            studentEmail: a.Student?.email || '',
+            registrationNumber: a.Student?.registrationNumber || '',
+            requestedById: a.issuedBy,
+            requestedByName: fullName(a.IssuedByUser),
+            requestedByRole: a.IssuedByUser?.approvedRole || '',
+            requestedAt: a.issuedAt,
+            approvedByName: fullName(a.ApprovedByUser),
+            approvedAt: a.approvedAt,
+            decisionNote: a.decisionNote || '',
+          };
+        }),
+      });
+    } catch (err) {
+      console.error('certification.requests error:', err);
+      res.status(500).json({ message: 'Failed to load certificate requests' });
+    }
+  },
+
+  // POST /api/certifications/requests/decide
+  // { decision: 'APPROVE' | 'REJECT', assignmentIds: [], batchIds: [], note }
+  // Approving makes the certificate visible to the student; rejecting keeps it
+  // hidden and tells the requester why.
+  decideRequests: async (req, res) => {
+    try {
+      if (!canApprove(req.user)) {
+        return res.status(403).json({ message: 'Only an admin, HOD or coordinator can approve certificates' });
+      }
+      const decision = String(req.body.decision || '').toUpperCase();
+      if (!['APPROVE', 'REJECT'].includes(decision)) {
+        return res.status(400).json({ message: 'decision must be APPROVE or REJECT' });
+      }
+      const ids = Array.isArray(req.body.assignmentIds) ? req.body.assignmentIds.filter(Boolean) : [];
+      const batchIds = Array.isArray(req.body.batchIds) ? req.body.batchIds.filter(Boolean) : [];
+      if (!ids.length && !batchIds.length) {
+        return res.status(400).json({ message: 'Select at least one certificate' });
+      }
+      const note = req.body.note ? String(req.body.note).slice(0, 2000) : null;
+
+      const or = [];
+      if (ids.length) or.push({ id: { [Op.in]: ids } });
+      if (batchIds.length) or.push({ batchId: { [Op.in]: batchIds } });
+      const rows = await CertificateAssignment.findAll({
+        where: { status: 'PENDING', [Op.or]: or },
+      });
+      if (!rows.length) return res.status(404).json({ message: 'Nothing left to decide — these were already handled' });
+
+      const now = new Date();
+      const touchedCerts = new Set();
+      for (const row of rows) {
+        if (decision === 'APPROVE') {
+          // The printed issue date is the day it was approved.
+          await row.update({
+            status: 'ISSUED', approvedBy: req.user.id, approvedAt: now, issuedAt: now, decisionNote: note,
+          });
+          touchedCerts.add(row.certificationId);
+        } else {
+          await row.update({ status: 'REJECTED', approvedBy: req.user.id, approvedAt: now, decisionNote: note });
+        }
+      }
+
+      if (decision === 'APPROVE' && touchedCerts.size) {
+        await Certification.update(
+          { status: 'ACTIVE' },
+          { where: { id: { [Op.in]: [...touchedCerts] } } },
+        );
+      }
+
+      res.json({
+        message: decision === 'APPROVE'
+          ? `Approved ${rows.length} certificate(s) — now visible to the student(s)`
+          : `Rejected ${rows.length} certificate(s) — the student(s) never see them`,
+        count: rows.length,
+      });
+    } catch (err) {
+      console.error('certification.decideRequests error:', err);
+      res.status(500).json({ message: 'Failed to record the decision' });
     }
   },
 

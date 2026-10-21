@@ -2314,9 +2314,22 @@ const CertificateAssignment = sequelize.define('CertificateAssignment', {
   certificateNumber: { type: DataTypes.STRING(64), allowNull: false, unique: true },
   // Snapshot: { [fieldId]: resolvedValue }.
   fieldValues: { type: DataTypes.JSON, allowNull: false, defaultValue: {} },
-  status: { type: DataTypes.ENUM('ISSUED', 'REVOKED'), allowNull: false, defaultValue: 'ISSUED' },
+  // A certificate a faculty member grants starts PENDING and is invisible to
+  // the student until an admin/HOD/coordinator approves it. Staff who can
+  // approve issue straight to ISSUED.
+  status: {
+    type: DataTypes.ENUM('PENDING', 'ISSUED', 'REVOKED', 'REJECTED'),
+    allowNull: false,
+    defaultValue: 'ISSUED',
+  },
   issuedBy: { type: DataTypes.UUID, allowNull: true },
   issuedAt: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
+  approvedBy: { type: DataTypes.UUID, allowNull: true },
+  approvedAt: { type: DataTypes.DATE, allowNull: true },
+  decisionNote: { type: DataTypes.TEXT, allowNull: true },
+  // Groups the rows created by one submission, so a whole batch can be
+  // approved or rejected together.
+  batchId: { type: DataTypes.UUID, allowNull: true },
 }, {
   tableName: 'certificate_assignments',
   timestamps: true,
@@ -2329,6 +2342,7 @@ Certification.hasMany(CertificateAssignment, { foreignKey: 'certificationId', as
 CertificateAssignment.belongsTo(Certification, { foreignKey: 'certificationId', as: 'Certification' });
 CertificateAssignment.belongsTo(User, { foreignKey: 'studentId', as: 'Student' });
 CertificateAssignment.belongsTo(User, { foreignKey: 'issuedBy', as: 'IssuedByUser' });
+CertificateAssignment.belongsTo(User, { foreignKey: 'approvedBy', as: 'ApprovedByUser', constraints: false });
 
 // Faculty weekly schedule (Mon–Sat, 8:00–18:00). Non-student roles place
 // work-blocks on a 15-min grid. startMinutes/endMinutes are minutes since

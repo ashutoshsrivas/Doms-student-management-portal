@@ -548,6 +548,39 @@ async function start() {
         console.error('Error adding total_strength to classes:', error.message);
       }
     }
+    // Certificates granted by faculty wait for approval before a student can
+    // see them: widen the status ENUM and record who decided.
+    try {
+      await sequelize.query(
+        `ALTER TABLE certificate_assignments MODIFY COLUMN status ENUM('PENDING','ISSUED','REVOKED','REJECTED') NOT NULL DEFAULT 'ISSUED'`,
+      );
+      console.log('certificate_assignments.status ENUM is up to date');
+    } catch (error) {
+      if (error.message && error.message.includes("doesn't exist")) {
+        // fresh install — sync creates the table with the right ENUM
+      } else {
+        console.error('Error updating certificate_assignments.status ENUM:', error.message);
+      }
+    }
+    for (const [column, ddl] of [
+      ['approved_by', 'CHAR(36) NULL'],
+      ['approved_at', 'DATETIME NULL'],
+      ['decision_note', 'TEXT NULL'],
+      ['batch_id', 'CHAR(36) NULL'],
+    ]) {
+      try {
+        await sequelize.query(`ALTER TABLE certificate_assignments ADD COLUMN ${column} ${ddl}`);
+        console.log(`Added ${column} column to certificate_assignments`);
+      } catch (error) {
+        if (error.message && error.message.includes('Duplicate column')) {
+          console.log(`${column} column already exists on certificate_assignments`);
+        } else if (error.message && error.message.includes("doesn't exist")) {
+          // fresh install — sync already created it
+        } else {
+          console.error(`Error adding ${column} to certificate_assignments:`, error.message);
+        }
+      }
+    }
     // Grade scale moved from A/B/C/D/UNAVAILABLE to the 10-point letters.
     // Widening the ENUM keeps every existing value that is still valid.
     try {
