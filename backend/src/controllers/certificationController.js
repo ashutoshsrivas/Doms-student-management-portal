@@ -10,9 +10,10 @@ const {
 const { Op } = require('sequelize');
 const { uploadToS3, deleteFromS3 } = require('../utils/s3Upload');
 
-// Who signs certificates off. COORDINATOR (the academic coordinator) is
-// aliased to ADMIN by the auth middleware, so it is covered here.
-const APPROVE_ROLES = ['ADMIN', 'HOD'];
+// Who signs certificates off: admin, HOD and the academic coordinator. The
+// auth middleware aliases COORDINATOR to ADMIN, but it is named here too so
+// approval never depends on that aliasing.
+const APPROVE_ROLES = ['ADMIN', 'HOD', 'COORDINATOR'];
 // Any member of staff may grant a certificate; theirs waits for approval.
 const GIVE_ROLES = ['ADMIN', 'HOD', 'FACULTY', 'CHAIR_HEAD', 'COORDINATOR', 'PLACEMENT_COORDINATOR', 'TRAINER', 'MENTOR'];
 // Roles that may view any student's earned certificates.
