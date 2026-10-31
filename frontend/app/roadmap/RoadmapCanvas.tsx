@@ -1,7 +1,8 @@
 'use client';
 
-import { ReactNode, useEffect } from 'react';
-import { FiX, FiFlag, FiPlus, FiCalendar } from 'react-icons/fi';
+import { ReactNode, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { FiX, FiFlag, FiPlus, FiCalendar, FiZoomIn, FiZoomOut, FiMaximize } from 'react-icons/fi';
 import Timeline from './Timeline';
 import { Milestone, SelfMilestone, daysUntil, fmtDate } from './types';
 
@@ -26,6 +27,15 @@ export default function RoadmapCanvas({
   goalTitle, startDate, endDate, sessionName, milestones, selfMilestones,
   onMilestone, onSelf, onAddSelf, readOnlyLabel, footer, onClose,
 }: Props) {
+  // Rendered into <body>: inside the dashboard layout the sidebar and the
+  // top bar painted over this, which put the close button out of reach.
+  const [mounted, setMounted] = useState(false);
+  // 100% fits the whole session on screen; zooming in makes room between
+  // milestones that sit close together, and the canvas scrolls sideways.
+  const [zoom, setZoom] = useState(100);
+
+  useEffect(() => { setMounted(true); }, []);
+
   // Escape closes it, and the page behind must not scroll underneath.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -39,9 +49,10 @@ export default function RoadmapCanvas({
   }, [onClose]);
 
   const days = daysUntil(endDate);
+  if (!mounted) return null;
 
-  return (
-    <div className="rm-fade fixed inset-0 z-[60] flex flex-col bg-white">
+  const canvas = (
+    <div className="rm-fade fixed inset-0 z-[2000] flex flex-col bg-white">
       <div className="rm-stage flex min-h-0 flex-1 flex-col">
         {/* header */}
         <header className="flex flex-none items-start gap-3 border-b border-white/60 px-4 py-3 sm:px-6 sm:py-4">
@@ -65,6 +76,37 @@ export default function RoadmapCanvas({
             </p>
           </div>
           <div className="flex flex-none items-center gap-2">
+            {/* zoom: the session can be two years long, so let people stretch it */}
+            <div className="hidden items-center gap-0.5 rounded-full border border-gray-200 bg-white/80 p-0.5 md:flex">
+              <button
+                type="button"
+                onClick={() => setZoom((z) => Math.max(100, z - 50))}
+                disabled={zoom <= 100}
+                aria-label="Zoom out"
+                className="flex h-8 w-8 items-center justify-center rounded-full text-gray-600 hover:bg-gray-100 disabled:opacity-40"
+              >
+                <FiZoomOut className="h-4 w-4" />
+              </button>
+              <span className="w-12 text-center text-xs font-semibold tabular-nums text-gray-600">{zoom}%</span>
+              <button
+                type="button"
+                onClick={() => setZoom((z) => Math.min(400, z + 50))}
+                disabled={zoom >= 400}
+                aria-label="Zoom in"
+                className="flex h-8 w-8 items-center justify-center rounded-full text-gray-600 hover:bg-gray-100 disabled:opacity-40"
+              >
+                <FiZoomIn className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setZoom(100)}
+                aria-label="Fit the whole session"
+                title="Fit"
+                className="flex h-8 w-8 items-center justify-center rounded-full text-gray-600 hover:bg-gray-100"
+              >
+                <FiMaximize className="h-4 w-4" />
+              </button>
+            </div>
             {onAddSelf && (
               <button
                 type="button"
@@ -86,8 +128,8 @@ export default function RoadmapCanvas({
         </header>
 
         {/* the canvas */}
-        <div className="min-h-0 flex-1 overflow-y-auto px-2 py-4 sm:px-6 sm:py-6">
-          <div className="mx-auto max-w-[1400px]">
+        <div className="min-h-0 flex-1 overflow-auto px-2 py-4 sm:px-6 sm:py-6">
+          <div className="mx-auto" style={{ width: `${zoom}%`, maxWidth: zoom === 100 ? 1400 : undefined }}>
             <Timeline
               startDate={startDate}
               endDate={endDate}
@@ -98,9 +140,20 @@ export default function RoadmapCanvas({
               onSelf={onSelf}
               studentLabel={readOnlyLabel}
               tall
+              hideLegend
             />
           </div>
           {footer && <div className="mx-auto mt-4 max-w-[1400px]">{footer}</div>}
+        </div>
+
+        <div className="flex-none border-t border-white/60 px-4 py-2">
+          <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-[11px] text-gray-500">
+            <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-indigo-600" /> Faculty milestones</span>
+            <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-emerald-600" /> My milestones</span>
+            <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-amber-500" /> My achievements</span>
+            <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-blue-600" /> Today</span>
+            {readOnlyLabel && <span className="text-gray-400">· {readOnlyLabel}</span>}
+          </div>
         </div>
 
         {onAddSelf && (
@@ -117,4 +170,6 @@ export default function RoadmapCanvas({
       </div>
     </div>
   );
+
+  return createPortal(canvas, document.body);
 }

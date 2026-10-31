@@ -43,6 +43,8 @@ export type TimelineProps = {
   variant?: 'full' | 'preview';
   /** Let the canvas use the height it is given. */
   tall?: boolean;
+  /** The canvas shows its own legend outside the zoomed area. */
+  hideLegend?: boolean;
   onOpen?: () => void;
 };
 
@@ -67,7 +69,7 @@ const DaysBadge = ({ days, caption }: { days: number | null; caption: string }) 
 
 export default function Timeline({
   startDate, endDate, goalTitle, milestones, selfMilestones, onMilestone, onSelf, studentLabel,
-  variant = 'full', tall = false, onOpen,
+  variant = 'full', tall = false, hideLegend = false, onOpen,
 }: TimelineProps) {
   const [isMobile, setIsMobile] = useState(false);
   const [hover, setHover] = useState<Hover>(null);
@@ -503,6 +505,7 @@ export default function Timeline({
         <span>{fmtDate(endDate)}</span>
       </div>
 
+      {!hideLegend && (
       <div className="mt-2 flex flex-wrap items-center justify-center gap-4 text-[11px] text-gray-500">
         <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-indigo-600" /> Faculty milestones (above)</span>
         <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-emerald-600" /> My milestones (below)</span>
@@ -510,6 +513,7 @@ export default function Timeline({
         <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-blue-600" /> Today</span>
         {studentLabel && <span className="text-gray-400">· {studentLabel}</span>}
       </div>
+      )}
     </div>
   );
 }
