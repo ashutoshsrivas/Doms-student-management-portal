@@ -2,11 +2,12 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { FiPlus, FiX, FiTrash2, FiAward, FiStar, FiFlag, FiCheck } from 'react-icons/fi';
+import { FiPlus, FiX, FiTrash2, FiAward, FiStar, FiFlag, FiCheck, FiMaximize2, FiClock } from 'react-icons/fi';
 import apiClient from '@/app/lib/apiClient';
 import GoalOrb from './GoalOrb';
 import Timeline from './Timeline';
-import { Milestone, Roadmap, SelfMilestone, fmtDate } from './types';
+import RoadmapCanvas from './RoadmapCanvas';
+import { Milestone, Roadmap, SelfMilestone, daysUntil, fmtDate } from './types';
 
 export default function StudentRoadmap() {
   const [data, setData] = useState<Roadmap | null>(null);
@@ -16,6 +17,7 @@ export default function StudentRoadmap() {
   const [openMilestone, setOpenMilestone] = useState<Milestone | null>(null);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [openSelf, setOpenSelf] = useState<Partial<SelfMilestone> | null>(null);
+  const [canvas, setCanvas] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -109,6 +111,12 @@ export default function StudentRoadmap() {
   if (!data) return null;
 
   const approved = data.goal?.status === 'APPROVED';
+  // The goal is reached at the end of the session, so that is what the
+  // countdown measures.
+  const goalDate = data.session?.endDate || data.goal?.targetDate || null;
+  const timelineStart = data.session?.startDate || data.goal?.createdAt?.slice(0, 10) || null;
+  const daysLeft = daysUntil(goalDate);
+  const pendingAnswers = data.milestones.filter((m) => m.questions.length > 0 && !m.myResponse).length;
 
   return (
     <div className="space-y-5">
@@ -149,38 +157,70 @@ export default function StudentRoadmap() {
         />
       ) : (
         <>
-          <div className={`rm-stage rounded-3xl border border-white/60 p-4 sm:p-6 ${justApproved ? 'rm-fade' : ''}`}>
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600 to-fuchsia-600 text-white shadow-lg shadow-indigo-500/25">
-                  <FiFlag className="h-4 w-4" />
+          <div className={`rm-stage overflow-hidden rounded-3xl border border-white/60 ${justApproved ? 'rm-fade' : ''}`}>
+            <div className="flex flex-wrap items-center justify-between gap-3 px-4 pt-4 sm:px-6 sm:pt-5">
+              <div className="flex min-w-0 items-center gap-3">
+                <span className="flex h-11 w-11 flex-none items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600 to-fuchsia-600 text-white shadow-lg shadow-indigo-500/25">
+                  <FiFlag className="h-5 w-5" />
                 </span>
-                <div>
-                  <div className="text-sm font-bold text-gray-900">{data.goal?.title}</div>
+                <div className="min-w-0">
+                  <div className="truncate text-base font-bold text-gray-900">{data.goal?.title}</div>
                   <div className="text-[11px] text-gray-500">
-                    Goal by {fmtDate(data.goal?.targetDate)}
+                    By the end of the session · {fmtDate(goalDate)}
                     {data.goal?.approvedByName ? ` · approved by ${data.goal.approvedByName}` : ''}
                   </div>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => setOpenSelf({ type: 'MILESTONE', date: new Date().toISOString().slice(0, 10) })}
-                className="inline-flex items-center gap-1.5 rounded-full bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800"
-              >
-                <FiPlus className="h-4 w-4" /> Add my milestone
-              </button>
+              <div className={`flex-none rounded-2xl px-4 py-2 text-center ring-1 ${
+                daysLeft === null ? 'bg-gray-100 text-gray-600 ring-gray-200'
+                  : daysLeft < 0 ? 'bg-rose-50 text-rose-700 ring-rose-200'
+                    : daysLeft <= 30 ? 'bg-amber-50 text-amber-800 ring-amber-200'
+                      : 'bg-blue-50 text-blue-700 ring-blue-200'
+              }`}>
+                <div className="text-xl font-bold leading-none tabular-nums">
+                  {daysLeft === null ? '—' : daysLeft < 0 ? `−${Math.abs(daysLeft)}` : daysLeft}
+                </div>
+                <div className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide opacity-80">days left</div>
+              </div>
             </div>
 
             <Timeline
-              startDate={data.session?.startDate || data.goal?.createdAt?.slice(0, 10) || null}
-              endDate={data.goal?.targetDate || data.session?.endDate || null}
+              variant="preview"
+              startDate={timelineStart}
+              endDate={goalDate}
               goalTitle={data.goal?.title || ''}
               milestones={data.milestones}
               selfMilestones={data.selfMilestones}
-              onMilestone={(m) => { setOpenMilestone(m); setAnswers(m.myResponse?.answers || {}); }}
-              onSelf={(m) => setOpenSelf(m)}
+              onOpen={() => setCanvas(true)}
             />
+
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/60 px-4 py-3 sm:px-6">
+              <div className="flex flex-wrap items-center gap-3 text-[11px] text-gray-500">
+                <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-indigo-600" /> {data.milestones.length} from faculty</span>
+                <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-emerald-600" /> {data.selfMilestones.length} mine</span>
+                {pendingAnswers > 0 && (
+                  <span className="inline-flex items-center gap-1 font-semibold text-amber-700">
+                    <FiClock className="h-3 w-3" /> {pendingAnswers} to answer
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setOpenSelf({ type: 'MILESTONE', date: new Date().toISOString().slice(0, 10) })}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3.5 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                >
+                  <FiPlus className="h-4 w-4" /> Add mine
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCanvas(true)}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800"
+                >
+                  <FiMaximize2 className="h-4 w-4" /> Open roadmap
+                </button>
+              </div>
+            </div>
           </div>
 
           {/* A plain list under the timeline — easier to scan, and the only
@@ -245,6 +285,21 @@ export default function StudentRoadmap() {
             </div>
           </div>
         </>
+      )}
+
+      {canvas && approved && (
+        <RoadmapCanvas
+          goalTitle={data.goal?.title || ''}
+          startDate={timelineStart}
+          endDate={goalDate}
+          sessionName={data.session?.name}
+          milestones={data.milestones}
+          selfMilestones={data.selfMilestones}
+          onMilestone={(m) => { setOpenMilestone(m); setAnswers(m.myResponse?.answers || {}); }}
+          onSelf={(m) => setOpenSelf(m)}
+          onAddSelf={() => setOpenSelf({ type: 'MILESTONE', date: new Date().toISOString().slice(0, 10) })}
+          onClose={() => setCanvas(false)}
+        />
       )}
 
       {/* Answer a faculty milestone */}

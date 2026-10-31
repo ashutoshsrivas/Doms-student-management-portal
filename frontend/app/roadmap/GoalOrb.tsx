@@ -17,21 +17,19 @@ type Props = {
 export default function GoalOrb({ questions, goal, sessionEnd, saving, onSave }: Props) {
   const [step, setStep] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>(goal?.answers || {});
-  const [targetDate, setTargetDate] = useState<string>(goal?.targetDate || sessionEnd || '');
+  const targetDate = sessionEnd || goal?.targetDate || '';
   const [editing, setEditing] = useState(!goal);
 
-  const total = questions.length + 1; // the questions, then the date
-  const onDateStep = step === questions.length;
+  const total = questions.length;
+  const lastStep = step === total - 1;
   const current = questions[step];
   const answered = useMemo(
     () => questions.filter((q) => String(answers[q.id] || '').trim()).length,
     [questions, answers],
   );
-  const progress = Math.round(((onDateStep ? total : step) / total) * 100);
+  const progress = Math.round((answered / Math.max(1, total)) * 100);
 
-  const canAdvance = onDateStep
-    ? !!targetDate
-    : !current?.required || !!String(answers[current.id] || '').trim();
+  const canAdvance = !current?.required || !!String(answers[current.id] || '').trim();
 
   const submit = () => {
     onSave({
@@ -61,7 +59,7 @@ export default function GoalOrb({ questions, goal, sessionEnd, saving, onSave }:
 
           <div className="rm-rise w-full rounded-3xl border border-gray-100 bg-white/80 p-5 text-center shadow-sm">
             <h2 className="text-lg font-bold text-gray-900 sm:text-xl">{goal.title}</h2>
-            <p className="mt-1 text-sm text-gray-500">Target · {fmtDate(goal.targetDate)}</p>
+            <p className="mt-1 text-sm text-gray-500">By the end of the session · {fmtDate(sessionEnd || goal.targetDate)}</p>
             {waiting ? (
               <p className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800">
                 <FiClock className="h-3.5 w-3.5" /> A faculty member will review this. Your timeline appears once it is approved.
@@ -112,23 +110,12 @@ export default function GoalOrb({ questions, goal, sessionEnd, saving, onSave }:
             <span className="text-[11px] font-semibold uppercase tracking-wide text-indigo-600">
               Step {Math.min(step + 1, total)} of {total}
             </span>
-            {!onDateStep && current && !current.required && (
+            {current && !current.required && (
               <span className="text-[11px] text-gray-400">optional</span>
             )}
           </div>
 
-          {onDateStep ? (
-            <>
-              <label className="block text-base font-bold text-gray-900 sm:text-lg">By when do you want to reach it?</label>
-              <p className="mt-1 text-xs text-gray-500">Your timeline runs from the start of your session to this date.</p>
-              <input
-                type="date"
-                value={targetDate}
-                onChange={(e) => setTargetDate(e.target.value)}
-                className="mt-3 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 focus:border-indigo-400 focus:outline-none"
-              />
-            </>
-          ) : current ? (
+          {current ? (
             <>
               <label className="block text-base font-bold text-gray-900 sm:text-lg">{current.label}</label>
               {current.type === 'textarea' ? (
@@ -165,7 +152,7 @@ export default function GoalOrb({ questions, goal, sessionEnd, saving, onSave }:
               <FiArrowLeft className="h-4 w-4" /> Back
             </button>
 
-            {onDateStep ? (
+            {lastStep ? (
               <button
                 type="button"
                 onClick={submit}
@@ -186,7 +173,11 @@ export default function GoalOrb({ questions, goal, sessionEnd, saving, onSave }:
             )}
           </div>
 
-          <div className="mt-4 flex items-center justify-center gap-1.5">
+          <p className="mt-4 text-center text-[11px] text-gray-500">
+            Your goal is for the <strong>end of your session</strong>{targetDate ? ` — ${fmtDate(targetDate)}` : ''}.
+          </p>
+
+          <div className="mt-3 flex items-center justify-center gap-1.5">
             {Array.from({ length: total }).map((_, i) => (
               <span
                 key={i}

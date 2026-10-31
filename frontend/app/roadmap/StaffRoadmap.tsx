@@ -5,10 +5,12 @@ import toast from 'react-hot-toast';
 import {
   FiPlus, FiX, FiTrash2, FiEdit2, FiCheck, FiSearch, FiUsers, FiFlag, FiClock,
   FiTarget, FiBookOpen, FiAward, FiBriefcase, FiCalendar, FiStar, FiZap, FiCheckCircle, FiArrowLeft, FiEye,
+  FiMaximize2,
 } from 'react-icons/fi';
 import apiClient from '@/app/lib/apiClient';
 import Timeline from './Timeline';
-import { Goal, Milestone, MILESTONE_ICONS, Question, Roadmap, SessionInfo, fmtDate } from './types';
+import RoadmapCanvas from './RoadmapCanvas';
+import { Goal, Milestone, MILESTONE_ICONS, Question, Roadmap, SessionInfo, daysUntil, fmtDate } from './types';
 
 const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   target: FiTarget, flag: FiFlag, book: FiBookOpen, award: FiAward, briefcase: FiBriefcase,
@@ -53,6 +55,7 @@ export default function StaffRoadmap() {
   const [viewing, setViewing] = useState<Roadmap | null>(null);
   const [rejecting, setRejecting] = useState<GoalRow | null>(null);
   const [note, setNote] = useState('');
+  const [canvas, setCanvas] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -169,6 +172,8 @@ export default function StaffRoadmap() {
 
   // ── One student's roadmap, read-only ──────────────────────────
   if (viewing) {
+    const viewedGoalDate = viewing.session?.endDate || viewing.goal?.targetDate || null;
+    const viewedDays = daysUntil(viewedGoalDate);
     return (
       <div className="space-y-4">
         <div className="flex flex-wrap items-center gap-3">
@@ -188,25 +193,47 @@ export default function StaffRoadmap() {
         </div>
 
         {viewing.goal ? (
-          <div className="rm-stage rounded-3xl border border-white/60 p-4 sm:p-6">
-            <div className="mb-3 flex items-center gap-2">
-              <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600 to-fuchsia-600 text-white">
-                <FiFlag className="h-4 w-4" />
-              </span>
-              <div>
-                <div className="text-sm font-bold text-gray-900">{viewing.goal.title}</div>
-                <div className="text-[11px] text-gray-500">Goal by {fmtDate(viewing.goal.targetDate)}</div>
+          <div className="rm-stage overflow-hidden rounded-3xl border border-white/60">
+            <div className="flex flex-wrap items-center justify-between gap-3 px-4 pt-4 sm:px-6 sm:pt-5">
+              <div className="flex min-w-0 items-center gap-3">
+                <span className="flex h-11 w-11 flex-none items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600 to-fuchsia-600 text-white shadow-lg shadow-indigo-500/25">
+                  <FiFlag className="h-5 w-5" />
+                </span>
+                <div className="min-w-0">
+                  <div className="truncate text-base font-bold text-gray-900">{viewing.goal.title}</div>
+                  <div className="text-[11px] text-gray-500">By the end of the session · {fmtDate(viewedGoalDate)}</div>
+                </div>
+              </div>
+              <div className={`flex-none rounded-2xl px-4 py-2 text-center ring-1 ${
+                viewedDays === null ? 'bg-gray-100 text-gray-600 ring-gray-200'
+                  : viewedDays < 0 ? 'bg-rose-50 text-rose-700 ring-rose-200'
+                    : 'bg-blue-50 text-blue-700 ring-blue-200'
+              }`}>
+                <div className="text-xl font-bold leading-none tabular-nums">
+                  {viewedDays === null ? '—' : viewedDays < 0 ? `−${Math.abs(viewedDays)}` : viewedDays}
+                </div>
+                <div className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide opacity-80">days left</div>
               </div>
             </div>
             <Timeline
+              variant="preview"
               startDate={viewing.session?.startDate || null}
-              endDate={viewing.goal.targetDate || viewing.session?.endDate || null}
+              endDate={viewedGoalDate}
               goalTitle={viewing.goal.title}
               milestones={viewing.milestones}
               selfMilestones={viewing.selfMilestones}
-              onMilestone={(m) => openResponses(m)}
-              studentLabel="Read-only view"
+              onOpen={() => setCanvas(true)}
             />
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/60 px-4 py-3 sm:px-6">
+              <div className="flex flex-wrap items-center gap-3 text-[11px] text-gray-500">
+                <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-indigo-600" /> {viewing.milestones.length} from faculty</span>
+                <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-emerald-600" /> {viewing.selfMilestones.length} theirs</span>
+              </div>
+              <button type="button" onClick={() => setCanvas(true)}
+                className="inline-flex items-center gap-1.5 rounded-full bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800">
+                <FiMaximize2 className="h-4 w-4" /> Open roadmap
+              </button>
+            </div>
           </div>
         ) : (
           <div className="rounded-2xl border border-dashed border-gray-200 bg-white px-4 py-10 text-center text-sm text-gray-500">
@@ -248,6 +275,20 @@ export default function StaffRoadmap() {
             )}
           </div>
         </div>
+
+        {canvas && viewing.goal && (
+          <RoadmapCanvas
+            goalTitle={viewing.goal.title}
+            startDate={viewing.session?.startDate || null}
+            endDate={viewedGoalDate}
+            sessionName={viewing.session?.name}
+            milestones={viewing.milestones}
+            selfMilestones={viewing.selfMilestones}
+            onMilestone={(m) => openResponses(m)}
+            readOnlyLabel={`${viewing.student?.name || 'Student'} · read-only`}
+            onClose={() => setCanvas(false)}
+          />
+        )}
 
         {responses && <ResponsesModal data={responses} onClose={() => setResponses(null)} />}
       </div>
@@ -321,7 +362,7 @@ export default function StaffRoadmap() {
                     <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${GOAL_STATUS_STYLE[g.status] || ''}`}>{g.status}</span>
                   </div>
                   <p className="mt-1 text-base font-semibold text-gray-900">{g.title}</p>
-                  <p className="text-[11px] text-gray-500">Target {fmtDate(g.targetDate)}</p>
+                  <p className="text-[11px] text-gray-500">By the end of the session · {fmtDate(g.targetDate)}</p>
                 </div>
                 {g.status === 'PENDING' && (
                   <div className="flex items-center gap-2">

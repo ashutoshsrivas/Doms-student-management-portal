@@ -39,6 +39,11 @@ export type TimelineProps = {
   onMilestone?: (m: Milestone) => void;
   onSelf?: (m: SelfMilestone) => void;
   studentLabel?: string;
+  /** 'preview' is the slim strip on the page; 'full' is the canvas. */
+  variant?: 'full' | 'preview';
+  /** Let the canvas use the height it is given. */
+  tall?: boolean;
+  onOpen?: () => void;
 };
 
 const DaysBadge = ({ days, caption }: { days: number | null; caption: string }) => {
@@ -62,6 +67,7 @@ const DaysBadge = ({ days, caption }: { days: number | null; caption: string }) 
 
 export default function Timeline({
   startDate, endDate, goalTitle, milestones, selfMilestones, onMilestone, onSelf, studentLabel,
+  variant = 'full', tall = false, onOpen,
 }: TimelineProps) {
   const [isMobile, setIsMobile] = useState(false);
   const [hover, setHover] = useState<Hover>(null);
@@ -140,6 +146,76 @@ export default function Timeline({
   }, [selfMilestones, axis.from, axis.to]);
 
   const clearHover = () => setHover(null);
+
+  // ── The slim strip on the page: rail, pins, no cards ──────────
+  if (variant === 'preview') {
+    return (
+      <button
+        type="button"
+        onClick={onOpen}
+        aria-label="Open the full roadmap"
+        className="group relative block h-[132px] w-full overflow-hidden rounded-2xl px-6 text-left"
+      >
+        <div className="absolute left-6 right-6 top-1/2 h-1 -translate-y-1/2 rounded-full bg-gray-200" />
+        <div
+          className={`rm-progress absolute left-6 top-1/2 h-1 -translate-y-1/2 rounded-full ${mounted ? 'rm-draw-x' : ''}`}
+          style={{ width: `calc((100% - 3rem) * ${currentPct / 100})` }}
+        />
+
+        {/* faculty pins above */}
+        {staff.map(({ m, at }) => {
+          const Icon = iconFor(m.icon);
+          return (
+            <span
+              key={m.id}
+              title={`${m.title} · ${fmtDate(m.dueDate)}`}
+              className={`absolute flex h-6 w-6 -translate-x-1/2 items-center justify-center rounded-full border-2 border-white text-white shadow ${
+                m.myResponse ? 'bg-emerald-500' : 'bg-indigo-600'
+              } ${mounted ? 'rm-pop' : 'opacity-0'}`}
+              style={{ left: `calc(1.5rem + (100% - 3rem) * ${at / 100})`, top: 'calc(50% - 34px)' }}
+            >
+              <Icon className="h-3 w-3" />
+            </span>
+          );
+        })}
+
+        {/* the student's own below */}
+        {own.map(({ m, at }) => {
+          const Icon = m.type === 'ACHIEVEMENT' ? FiAward : FiStar;
+          return (
+            <span
+              key={m.id}
+              title={`${m.title} · ${fmtDate(m.date)}`}
+              className={`absolute flex h-6 w-6 -translate-x-1/2 items-center justify-center rounded-full border-2 border-white text-white shadow ${
+                m.type === 'ACHIEVEMENT' ? 'bg-amber-500' : 'bg-emerald-600'
+              } ${mounted ? 'rm-pop' : 'opacity-0'}`}
+              style={{ left: `calc(1.5rem + (100% - 3rem) * ${at / 100})`, top: 'calc(50% + 12px)' }}
+            >
+              <Icon className="h-3 w-3" />
+            </span>
+          );
+        })}
+
+        {/* start, today, goal */}
+        <span className="absolute left-6 top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-gray-300 shadow" />
+        <span
+          className="rm-here absolute top-1/2 z-10 flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-blue-600 text-white shadow ring-4 ring-white"
+          style={{ left: `calc(1.5rem + (100% - 3rem) * ${currentPct / 100})` }}
+        >
+          <FiMapPin className="h-3 w-3" />
+        </span>
+        <span className="absolute right-6 top-1/2 flex h-9 w-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-gradient-to-br from-indigo-600 to-fuchsia-600 text-white shadow-lg">
+          <FiFlag className="rm-flag-cloth h-4 w-4" />
+        </span>
+
+        <span className="absolute bottom-2 left-6 text-[10px] font-semibold text-gray-400">{fmtDate(startDate)}</span>
+        <span className="absolute bottom-2 right-6 text-[10px] font-semibold text-gray-400">{fmtDate(endDate)}</span>
+        <span className="absolute right-6 top-2 rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-bold text-gray-600 opacity-0 shadow-sm transition group-hover:opacity-100">
+          Open full roadmap
+        </span>
+      </button>
+    );
+  }
 
   // ── Mobile: one stop per row, in date order ───────────────────
   if (isMobile) {
@@ -263,11 +339,12 @@ export default function Timeline({
   }
 
   // ── Desktop: a true time axis ─────────────────────────────────
-  const laneOffset = (lane: number) => 92 + lane * 74;
+  const laneOffset = (lane: number) => (tall ? 124 + lane * 96 : 92 + lane * 74);
+  const cardWidth = tall ? 186 : 150;
 
   return (
     <div className="relative" onMouseLeave={clearHover}>
-      <div className="relative h-[460px] w-full overflow-hidden rounded-3xl">
+      <div className={`relative w-full overflow-hidden rounded-3xl ${tall ? 'h-[clamp(520px,70vh,760px)]' : 'h-[460px]'}`}>
         {/* staff milestones above */}
         {staff.map(({ m, at, lane }, i) => {
           const Icon = iconFor(m.icon);
@@ -284,7 +361,8 @@ export default function Timeline({
                 onClick={() => onMilestone?.(m)}
                 onMouseEnter={() => setHover({ label: m.title, days })}
                 onFocus={() => setHover({ label: m.title, days })}
-                className="rm-card w-[150px] rounded-2xl border border-indigo-100 bg-white/90 p-2.5 text-left shadow-sm hover:shadow-md"
+                className="rm-card rounded-2xl border border-indigo-100 bg-white/90 p-2.5 text-left shadow-sm hover:shadow-md"
+                style={{ width: cardWidth }}
               >
                 <div className="flex items-center gap-1.5">
                   <span className="flex h-6 w-6 flex-none items-center justify-center rounded-full bg-indigo-600 text-white">
@@ -298,7 +376,7 @@ export default function Timeline({
                 </div>
               </button>
               {/* stem down to the rail */}
-              <div className="w-px flex-1 bg-gradient-to-b from-indigo-300 to-indigo-200" style={{ height: laneOffset(lane) - 78 }} />
+              <div className="w-px flex-1 bg-gradient-to-b from-indigo-300 to-indigo-200" style={{ height: laneOffset(lane) - (tall ? 92 : 78) }} />
               <button
                 type="button"
                 aria-label={m.title}
@@ -396,12 +474,13 @@ export default function Timeline({
               >
                 <Icon className="h-4 w-4" />
               </button>
-              <div className="w-px bg-gradient-to-b from-emerald-200 to-emerald-300" style={{ height: laneOffset(lane) - 92 + 14 }} />
+              <div className="w-px bg-gradient-to-b from-emerald-200 to-emerald-300" style={{ height: laneOffset(lane) - (tall ? 110 : 92) + 14 }} />
               <button
                 type="button"
                 onClick={() => onSelf?.(m)}
                 onMouseEnter={() => setHover({ label: m.title, days })}
-                className="rm-card w-[150px] rounded-2xl border border-emerald-100 bg-white/90 p-2.5 text-left shadow-sm hover:shadow-md"
+                className="rm-card rounded-2xl border border-emerald-100 bg-white/90 p-2.5 text-left shadow-sm hover:shadow-md"
+                style={{ width: cardWidth }}
               >
                 <div className="flex items-center gap-1.5">
                   <span className={`flex h-6 w-6 flex-none items-center justify-center rounded-full text-white ${m.type === 'ACHIEVEMENT' ? 'bg-amber-500' : 'bg-emerald-600'}`}>

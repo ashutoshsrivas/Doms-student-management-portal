@@ -123,10 +123,16 @@ async function roadmapFor(userId, { includeStudent = false } = {}) {
 
   const own = await StudentMilestone.findAll({ where: { userId }, order: [['date', 'ASC']] });
 
+  // The goal is reached at the end of the session, so the session end date
+  // is what the timeline and the day count run to — even for goals saved
+  // earlier with a date the student picked.
+  const shaped = shapeGoal(goal);
+  if (shaped && session?.endDate) shaped.targetDate = session.endDate;
+
   const payload = {
     session,
     questions: GOAL_QUESTIONS,
-    goal: shapeGoal(goal),
+    goal: shaped,
     milestones: milestones.map((m) => {
       const mine = responseBy.get(m.id);
       return shapeMilestone(m, {
@@ -179,9 +185,9 @@ const roadmapController = {
         }
       }
 
+      // Not the student's choice: the goal is for the end of their session.
       const session = await sessionFor(req.user.id);
-      let targetDate = req.body.targetDate ? dayOnly(req.body.targetDate) : null;
-      if (!targetDate) targetDate = session?.endDate || null;
+      const targetDate = session?.endDate || (req.body.targetDate ? dayOnly(req.body.targetDate) : null);
 
       const existing = await StudentGoal.findOne({ where: { userId: req.user.id } });
       if (existing && existing.status === 'APPROVED') {
@@ -231,7 +237,7 @@ const roadmapController = {
         include: [
           { model: User, as: 'Student', attributes: ['id', 'firstName', 'lastName', 'email', 'registrationNumber'] },
           { model: User, as: 'ApprovedByUser', attributes: ['id', 'firstName', 'lastName', 'email'] },
-          { model: AcademicSession, as: 'Session', attributes: ['id', 'name'] },
+          { model: AcademicSession, as: 'Session', attributes: ['id', 'name', 'endDate'] },
         ],
         order: [['createdAt', 'DESC']],
         limit: 1000,
@@ -239,6 +245,7 @@ const roadmapController = {
       res.json({
         goals: rows.map((g) => ({
           ...shapeGoal(g),
+          targetDate: dayOnly(g.Session?.endDate) || shapeGoal(g).targetDate,
           studentId: g.userId,
           studentName: fullName(g.Student),
           studentEmail: g.Student?.email || '',
