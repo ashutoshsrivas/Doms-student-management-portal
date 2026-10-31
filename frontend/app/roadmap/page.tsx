@@ -18,7 +18,7 @@ export default function RoadmapPage() {
   return (
     <ProtectedRoute>
       <DashboardLayout>
-        <div className="mx-auto max-w-6xl p-4 sm:p-6">
+        <div className="mx-auto w-full min-w-0 max-w-6xl p-4 sm:p-6">
           <Content />
         </div>
       </DashboardLayout>

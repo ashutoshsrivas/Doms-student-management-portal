@@ -296,7 +296,7 @@ export default function StaffRoadmap() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="w-full min-w-0 space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 sm:text-3xl">Roadmap</h1>

@@ -119,7 +119,7 @@ export default function StudentRoadmap() {
   const pendingAnswers = data.milestones.filter((m) => m.questions.length > 0 && !m.myResponse).length;
 
   return (
-    <div className="space-y-5">
+    <div className="w-full min-w-0 space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 sm:text-3xl">Roadmap</h1>

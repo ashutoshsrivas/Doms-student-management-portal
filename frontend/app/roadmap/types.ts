@@ -72,12 +72,15 @@ export const daysUntil = (date: string | null | undefined): number | null => {
   return Math.round((target.getTime() - today.getTime()) / 86400000);
 };
 
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+// Formatted by hand rather than with toLocaleDateString: the server and the
+// browser can sit in different locales, and the mismatch breaks hydration.
 export const fmtDate = (date: string | null | undefined) => {
   if (!date) return '—';
   const d = new Date(`${String(date).slice(0, 10)}T00:00:00`);
-  return Number.isNaN(d.getTime())
-    ? '—'
-    : d.toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' });
+  if (Number.isNaN(d.getTime())) return '—';
+  return `${String(d.getDate()).padStart(2, '0')} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
 };
 
 export const MILESTONE_ICONS = ['target', 'flag', 'book', 'award', 'briefcase', 'users', 'calendar', 'star', 'zap', 'check'] as const;

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   FiTarget, FiFlag, FiBookOpen, FiAward, FiBriefcase, FiUsers, FiCalendar,
   FiStar, FiZap, FiCheckCircle, FiEdit2, FiMapPin,
@@ -72,7 +72,6 @@ export default function Timeline({
   const [isMobile, setIsMobile] = useState(false);
   const [hover, setHover] = useState<Hover>(null);
   const [mounted, setMounted] = useState(false);
-  const railRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 767px)');
@@ -171,7 +170,7 @@ export default function Timeline({
               title={`${m.title} · ${fmtDate(m.dueDate)}`}
               className={`absolute flex h-6 w-6 -translate-x-1/2 items-center justify-center rounded-full border-2 border-white text-white shadow ${
                 m.myResponse ? 'bg-emerald-500' : 'bg-indigo-600'
-              } ${mounted ? 'rm-pop' : 'opacity-0'}`}
+              } ${mounted ? 'rm-fade' : 'opacity-0'}`}
               style={{ left: `calc(1.5rem + (100% - 3rem) * ${at / 100})`, top: 'calc(50% - 34px)' }}
             >
               <Icon className="h-3 w-3" />
@@ -188,7 +187,7 @@ export default function Timeline({
               title={`${m.title} · ${fmtDate(m.date)}`}
               className={`absolute flex h-6 w-6 -translate-x-1/2 items-center justify-center rounded-full border-2 border-white text-white shadow ${
                 m.type === 'ACHIEVEMENT' ? 'bg-amber-500' : 'bg-emerald-600'
-              } ${mounted ? 'rm-pop' : 'opacity-0'}`}
+              } ${mounted ? 'rm-fade' : 'opacity-0'}`}
               style={{ left: `calc(1.5rem + (100% - 3rem) * ${at / 100})`, top: 'calc(50% + 12px)' }}
             >
               <Icon className="h-3 w-3" />
@@ -339,22 +338,38 @@ export default function Timeline({
   }
 
   // ── Desktop: a true time axis ─────────────────────────────────
-  const laneOffset = (lane: number) => (tall ? 124 + lane * 96 : 92 + lane * 74);
+  // The axis is inset so a card sitting at either end stays inside the
+  // canvas, and the canvas grows tall enough for the lanes actually in use.
+  const pad = tall ? 118 : 96;
   const cardWidth = tall ? 186 : 150;
+  const laneGap = tall ? 96 : 78;
+  // the first lane starts above the days badge, so the two never overlap
+  const laneOffset = (lane: number) => (tall ? 108 : 96) + lane * laneGap;
+  const CARD_H = 104;
+  const usedLane = Math.max(0, ...staff.map((x) => x.lane), ...own.map((x) => x.lane));
+  const half = laneOffset(usedLane) + CARD_H + 56;
+  const height = Math.max(tall ? 520 : 430, half * 2);
+  const atX = (at: number) => `calc(${pad}px + (100% - ${pad * 2}px) * ${at / 100})`;
 
   return (
     <div className="relative" onMouseLeave={clearHover}>
-      <div className={`relative w-full overflow-hidden rounded-3xl ${tall ? 'h-[clamp(520px,70vh,760px)]' : 'h-[460px]'}`}>
-        {/* staff milestones above */}
+      <div className="relative w-full rounded-3xl" style={{ height }}>
+        {/* faculty milestones above the rail */}
         {staff.map(({ m, at, lane }, i) => {
           const Icon = iconFor(m.icon);
           const days = daysUntil(m.dueDate);
           const answered = !!m.myResponse;
           return (
+            // the animation animates transform, so the positioning transform
+            // lives on the wrapper and the pop on the child
             <div
               key={m.id}
-              className={`absolute flex -translate-x-1/2 flex-col items-center ${mounted ? 'rm-pop' : 'opacity-0'}`}
-              style={{ left: `${at}%`, bottom: `calc(50% + ${laneOffset(lane)}px)`, animationDelay: `${160 + i * 60}ms` }}
+              className="absolute"
+              style={{ left: atX(at), top: '50%', transform: 'translate(-50%, calc(-100% + 18px))' }}
+            >
+            <div
+              className={`flex flex-col items-center ${mounted ? 'rm-pop' : 'opacity-0'}`}
+              style={{ animationDelay: `${160 + i * 60}ms` }}
             >
               <button
                 type="button"
@@ -375,8 +390,7 @@ export default function Timeline({
                   {answered ? 'Answered' : m.questions.length ? `${m.questions.length} question${m.questions.length === 1 ? '' : 's'}` : 'From faculty'}
                 </div>
               </button>
-              {/* stem down to the rail */}
-              <div className="w-px flex-1 bg-gradient-to-b from-indigo-300 to-indigo-200" style={{ height: laneOffset(lane) - (tall ? 92 : 78) }} />
+              <div className="w-px bg-gradient-to-b from-indigo-200 to-indigo-400" style={{ height: laneOffset(lane) }} />
               <button
                 type="button"
                 aria-label={m.title}
@@ -389,50 +403,36 @@ export default function Timeline({
                 <Icon className="h-4 w-4" />
               </button>
             </div>
+            </div>
           );
         })}
 
         {/* the rail */}
-        <div className="absolute left-0 right-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-gray-200" />
+        <div className="absolute top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-gray-200" style={{ left: pad, right: pad }} />
         <div
-          className={`rm-progress absolute left-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full ${mounted ? 'rm-draw-x' : ''}`}
-          style={{ width: `${currentPct}%` }}
+          className={`rm-progress absolute top-1/2 h-1.5 -translate-y-1/2 rounded-full ${mounted ? 'rm-draw-x' : ''}`}
+          style={{ left: pad, width: `calc((100% - ${pad * 2}px) * ${currentPct / 100})` }}
         />
-        <div ref={railRef} className="absolute left-0 right-0 top-1/2 h-0" />
 
         {/* session start */}
-        <div className="absolute left-0 top-1/2 flex -translate-y-1/2 flex-col items-start">
-          <div className="h-5 w-5 -translate-y-1/2 rounded-full border-2 border-white bg-gray-300 shadow" />
+        <div className="absolute top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center" style={{ left: pad }}>
+          <span className="h-5 w-5 rounded-full border-2 border-white bg-gray-300 shadow" />
         </div>
-        <div className="absolute left-0 top-1/2 mt-6 max-w-[160px] text-left">
-          <div className="text-[11px] font-bold text-gray-700">Session starts</div>
-          <div className="text-[11px] text-gray-400">{fmtDate(startDate)}</div>
-        </div>
-
         {/* the goal, as a planted flag */}
-        <div className="absolute right-0 top-1/2 -translate-y-1/2">
-          <div
-            className={`rm-flag flex flex-col items-center ${mounted ? '' : 'opacity-0'}`}
-            onMouseEnter={() => setHover({ label: goalTitle || 'Goal', days: goalDays })}
-          >
-            <div className="relative -translate-y-1/2">
-              <div className="absolute left-1/2 top-1/2 h-16 w-16 -translate-x-1/2 -translate-y-1/2 rounded-full bg-indigo-500/20 blur-xl" />
-              <div className="relative flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-indigo-600 to-fuchsia-600 text-white shadow-xl shadow-indigo-500/30">
-                <FiFlag className="rm-flag-cloth h-5 w-5" />
-              </div>
+        <div
+          className="absolute -translate-x-1/2 -translate-y-1/2"
+          style={{ left: `calc(100% - ${pad}px)`, top: '50%' }}
+          onMouseEnter={() => setHover({ label: goalTitle || 'Goal', days: goalDays })}
+        >
+          <div className={`rm-flag relative ${mounted ? '' : 'opacity-0'}`}>
+            <div className="absolute left-1/2 top-1/2 h-16 w-16 -translate-x-1/2 -translate-y-1/2 rounded-full bg-indigo-500/20 blur-xl" />
+            <div className="relative flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-indigo-600 to-fuchsia-600 text-white shadow-xl shadow-indigo-500/30">
+              <FiFlag className="rm-flag-cloth h-5 w-5" />
             </div>
           </div>
         </div>
-        <div className="absolute right-0 top-1/2 mt-6 max-w-[190px] text-right">
-          <div className="truncate text-[11px] font-bold text-gray-900">{goalTitle || 'Final goal'}</div>
-          <div className="text-[11px] text-gray-400">{fmtDate(endDate)}</div>
-        </div>
-
         {/* where the student is standing today */}
-        <div
-          className="absolute top-1/2 z-10 -translate-x-1/2 -translate-y-1/2"
-          style={{ left: `${currentPct}%` }}
-        >
+        <div className="absolute top-1/2 z-10 -translate-x-1/2 -translate-y-1/2" style={{ left: atX(currentPct) }}>
           <div className="rm-here relative flex h-7 w-7 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg shadow-blue-500/40 ring-4 ring-white">
             <span className="rm-here-ring" />
             <span className="rm-here-ring" />
@@ -440,28 +440,26 @@ export default function Timeline({
           </div>
         </div>
         {/* the days-left badge sits right above that marker */}
-        <div
-          className="pointer-events-none absolute z-20 -translate-x-1/2"
-          style={{ left: `${currentPct}%`, top: 'calc(50% - 74px)' }}
-        >
+        <div className="pointer-events-none absolute z-20 -translate-x-1/2" style={{ left: atX(currentPct), top: 'calc(50% - 78px)' }}>
           <div className="flex flex-col items-center">
-            <DaysBadge
-              days={hover ? hover.days : goalDays}
-              caption={hover ? hover.label : 'to your goal'}
-            />
-            <div className="h-5 w-px bg-blue-300" />
+            <DaysBadge days={hover ? hover.days : goalDays} caption={hover ? hover.label : 'to your goal'} />
+            <div className="h-6 w-px bg-blue-300" />
           </div>
         </div>
 
-        {/* the student's own milestones below */}
+        {/* the student's own milestones below the rail */}
         {own.map(({ m, at, lane }, i) => {
           const Icon = m.type === 'ACHIEVEMENT' ? FiAward : FiStar;
           const days = daysUntil(m.date);
           return (
             <div
               key={m.id}
-              className={`absolute flex -translate-x-1/2 flex-col items-center ${mounted ? 'rm-pop' : 'opacity-0'}`}
-              style={{ left: `${at}%`, top: `calc(50% + 18px)`, animationDelay: `${220 + i * 60}ms` }}
+              className="absolute"
+              style={{ left: atX(at), top: '50%', transform: 'translate(-50%, -18px)' }}
+            >
+            <div
+              className={`flex flex-col items-center ${mounted ? 'rm-pop' : 'opacity-0'}`}
+              style={{ animationDelay: `${220 + i * 60}ms` }}
             >
               <button
                 type="button"
@@ -474,7 +472,7 @@ export default function Timeline({
               >
                 <Icon className="h-4 w-4" />
               </button>
-              <div className="w-px bg-gradient-to-b from-emerald-200 to-emerald-300" style={{ height: laneOffset(lane) - (tall ? 110 : 92) + 14 }} />
+              <div className="w-px bg-gradient-to-b from-emerald-300 to-emerald-200" style={{ height: laneOffset(lane) }} />
               <button
                 type="button"
                 onClick={() => onSelf?.(m)}
@@ -495,11 +493,17 @@ export default function Timeline({
                 </div>
               </button>
             </div>
+            </div>
           );
         })}
       </div>
 
-      <div className="mt-1 flex flex-wrap items-center justify-center gap-4 text-[11px] text-gray-500">
+      <div className="pointer-events-none -mt-2 flex justify-between px-2 text-[11px] font-semibold text-gray-400">
+        <span>{fmtDate(startDate)}</span>
+        <span>{fmtDate(endDate)}</span>
+      </div>
+
+      <div className="mt-2 flex flex-wrap items-center justify-center gap-4 text-[11px] text-gray-500">
         <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-indigo-600" /> Faculty milestones (above)</span>
         <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-emerald-600" /> My milestones (below)</span>
         <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-amber-500" /> My achievements</span>
