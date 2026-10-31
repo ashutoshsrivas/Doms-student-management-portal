@@ -20,7 +20,18 @@ const STAFF_ROLES = [
 const isStaff = (user) => STAFF_ROLES.includes(user.role);
 const isAdminish = (user) => ['ADMIN', 'HOD', 'COORDINATOR'].includes(user.role);
 const fullName = (u) => (u ? `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email || '' : '');
-const dayOnly = (d) => (d ? String(d).slice(0, 10) : null);
+// DATEONLY columns come back as 'YYYY-MM-DD', but DATE columns (a session's
+// start/end) come back as a JS Date — stringifying that gives 'Fri Aug 07',
+// which no date input or parser accepts. Always hand out 'YYYY-MM-DD'.
+const dayOnly = (d) => {
+  if (!d) return null;
+  if (d instanceof Date) {
+    if (Number.isNaN(d.getTime())) return null;
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  }
+  return String(d).slice(0, 10);
+};
 
 // The session a student belongs to, newest enrolment first, with its dates —
 // the timeline starts on the session start date.
