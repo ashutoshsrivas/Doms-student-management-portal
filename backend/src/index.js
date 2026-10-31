@@ -37,6 +37,7 @@ const gradeRoutes = require('./routes/gradeRoutes');
 const sectionRoutes = require('./routes/sectionRoutes');
 const socialMediaRoutes = require('./routes/socialMediaRoutes');
 const examRoutes = require('./routes/examRoutes');
+const roadmapRoutes = require('./routes/roadmapRoutes');
 const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
@@ -98,6 +99,7 @@ app.use('/api/grades', gradeRoutes);
 app.use('/api/sections', sectionRoutes);
 app.use('/api/social-media', socialMediaRoutes);
 app.use('/api/exams', examRoutes);
+app.use('/api/roadmap', roadmapRoutes);
 
 // Health check
 app.get('/health', (req, res) => {

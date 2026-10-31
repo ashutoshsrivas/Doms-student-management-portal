@@ -21,7 +21,7 @@ import {
   FiHelpCircle,
   FiHardDrive,
   FiFileText,
-  FiClipboard,
+  FiClipboard, FiMap,
 } from 'react-icons/fi';
 import useAuthStore from '@/app/store/authStore';
 import SessionSelector from '@/app/components/SessionSelector';
@@ -117,6 +117,7 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
         { name: 'Sections', href: '/admin/sections', iconKey: 'users' },
         { name: 'Assessments', href: '/admin/assessments', iconKey: 'check' },
         { name: 'Certifications', href: '/admin/certifications', iconKey: 'award' },
+        { name: 'Roadmap', href: '/roadmap', iconKey: 'map' },
         { name: 'Grading', href: '/admin/grading', iconKey: 'award' },
         { name: 'Mentor Teams', href: '/admin/mentors', iconKey: 'users' },
         { name: 'My Mentees', href: '/faculty/mentors', iconKey: 'users' },
@@ -147,6 +148,7 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
         { name: 'My Classes', href: '/admin/classes', iconKey: 'list' },
         { name: 'My Schedule', href: '/schedule', iconKey: 'calendar' },
         { name: 'Certifications', href: '/admin/certifications', iconKey: 'award' },
+        { name: 'Roadmap', href: '/roadmap', iconKey: 'map' },
         { name: 'Grading', href: '/admin/grading', iconKey: 'award' },
         { name: 'My Tasks', href: '/faculty/tasks', iconKey: 'clipboard' },
         { name: 'Announcements', href: '/student/announcements', iconKey: 'bell', children: studentAnnouncementsChildren },
@@ -163,6 +165,7 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
         { name: 'My Classes', href: '/admin/classes', iconKey: 'list' },
         { name: 'My Schedule', href: '/schedule', iconKey: 'calendar' },
         { name: 'Certifications', href: '/admin/certifications', iconKey: 'award' },
+        { name: 'Roadmap', href: '/roadmap', iconKey: 'map' },
         { name: 'Grading', href: '/admin/grading', iconKey: 'award' },
         { name: 'My Tasks', href: '/faculty/tasks', iconKey: 'clipboard' },
         { name: 'Announcements', href: '/student/announcements', iconKey: 'bell', children: studentAnnouncementsChildren },
@@ -177,6 +180,7 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
         { name: 'Sections', href: '/admin/sections', iconKey: 'users' },
         { name: 'Assessments', href: '/admin/assessments', iconKey: 'check' },
         { name: 'Certifications', href: '/admin/certifications', iconKey: 'award' },
+        { name: 'Roadmap', href: '/roadmap', iconKey: 'map' },
         { name: 'Grading', href: '/admin/grading', iconKey: 'award' },
         { name: 'Mentor Teams', href: '/admin/mentors', iconKey: 'users' },
         { name: 'My Mentees', href: '/faculty/mentors', iconKey: 'users' },
@@ -211,6 +215,7 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
         { name: 'Reports', href: '/admin/reports', iconKey: 'fileText' },
         { name: 'My Schedule', href: '/schedule', iconKey: 'calendar' },
         { name: 'Certifications', href: '/admin/certifications', iconKey: 'award' },
+        { name: 'Roadmap', href: '/roadmap', iconKey: 'map' },
         { name: 'Grading', href: '/admin/grading', iconKey: 'award' },
         { name: 'My Tasks', href: '/faculty/tasks', iconKey: 'clipboard' },
         { name: 'Announcements', href: '/admin/announcements', iconKey: 'bell', children: adminAnnouncementsChildren },
@@ -221,6 +226,7 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
         { name: 'NOC Uploads', href: '/sip-noc', iconKey: 'fileText' },
         { name: 'My Schedule', href: '/schedule', iconKey: 'calendar' },
         { name: 'Certifications', href: '/admin/certifications', iconKey: 'award' },
+        { name: 'Roadmap', href: '/roadmap', iconKey: 'map' },
         { name: 'Grading', href: '/admin/grading', iconKey: 'award' },
         { name: 'My Tasks', href: '/faculty/tasks', iconKey: 'clipboard' },
         { name: 'Announcements', href: '/student/announcements', iconKey: 'bell', children: studentAnnouncementsChildren },
@@ -237,6 +243,7 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
         { name: 'Sections', href: '/admin/sections', iconKey: 'users' },
         { name: 'Assessments', href: '/admin/assessments', iconKey: 'check' },
         { name: 'Certifications', href: '/admin/certifications', iconKey: 'award' },
+        { name: 'Roadmap', href: '/roadmap', iconKey: 'map' },
         { name: 'Grading', href: '/admin/grading', iconKey: 'award' },
         { name: 'Mentor Teams', href: '/admin/mentors', iconKey: 'users' },
         { name: 'My Mentees', href: '/faculty/mentors', iconKey: 'users' },
@@ -261,6 +268,7 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
         { name: 'NOC Uploads', href: '/sip-noc', iconKey: 'fileText' },
         { name: 'My Schedule', href: '/schedule', iconKey: 'calendar' },
         { name: 'Certifications', href: '/admin/certifications', iconKey: 'award' },
+        { name: 'Roadmap', href: '/roadmap', iconKey: 'map' },
         { name: 'Grading', href: '/admin/grading', iconKey: 'award' },
         { name: 'My Tasks', href: '/faculty/tasks', iconKey: 'clipboard' },
         { name: 'Announcements', href: '/student/announcements', iconKey: 'bell', children: studentAnnouncementsChildren },
@@ -272,6 +280,7 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
         { name: 'My Profile', href: '/student/profile', iconKey: 'user' },
         { name: 'Class Attendance', href: '/student/class-attendance', iconKey: 'calendar' },
         { name: 'Placements and SIP', href: '/student/sip', iconKey: 'briefcase', children: studentSipChildren },
+        { name: 'Roadmap', href: '/roadmap', iconKey: 'map' },
         { name: 'My Grades', href: '/student/grades', iconKey: 'award' },
         { name: 'Upload NOC', href: '/student/noc', iconKey: 'fileText' },
         { name: 'Announcements', href: '/student/announcements', iconKey: 'bell', children: studentAnnouncementsChildren },
@@ -310,6 +319,7 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
       fileText:   <FiFileText className="w-4.5 h-4.5" />,
       clipboard:  <FiClipboard className="w-4.5 h-4.5" />,
       award:      <FiAward className="w-4.5 h-4.5" />,
+      map:        <FiMap className="w-4.5 h-4.5" />,
     };
     return iconMap[iconKey] || <FiBarChart2 className="w-4.5 h-4.5" />;
   };

@@ -1,0 +1,213 @@
+/* Roadmap animations. Spring-ish easing, soft glass surfaces and a glowing
+   orb — the feel of iOS, without a motion library. Everything here is
+   switched off when the viewer asks for reduced motion. */
+
+:root {
+  --rm-spring: cubic-bezier(0.22, 1.2, 0.32, 1);
+  --rm-ease: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* ── The goal orb ─────────────────────────────────────────────── */
+.rm-orb-wrap {
+  position: relative;
+  display: grid;
+  place-items: center;
+  isolation: isolate;
+}
+
+.rm-orb {
+  position: relative;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0) 38%),
+    radial-gradient(circle at 70% 75%, rgba(56, 189, 248, 0.95), rgba(56, 189, 248, 0) 55%),
+    radial-gradient(circle at 25% 80%, rgba(168, 85, 247, 0.9), rgba(168, 85, 247, 0) 55%),
+    radial-gradient(circle at 80% 25%, rgba(45, 212, 191, 0.8), rgba(45, 212, 191, 0) 50%),
+    linear-gradient(160deg, #1d4ed8, #4c1d95 55%, #0f172a);
+  box-shadow:
+    inset 0 0 40px rgba(255, 255, 255, 0.25),
+    inset 0 -20px 40px rgba(0, 0, 0, 0.35),
+    0 20px 60px -12px rgba(79, 70, 229, 0.65);
+  animation: rm-breathe 7s var(--rm-ease) infinite;
+}
+
+/* the sheen that drifts across the surface */
+.rm-orb::before {
+  content: '';
+  position: absolute;
+  inset: -12%;
+  border-radius: 50%;
+  background: conic-gradient(from 0deg, rgba(255, 255, 255, 0) 0deg, rgba(255, 255, 255, 0.5) 60deg, rgba(255, 255, 255, 0) 150deg, rgba(125, 211, 252, 0.45) 240deg, rgba(255, 255, 255, 0) 330deg);
+  filter: blur(18px);
+  opacity: 0.75;
+  animation: rm-spin 14s linear infinite;
+  z-index: -1;
+}
+
+/* the halo on the floor beneath it */
+.rm-orb::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -14%;
+  width: 62%;
+  height: 14%;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: radial-gradient(ellipse at center, rgba(99, 102, 241, 0.45), rgba(99, 102, 241, 0) 70%);
+  filter: blur(6px);
+  animation: rm-shadow 7s var(--rm-ease) infinite;
+}
+
+.rm-orb-glass {
+  position: absolute;
+  inset: 8%;
+  border-radius: 50%;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0) 45%);
+  mix-blend-mode: screen;
+  pointer-events: none;
+}
+
+.rm-orb-pulse {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(165, 180, 252, 0.55);
+  animation: rm-ring 3.2s var(--rm-ease) infinite;
+}
+.rm-orb-pulse:nth-of-type(2) { animation-delay: 1.1s; }
+.rm-orb-pulse:nth-of-type(3) { animation-delay: 2.2s; }
+
+/* the orb folding away as the flag is planted */
+.rm-orb-collapse { animation: rm-collapse 0.85s var(--rm-spring) forwards; }
+
+@keyframes rm-breathe {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-10px) scale(1.035); }
+}
+@keyframes rm-shadow {
+  0%, 100% { opacity: 0.55; transform: translateX(-50%) scale(1); }
+  50% { opacity: 0.3; transform: translateX(-50%) scale(0.86); }
+}
+@keyframes rm-spin { to { transform: rotate(360deg); } }
+@keyframes rm-ring {
+  0% { transform: scale(1); opacity: 0.6; }
+  100% { transform: scale(1.5); opacity: 0; }
+}
+@keyframes rm-collapse {
+  0% { transform: scale(1); opacity: 1; filter: blur(0); }
+  55% { transform: scale(0.35) translateY(18px); opacity: 0.85; filter: blur(2px); }
+  100% { transform: scale(0.05) translateY(30px); opacity: 0; filter: blur(8px); }
+}
+
+/* ── Entrances ────────────────────────────────────────────────── */
+.rm-rise { animation: rm-rise 0.7s var(--rm-spring) both; }
+.rm-fade { animation: rm-fade 0.5s var(--rm-ease) both; }
+.rm-pop { animation: rm-pop 0.6s var(--rm-spring) both; }
+.rm-draw-x { animation: rm-draw-x 1.1s var(--rm-ease) both; transform-origin: left center; }
+.rm-draw-y { animation: rm-draw-y 1.1s var(--rm-ease) both; transform-origin: center top; }
+
+@keyframes rm-rise {
+  from { opacity: 0; transform: translateY(18px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes rm-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes rm-pop {
+  0% { opacity: 0; transform: scale(0.4); }
+  100% { opacity: 1; transform: scale(1); }
+}
+@keyframes rm-draw-x { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes rm-draw-y { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+
+/* ── Timeline pieces ──────────────────────────────────────────── */
+.rm-flag { animation: rm-plant 0.9s var(--rm-spring) both; transform-origin: bottom center; }
+@keyframes rm-plant {
+  0% { opacity: 0; transform: translateY(-26px) scale(0.6) rotate(-12deg); }
+  60% { opacity: 1; transform: translateY(2px) scale(1.06) rotate(2deg); }
+  100% { opacity: 1; transform: none; }
+}
+.rm-flag-cloth { animation: rm-wave 3.4s ease-in-out infinite; transform-origin: left center; }
+@keyframes rm-wave {
+  0%, 100% { transform: skewY(0deg) scaleX(1); }
+  50% { transform: skewY(-3.5deg) scaleX(0.97); }
+}
+
+/* the "you are here" marker */
+.rm-here { animation: rm-bob 3.6s ease-in-out infinite; }
+@keyframes rm-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+.rm-here-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: rgba(37, 99, 235, 0.35);
+  animation: rm-here-ring 2.4s var(--rm-ease) infinite;
+}
+.rm-here-ring:nth-of-type(2) { animation-delay: 1.2s; }
+@keyframes rm-here-ring {
+  0% { transform: scale(0.9); opacity: 0.7; }
+  100% { transform: scale(2.6); opacity: 0; }
+}
+
+/* travelled part of the rail, shimmering gently */
+.rm-progress {
+  background-image: linear-gradient(90deg, #2563eb, #7c3aed, #0ea5e9, #2563eb);
+  background-size: 300% 100%;
+  animation: rm-flow 9s linear infinite;
+}
+.rm-progress-y {
+  background-image: linear-gradient(180deg, #2563eb, #7c3aed, #0ea5e9, #2563eb);
+  background-size: 100% 300%;
+  animation: rm-flow-y 9s linear infinite;
+}
+@keyframes rm-flow { to { background-position: 300% 0; } }
+@keyframes rm-flow-y { to { background-position: 0 300%; } }
+
+/* milestone pins */
+.rm-pin {
+  transition: transform 0.35s var(--rm-spring), box-shadow 0.35s var(--rm-ease);
+}
+.rm-pin:hover, .rm-pin:focus-visible { transform: scale(1.14); z-index: 20; }
+
+.rm-card { transition: transform 0.35s var(--rm-spring), opacity 0.3s var(--rm-ease); }
+
+/* the days-left badge swapping its number */
+.rm-days { transition: transform 0.3s var(--rm-spring), color 0.3s var(--rm-ease); }
+
+/* glass panel used around the page */
+.rm-glass {
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(18px) saturate(1.3);
+  -webkit-backdrop-filter: blur(18px) saturate(1.3);
+}
+
+.rm-stage {
+  background:
+    radial-gradient(900px 420px at 15% -10%, rgba(99, 102, 241, 0.18), transparent 70%),
+    radial-gradient(800px 380px at 85% 0%, rgba(14, 165, 233, 0.16), transparent 70%),
+    radial-gradient(600px 300px at 50% 110%, rgba(168, 85, 247, 0.14), transparent 70%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rm-orb,
+  .rm-orb::before,
+  .rm-orb::after,
+  .rm-orb-pulse,
+  .rm-here,
+  .rm-here-ring,
+  .rm-flag,
+  .rm-flag-cloth,
+  .rm-progress,
+  .rm-progress-y,
+  .rm-rise,
+  .rm-fade,
+  .rm-pop,
+  .rm-draw-x,
+  .rm-draw-y,
+  .rm-orb-collapse {
+    animation: none !important;
+  }
+  .rm-pin { transition: none; }
+}

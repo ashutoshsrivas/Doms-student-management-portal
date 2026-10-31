@@ -2513,10 +2513,110 @@ NotificationPrompt.hasMany(NotificationPromptResponse, {
 NotificationPromptResponse.belongsTo(NotificationPrompt, { foreignKey: 'promptId' });
 NotificationPromptResponse.belongsTo(User, { foreignKey: 'studentUserId', as: 'Student' });
 
+// ── Roadmap ─────────────────────────────────────────────────────
+// A student answers a few questions to set one goal for their programme.
+// It is only drawn on their timeline once a member of staff approves it.
+const GOAL_QUESTIONS = [
+  { id: 'goal', label: 'In one line, what do you want to achieve by the end of this programme?', type: 'text', required: true },
+  { id: 'why', label: 'Why does this matter to you?', type: 'textarea', required: true },
+  { id: 'target', label: 'Which role, company or outcome are you aiming for?', type: 'text', required: false },
+  { id: 'first_step', label: 'What is the first skill or step you will work on?', type: 'text', required: false },
+  { id: 'measure', label: 'How will you know you have reached it?', type: 'textarea', required: false },
+];
+
+const StudentGoal = sequelize.define('StudentGoal', {
+  id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
+  userId: { type: DataTypes.UUID, allowNull: false },
+  academicSessionId: { type: DataTypes.UUID, allowNull: true },
+  title: { type: DataTypes.STRING(500), allowNull: false },
+  // { [questionId]: answer }
+  answers: { type: DataTypes.JSON, allowNull: false, defaultValue: {} },
+  // The day the goal should be reached; defaults to the session end date.
+  targetDate: { type: DataTypes.DATEONLY, allowNull: true },
+  status: { type: DataTypes.ENUM('PENDING', 'APPROVED', 'REJECTED'), allowNull: false, defaultValue: 'PENDING' },
+  approvedBy: { type: DataTypes.UUID, allowNull: true },
+  approvedAt: { type: DataTypes.DATE, allowNull: true },
+  decisionNote: { type: DataTypes.TEXT, allowNull: true },
+}, {
+  tableName: 'student_goals',
+  timestamps: true,
+  underscored: true,
+  indexes: [{ unique: true, name: 'student_goal_user', fields: ['user_id'] }],
+});
+
+// A milestone a member of staff places on every student's timeline in one
+// session, optionally with questions for the students to answer.
+const RoadmapMilestone = sequelize.define('RoadmapMilestone', {
+  id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
+  academicSessionId: { type: DataTypes.UUID, allowNull: false },
+  title: { type: DataTypes.STRING(300), allowNull: false },
+  description: { type: DataTypes.TEXT, allowNull: true },
+  dueDate: { type: DataTypes.DATEONLY, allowNull: false },
+  // A key the front-end maps to an icon, e.g. 'flag' | 'book' | 'target'.
+  icon: { type: DataTypes.STRING(40), allowNull: false, defaultValue: 'target' },
+  // [{ id, label, type: 'text' | 'textarea' | 'choice', options: [], required }]
+  questions: { type: DataTypes.JSON, allowNull: false, defaultValue: [] },
+  createdBy: { type: DataTypes.UUID, allowNull: true },
+}, {
+  tableName: 'roadmap_milestones',
+  timestamps: true,
+  underscored: true,
+  indexes: [{ fields: ['academic_session_id'] }],
+});
+
+// One student's answers to a staff milestone.
+const RoadmapMilestoneResponse = sequelize.define('RoadmapMilestoneResponse', {
+  id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
+  milestoneId: { type: DataTypes.UUID, allowNull: false },
+  userId: { type: DataTypes.UUID, allowNull: false },
+  answers: { type: DataTypes.JSON, allowNull: false, defaultValue: {} },
+  submittedAt: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
+}, {
+  tableName: 'roadmap_milestone_responses',
+  timestamps: true,
+  underscored: true,
+  indexes: [{ unique: true, name: 'rmr_milestone_user', fields: ['milestone_id', 'user_id'] }],
+});
+
+// Something the student puts on their own timeline: a milestone they set
+// themselves, or an achievement they have already earned.
+const StudentMilestone = sequelize.define('StudentMilestone', {
+  id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
+  userId: { type: DataTypes.UUID, allowNull: false },
+  academicSessionId: { type: DataTypes.UUID, allowNull: true },
+  title: { type: DataTypes.STRING(300), allowNull: false },
+  description: { type: DataTypes.TEXT, allowNull: true },
+  date: { type: DataTypes.DATEONLY, allowNull: false },
+  type: { type: DataTypes.ENUM('MILESTONE', 'ACHIEVEMENT'), allowNull: false, defaultValue: 'MILESTONE' },
+}, {
+  tableName: 'student_milestones',
+  timestamps: true,
+  underscored: true,
+  indexes: [{ fields: ['user_id'] }],
+});
+
+// constraints: false everywhere — these tables only ever reference existing
+// rows, and no roadmap row may cascade into student or session data.
+StudentGoal.belongsTo(User, { foreignKey: 'userId', as: 'Student', constraints: false });
+StudentGoal.belongsTo(User, { foreignKey: 'approvedBy', as: 'ApprovedByUser', constraints: false });
+StudentGoal.belongsTo(AcademicSession, { foreignKey: 'academicSessionId', as: 'Session', constraints: false });
+RoadmapMilestone.belongsTo(User, { foreignKey: 'createdBy', as: 'Creator', constraints: false });
+RoadmapMilestone.belongsTo(AcademicSession, { foreignKey: 'academicSessionId', as: 'Session', constraints: false });
+RoadmapMilestone.hasMany(RoadmapMilestoneResponse, { foreignKey: 'milestoneId', as: 'Responses', constraints: false });
+RoadmapMilestoneResponse.belongsTo(RoadmapMilestone, { foreignKey: 'milestoneId', as: 'Milestone', constraints: false });
+RoadmapMilestoneResponse.belongsTo(User, { foreignKey: 'userId', as: 'Student', constraints: false });
+StudentMilestone.belongsTo(User, { foreignKey: 'userId', as: 'Student', constraints: false });
+StudentMilestone.belongsTo(AcademicSession, { foreignKey: 'academicSessionId', as: 'Session', constraints: false });
+
 // Messaging Models
 
 
 module.exports = {
+  GOAL_QUESTIONS,
+  StudentGoal,
+  RoadmapMilestone,
+  RoadmapMilestoneResponse,
+  StudentMilestone,
   sequelize,
   ExamCourse,
   ExamCourseAssignee,
