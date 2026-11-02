@@ -38,7 +38,12 @@ export default function RoadmapCanvas({
 
   // Escape closes it, and the page behind must not scroll underneath.
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      // a dialog opened from the canvas owns Escape while it is up
+      if (document.querySelector('[data-roadmap-dialog]')) return;
+      onClose();
+    };
     window.addEventListener('keydown', onKey);
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';

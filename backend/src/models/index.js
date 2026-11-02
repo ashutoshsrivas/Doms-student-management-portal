@@ -2595,6 +2595,22 @@ const StudentMilestone = sequelize.define('StudentMilestone', {
   indexes: [{ fields: ['user_id'] }],
 });
 
+// When staff remove a student's goal, the student is told once: they get a
+// note about what was removed and then a fresh roadmap to set up.
+const RoadmapGoalNotice = sequelize.define('RoadmapGoalNotice', {
+  id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
+  userId: { type: DataTypes.UUID, allowNull: false },
+  title: { type: DataTypes.STRING(500), allowNull: true },
+  reason: { type: DataTypes.TEXT, allowNull: true },
+  deletedBy: { type: DataTypes.UUID, allowNull: true },
+  acknowledgedAt: { type: DataTypes.DATE, allowNull: true },
+}, {
+  tableName: 'roadmap_goal_notices',
+  timestamps: true,
+  underscored: true,
+  indexes: [{ fields: ['user_id'] }],
+});
+
 // constraints: false everywhere — these tables only ever reference existing
 // rows, and no roadmap row may cascade into student or session data.
 StudentGoal.belongsTo(User, { foreignKey: 'userId', as: 'Student', constraints: false });
@@ -2607,6 +2623,8 @@ RoadmapMilestoneResponse.belongsTo(RoadmapMilestone, { foreignKey: 'milestoneId'
 RoadmapMilestoneResponse.belongsTo(User, { foreignKey: 'userId', as: 'Student', constraints: false });
 StudentMilestone.belongsTo(User, { foreignKey: 'userId', as: 'Student', constraints: false });
 StudentMilestone.belongsTo(AcademicSession, { foreignKey: 'academicSessionId', as: 'Session', constraints: false });
+RoadmapGoalNotice.belongsTo(User, { foreignKey: 'userId', as: 'Student', constraints: false });
+RoadmapGoalNotice.belongsTo(User, { foreignKey: 'deletedBy', as: 'DeletedByUser', constraints: false });
 
 // Messaging Models
 
@@ -2614,6 +2632,7 @@ StudentMilestone.belongsTo(AcademicSession, { foreignKey: 'academicSessionId', a
 module.exports = {
   GOAL_QUESTIONS,
   StudentGoal,
+  RoadmapGoalNotice,
   RoadmapMilestone,
   RoadmapMilestoneResponse,
   StudentMilestone,

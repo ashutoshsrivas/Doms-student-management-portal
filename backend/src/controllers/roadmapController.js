@@ -2,6 +2,7 @@ const { Op } = require('sequelize');
 const {
   GOAL_QUESTIONS,
   StudentGoal,
+  RoadmapGoalNotice,
   RoadmapMilestone,
   RoadmapMilestoneResponse,
   StudentMilestone,
@@ -142,6 +143,21 @@ async function roadmapFor(userId, { includeStudent = false } = {}) {
     selfMilestones: own.map(shapeSelf),
   };
 
+  if (!includeStudent) {
+    const notice = await RoadmapGoalNotice.findOne({
+      where: { userId, acknowledgedAt: null },
+      include: [{ model: User, as: 'DeletedByUser', attributes: ['id', 'firstName', 'lastName', 'email'] }],
+      order: [['createdAt', 'DESC']],
+    });
+    payload.notice = notice ? {
+      id: notice.id,
+      title: notice.title || '',
+      reason: notice.reason || '',
+      removedByName: fullName(notice.DeletedByUser),
+      removedAt: notice.createdAt,
+    } : null;
+  }
+
   if (includeStudent) {
     const student = await User.findByPk(userId, {
       attributes: ['id', 'firstName', 'lastName', 'email', 'registrationNumber'],
@@ -243,6 +259,7 @@ const roadmapController = {
         limit: 1000,
       });
       res.json({
+        canManage: isAdminish(req.user),
         goals: rows.map((g) => ({
           ...shapeGoal(g),
           targetDate: dayOnly(g.Session?.endDate) || shapeGoal(g).targetDate,
@@ -283,6 +300,80 @@ const roadmapController = {
     } catch (err) {
       console.error('roadmap.decideGoal error:', err);
       res.status(500).json({ message: 'Failed to record the decision' });
+    }
+  },
+
+  // PATCH /api/roadmap/goals/:id — admin/HOD/coordinator may correct a goal
+  // or put an approved one back in front of the student.
+  updateGoal: async (req, res) => {
+    try {
+      if (!isAdminish(req.user)) {
+        return res.status(403).json({ message: 'Only an admin, HOD or coordinator can change a goal' });
+      }
+      const goal = await StudentGoal.findByPk(req.params.id);
+      if (!goal) return res.status(404).json({ message: 'Goal not found' });
+
+      const patch = {};
+      if (req.body.title !== undefined) {
+        const title = String(req.body.title).trim();
+        if (!title) return res.status(400).json({ message: 'The goal cannot be empty' });
+        patch.title = title.slice(0, 500);
+      }
+      if (req.body.answers && typeof req.body.answers === 'object') patch.answers = req.body.answers;
+      if (req.body.status !== undefined) {
+        const status = String(req.body.status).toUpperCase();
+        if (!['PENDING', 'APPROVED', 'REJECTED'].includes(status)) {
+          return res.status(400).json({ message: 'status must be PENDING, APPROVED or REJECTED' });
+        }
+        patch.status = status;
+        patch.approvedBy = req.user.id;
+        patch.approvedAt = new Date();
+      }
+      if (req.body.note !== undefined) patch.decisionNote = req.body.note ? String(req.body.note).slice(0, 2000) : null;
+
+      await goal.update(patch);
+      res.json({ message: 'Goal updated', goal: shapeGoal(goal) });
+    } catch (err) {
+      console.error('roadmap.updateGoal error:', err);
+      res.status(500).json({ message: 'Failed to update the goal' });
+    }
+  },
+
+  // DELETE /api/roadmap/goals/:id — removes it and leaves the student a note,
+  // so they open the roadmap to a clean setup and know why.
+  deleteGoal: async (req, res) => {
+    try {
+      if (!isAdminish(req.user)) {
+        return res.status(403).json({ message: 'Only an admin, HOD or coordinator can delete a goal' });
+      }
+      const goal = await StudentGoal.findByPk(req.params.id);
+      if (!goal) return res.status(404).json({ message: 'Goal not found' });
+
+      await RoadmapGoalNotice.create({
+        userId: goal.userId,
+        title: goal.title,
+        reason: req.body?.reason ? String(req.body.reason).slice(0, 2000) : null,
+        deletedBy: req.user.id,
+      });
+      await goal.destroy();
+      res.json({ message: 'Goal removed — the student will be asked to set a new one' });
+    } catch (err) {
+      console.error('roadmap.deleteGoal error:', err);
+      res.status(500).json({ message: 'Failed to delete the goal' });
+    }
+  },
+
+  // POST /api/roadmap/notices/:id/ack — the student has read the note.
+  acknowledgeNotice: async (req, res) => {
+    try {
+      const notice = await RoadmapGoalNotice.findByPk(req.params.id);
+      if (!notice) return res.status(404).json({ message: 'Not found' });
+      if (notice.userId !== req.user.id) return res.status(403).json({ message: 'Not yours' });
+      await notice.update({ acknowledgedAt: new Date() });
+      res.json({ message: 'Noted' });
+    } catch (err) {
+      console.error('roadmap.acknowledgeNotice error:', err);
+      res.status(500).json({ message: 'Failed to update' });
     }
   },
 

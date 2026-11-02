@@ -5,11 +5,12 @@ import toast from 'react-hot-toast';
 import {
   FiPlus, FiX, FiTrash2, FiEdit2, FiCheck, FiSearch, FiUsers, FiFlag, FiClock,
   FiTarget, FiBookOpen, FiAward, FiBriefcase, FiCalendar, FiStar, FiZap, FiCheckCircle, FiArrowLeft, FiEye,
-  FiMaximize2,
+  FiMaximize2, FiRotateCcw,
 } from 'react-icons/fi';
 import apiClient from '@/app/lib/apiClient';
 import Timeline from './Timeline';
 import RoadmapCanvas from './RoadmapCanvas';
+import Portal from './Portal';
 import { Goal, Milestone, MILESTONE_ICONS, Question, Roadmap, SessionInfo, daysUntil, fmtDate } from './types';
 
 const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -56,6 +57,11 @@ export default function StaffRoadmap() {
   const [rejecting, setRejecting] = useState<GoalRow | null>(null);
   const [note, setNote] = useState('');
   const [canvas, setCanvas] = useState(false);
+  const [canManageGoals, setCanManageGoals] = useState(false);
+  const [editingGoal, setEditingGoal] = useState<GoalRow | null>(null);
+  const [goalDraft, setGoalDraft] = useState('');
+  const [deletingGoal, setDeletingGoal] = useState<GoalRow | null>(null);
+  const [deleteReason, setDeleteReason] = useState('');
 
   useEffect(() => {
     (async () => {
@@ -80,6 +86,7 @@ export default function StaffRoadmap() {
         apiClient.get('/roadmap/students', { params: { sessionId } }),
       ]);
       setGoals(g.data.goals || []);
+      setCanManageGoals(!!g.data.canManage);
       setMilestones(m.data.milestones || []);
       setStudents(s.data.students || []);
     } catch (e: any) {
@@ -103,6 +110,55 @@ export default function StaffRoadmap() {
       await load();
     } catch (e: any) {
       toast.error(e?.response?.data?.message || 'Failed to record the decision');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const saveGoalEdit = async () => {
+    if (!editingGoal) return;
+    if (!goalDraft.trim()) { toast.error('The goal cannot be empty'); return; }
+    try {
+      setBusy(true);
+      const { data } = await apiClient.patch(`/roadmap/goals/${editingGoal.id}`, { title: goalDraft.trim() });
+      toast.success(data.message || 'Goal updated');
+      setEditingGoal(null);
+      await load();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Failed to update the goal');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Putting an approved goal back in front of the student.
+  const reopenGoal = async (goal: GoalRow) => {
+    if (!confirm(`Send ${goal.studentName}'s approved goal back for a rethink?`)) return;
+    try {
+      setBusy(true);
+      await apiClient.patch(`/roadmap/goals/${goal.id}`, { status: 'PENDING' });
+      toast.success('Sent back — the student can edit it again');
+      await load();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Failed to send it back');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const deleteGoal = async () => {
+    if (!deletingGoal) return;
+    try {
+      setBusy(true);
+      const { data } = await apiClient.delete(`/roadmap/goals/${deletingGoal.id}`, {
+        data: { reason: deleteReason.trim() || null },
+      });
+      toast.success(data.message || 'Goal removed');
+      setDeletingGoal(null);
+      setDeleteReason('');
+      await load();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Failed to delete the goal');
     } finally {
       setBusy(false);
     }
@@ -364,18 +420,38 @@ export default function StaffRoadmap() {
                   <p className="mt-1 text-base font-semibold text-gray-900">{g.title}</p>
                   <p className="text-[11px] text-gray-500">By the end of the session · {fmtDate(g.targetDate)}</p>
                 </div>
-                {g.status === 'PENDING' && (
-                  <div className="flex items-center gap-2">
-                    <button type="button" disabled={busy} onClick={() => decide(g, 'APPROVE')}
-                      className="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-60">
-                      <FiCheck className="h-3.5 w-3.5" /> Approve
-                    </button>
-                    <button type="button" disabled={busy} onClick={() => setRejecting(g)}
-                      className="inline-flex items-center gap-1.5 rounded-full border border-rose-200 px-4 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-60">
-                      <FiX className="h-3.5 w-3.5" /> Send back
-                    </button>
-                  </div>
-                )}
+                <div className="flex flex-wrap items-center gap-2">
+                  {g.status === 'PENDING' && (
+                    <>
+                      <button type="button" disabled={busy} onClick={() => decide(g, 'APPROVE')}
+                        className="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-60">
+                        <FiCheck className="h-3.5 w-3.5" /> Approve
+                      </button>
+                      <button type="button" disabled={busy} onClick={() => setRejecting(g)}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-rose-200 px-4 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-60">
+                        <FiX className="h-3.5 w-3.5" /> Send back
+                      </button>
+                    </>
+                  )}
+                  {canManageGoals && (
+                    <>
+                      {g.status === 'APPROVED' && (
+                        <button type="button" disabled={busy} onClick={() => reopenGoal(g)}
+                          className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 px-3 py-2 text-xs font-semibold text-amber-800 hover:bg-amber-50 disabled:opacity-60">
+                          <FiRotateCcw className="h-3.5 w-3.5" /> Send back
+                        </button>
+                      )}
+                      <button type="button" onClick={() => { setEditingGoal(g); setGoalDraft(g.title); }} title="Edit the goal"
+                        className="rounded-full border border-gray-200 p-2 text-blue-600 hover:bg-blue-50">
+                        <FiEdit2 className="h-3.5 w-3.5" />
+                      </button>
+                      <button type="button" onClick={() => { setDeletingGoal(g); setDeleteReason(''); }} title="Delete the goal"
+                        className="rounded-full border border-gray-200 p-2 text-red-600 hover:bg-red-50">
+                        <FiTrash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
               <dl className="mt-3 grid gap-2 border-t border-gray-100 pt-3 sm:grid-cols-2">
                 {Object.entries(g.answers || {}).filter(([, v]) => String(v || '').trim()).map(([k, v]) => (
@@ -498,7 +574,8 @@ export default function StaffRoadmap() {
 
       {/* Create / edit a milestone */}
       {editing && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4">
+        <Portal>
+        <div className="fixed inset-0 z-[2100] flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4">
           <div className="rm-rise max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl">
             <div className="sticky top-0 flex items-center justify-between border-b bg-white px-5 py-4">
               <h3 className="text-base font-bold text-gray-900">{editing.id ? 'Edit milestone' : 'New milestone'}</h3>
@@ -612,11 +689,78 @@ export default function StaffRoadmap() {
             </div>
           </div>
         </div>
+        </Portal>
+      )}
+
+      {/* Edit a goal's wording */}
+      {editingGoal && (
+        <Portal>
+        <div className="fixed inset-0 z-[2100] flex items-center justify-center bg-black/50 p-4">
+          <div className="rm-rise w-full max-w-md rounded-3xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b px-5 py-4">
+              <h3 className="text-base font-bold text-gray-900">Edit the goal</h3>
+              <button type="button" onClick={() => setEditingGoal(null)} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100"><FiX className="h-5 w-5" /></button>
+            </div>
+            <div className="space-y-3 px-5 py-4">
+              <p className="text-xs text-gray-500">{editingGoal.studentName} · {editingGoal.status.toLowerCase()}</p>
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Goal</label>
+                <textarea rows={3} value={goalDraft} onChange={(e) => setGoalDraft(e.target.value)} maxLength={500}
+                  className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900" />
+              </div>
+              <p className="text-[11px] text-gray-400">The student keeps their own answers; only the goal line changes.</p>
+            </div>
+            <div className="flex justify-end gap-2 border-t px-5 py-4">
+              <button type="button" onClick={() => setEditingGoal(null)}
+                className="rounded-full border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">Cancel</button>
+              <button type="button" disabled={busy} onClick={saveGoalEdit}
+                className="rounded-full bg-blue-600 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60">
+                {busy ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+        </Portal>
+      )}
+
+      {/* Delete a goal */}
+      {deletingGoal && (
+        <Portal>
+        <div className="fixed inset-0 z-[2100] flex items-center justify-center bg-black/50 p-4">
+          <div className="rm-rise w-full max-w-md rounded-3xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b px-5 py-4">
+              <h3 className="text-base font-bold text-gray-900">Delete this goal</h3>
+              <button type="button" onClick={() => setDeletingGoal(null)} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100"><FiX className="h-5 w-5" /></button>
+            </div>
+            <div className="space-y-3 px-5 py-4">
+              <p className="text-sm text-gray-600">
+                {deletingGoal.studentName}&apos;s goal “{deletingGoal.title}” is removed. They open the roadmap to a fresh setup,
+                with a note saying you removed it. Their own milestones stay.
+              </p>
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Reason for the student (optional)</label>
+                <textarea rows={3} value={deleteReason} onChange={(e) => setDeleteReason(e.target.value)} maxLength={2000}
+                  placeholder="e.g. Set a goal tied to your specialisation"
+                  className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900" />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 border-t px-5 py-4">
+              <button type="button" onClick={() => setDeletingGoal(null)}
+                className="rounded-full border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">Cancel</button>
+              <button type="button" disabled={busy} onClick={deleteGoal}
+                className="rounded-full bg-red-600 px-5 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60">
+                {busy ? 'Deleting…' : 'Delete goal'}
+              </button>
+            </div>
+          </div>
+        </div>
+        </Portal>
       )}
 
       {/* Send a goal back */}
       {rejecting && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+        <Portal>
+        <div className="fixed inset-0 z-[2100] flex items-center justify-center bg-black/50 p-4">
           <div className="rm-rise w-full max-w-md rounded-3xl bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b px-5 py-4">
               <h3 className="text-base font-bold text-gray-900">Send this goal back</h3>
@@ -643,6 +787,7 @@ export default function StaffRoadmap() {
             </div>
           </div>
         </div>
+        </Portal>
       )}
 
       {responses && <ResponsesModal data={responses} onClose={() => setResponses(null)} />}
@@ -654,7 +799,8 @@ function ResponsesModal({ data, onClose }: { data: ResponseView; onClose: () => 
   const [onlyAnswered, setOnlyAnswered] = useState(true);
   const rows = onlyAnswered ? data.students.filter((s) => s.answered) : data.students;
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4">
+    <Portal>
+    <div className="fixed inset-0 z-[2100] flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4">
       <div className="rm-rise max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl">
         <div className="sticky top-0 flex items-start justify-between gap-3 border-b bg-white px-5 py-4">
           <div>
@@ -706,5 +852,6 @@ function ResponsesModal({ data, onClose }: { data: ResponseView; onClose: () => 
         </div>
       </div>
     </div>
+    </Portal>
   );
 }

@@ -52,12 +52,21 @@ export type SessionInfo = {
   isActive?: boolean;
 };
 
+export type GoalNotice = {
+  id: string;
+  title: string;
+  reason: string;
+  removedByName: string;
+  removedAt: string;
+};
+
 export type Roadmap = {
   session: SessionInfo | null;
   questions: Question[];
   goal: Goal | null;
   milestones: Milestone[];
   selfMilestones: SelfMilestone[];
+  notice?: GoalNotice | null;
   student?: { id: string; name: string; email: string; registrationNumber: string } | null;
 };
 

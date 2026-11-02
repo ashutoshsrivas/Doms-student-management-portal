@@ -2,12 +2,13 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { FiPlus, FiX, FiTrash2, FiAward, FiStar, FiFlag, FiCheck, FiMaximize2, FiClock } from 'react-icons/fi';
+import { FiPlus, FiX, FiTrash2, FiAward, FiStar, FiFlag, FiCheck, FiMaximize2, FiClock, FiAlertCircle } from 'react-icons/fi';
 import apiClient from '@/app/lib/apiClient';
 import GoalOrb from './GoalOrb';
 import Timeline from './Timeline';
 import RoadmapCanvas from './RoadmapCanvas';
-import { Milestone, Roadmap, SelfMilestone, daysUntil, fmtDate } from './types';
+import Portal from './Portal';
+import { GoalNotice, Milestone, Roadmap, SelfMilestone, daysUntil, fmtDate } from './types';
 
 export default function StudentRoadmap() {
   const [data, setData] = useState<Roadmap | null>(null);
@@ -18,12 +19,14 @@ export default function StudentRoadmap() {
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [openSelf, setOpenSelf] = useState<Partial<SelfMilestone> | null>(null);
   const [canvas, setCanvas] = useState(false);
+  const [notice, setNotice] = useState<GoalNotice | null>(null);
 
   const load = useCallback(async () => {
     try {
       setLoading(true);
       const { data: body } = await apiClient.get('/roadmap/me');
       setData(body);
+      setNotice(body.notice || null);
     } catch (e: any) {
       toast.error(e?.response?.data?.message || 'Failed to load your roadmap');
     } finally {
@@ -287,6 +290,38 @@ export default function StudentRoadmap() {
         </>
       )}
 
+      {notice && (
+        <Portal>
+          <div className="fixed inset-0 z-[2200] flex items-center justify-center bg-black/50 p-4">
+            <div className="rm-rise w-full max-w-md rounded-3xl bg-white p-6 text-center shadow-2xl">
+              <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-50 text-amber-600">
+                <FiAlertCircle className="h-6 w-6" />
+              </span>
+              <h3 className="mt-3 text-lg font-bold text-gray-900">Your goal was removed</h3>
+              <p className="mt-2 text-sm text-gray-600">
+                {notice.removedByName ? `${notice.removedByName} removed` : 'A faculty member removed'} your earlier goal
+                {notice.title ? ' — ' : ''}
+                {notice.title && <span className="font-semibold text-gray-800">“{notice.title}”</span>}
+                {notice.removedAt ? ` on ${fmtDate(notice.removedAt)}` : ''}.
+              </p>
+              {notice.reason && <p className="mt-2 rounded-xl bg-gray-50 px-3 py-2 text-sm text-gray-600">“{notice.reason}”</p>}
+              <p className="mt-3 text-sm text-gray-500">Set a new goal to start your roadmap again.</p>
+              <button
+                type="button"
+                onClick={async () => {
+                  try { await apiClient.post(`/roadmap/notices/${notice.id}/ack`); } catch { /* the note is only informational */ }
+                  setNotice(null);
+                  await load();
+                }}
+                className="mt-5 w-full rounded-full bg-gradient-to-r from-indigo-600 to-fuchsia-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-500/25 hover:brightness-110"
+              >
+                Set a new goal
+              </button>
+            </div>
+          </div>
+        </Portal>
+      )}
+
       {canvas && approved && (
         <RoadmapCanvas
           goalTitle={data.goal?.title || ''}
@@ -304,7 +339,8 @@ export default function StudentRoadmap() {
 
       {/* Answer a faculty milestone */}
       {openMilestone && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4">
+        <Portal>
+        <div className="fixed inset-0 z-[2100] flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4">
           <div className="rm-rise max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl">
             <div className="sticky top-0 flex items-start justify-between gap-3 border-b bg-white px-5 py-4">
               <div>
@@ -361,11 +397,13 @@ export default function StudentRoadmap() {
             )}
           </div>
         </div>
+        </Portal>
       )}
 
       {/* Add or edit one of my own */}
       {openSelf && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4">
+        <Portal>
+        <div className="fixed inset-0 z-[2100] flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4">
           <div className="rm-rise w-full max-w-md rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl">
             <div className="flex items-center justify-between border-b px-5 py-4">
               <h3 className="text-base font-bold text-gray-900">{openSelf.id ? 'Edit' : 'Add to my timeline'}</h3>
@@ -421,6 +459,7 @@ export default function StudentRoadmap() {
             </div>
           </div>
         </div>
+        </Portal>
       )}
     </div>
   );

@@ -13,6 +13,9 @@ router.post('/goal', ctrl.saveGoal);
 router.get('/sessions', ctrl.listSessions);
 router.get('/goals', ctrl.listGoals);
 router.post('/goals/:id/decide', ctrl.decideGoal);
+router.patch('/goals/:id', ctrl.updateGoal);
+router.delete('/goals/:id', ctrl.deleteGoal);
+router.post('/notices/:id/ack', ctrl.acknowledgeNotice);
 router.get('/students', ctrl.listStudents);
 router.get('/student/:userId', ctrl.studentRoadmap);
 
