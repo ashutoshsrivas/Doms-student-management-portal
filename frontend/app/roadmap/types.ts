@@ -21,6 +21,9 @@ export type Goal = {
 export type Milestone = {
   id: string;
   academicSessionId?: string;
+  /** null = the whole session; set = one student's timeline. */
+  userId?: string | null;
+  studentName?: string;
   title: string;
   description: string;
   dueDate: string;

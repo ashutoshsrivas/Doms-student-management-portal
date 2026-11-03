@@ -550,6 +550,20 @@ async function start() {
         console.error('Error adding total_strength to classes:', error.message);
       }
     }
+    // A roadmap milestone can be aimed at one student instead of a session.
+    try {
+      await sequelize.query('ALTER TABLE roadmap_milestones ADD COLUMN user_id CHAR(36) NULL');
+      console.log('Added user_id column to roadmap_milestones');
+    } catch (error) {
+      if (error.message && error.message.includes('Duplicate column')) {
+        console.log('user_id column already exists on roadmap_milestones');
+      } else if (error.message && error.message.includes("doesn't exist")) {
+        // fresh install — sync already created it
+      } else {
+        console.error('Error adding user_id to roadmap_milestones:', error.message);
+      }
+    }
+
     // Certificates granted by faculty wait for approval before a student can
     // see them: widen the status ENUM and record who decided.
     try {

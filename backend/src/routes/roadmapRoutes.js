@@ -11,6 +11,9 @@ router.post('/goal', ctrl.saveGoal);
 
 // Staff: goals awaiting approval, session overview, one student's roadmap
 router.get('/sessions', ctrl.listSessions);
+router.get('/session-students', ctrl.sessionStudents);
+router.get('/goal-questions', ctrl.getGoalQuestions);
+router.put('/goal-questions', ctrl.setGoalQuestions);
 router.get('/goals', ctrl.listGoals);
 router.post('/goals/:id/decide', ctrl.decideGoal);
 router.patch('/goals/:id', ctrl.updateGoal);

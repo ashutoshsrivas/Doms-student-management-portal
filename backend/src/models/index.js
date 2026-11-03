@@ -2549,6 +2549,8 @@ const StudentGoal = sequelize.define('StudentGoal', {
 const RoadmapMilestone = sequelize.define('RoadmapMilestone', {
   id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
   academicSessionId: { type: DataTypes.UUID, allowNull: false },
+  // null = everyone in the session; set = only that student's timeline.
+  userId: { type: DataTypes.UUID, allowNull: true },
   title: { type: DataTypes.STRING(300), allowNull: false },
   description: { type: DataTypes.TEXT, allowNull: true },
   dueDate: { type: DataTypes.DATEONLY, allowNull: false },
@@ -2561,7 +2563,7 @@ const RoadmapMilestone = sequelize.define('RoadmapMilestone', {
   tableName: 'roadmap_milestones',
   timestamps: true,
   underscored: true,
-  indexes: [{ fields: ['academic_session_id'] }],
+  indexes: [{ fields: ['academic_session_id'] }, { fields: ['user_id'] }],
 });
 
 // One student's answers to a staff milestone.
@@ -2595,6 +2597,18 @@ const StudentMilestone = sequelize.define('StudentMilestone', {
   indexes: [{ fields: ['user_id'] }],
 });
 
+// One row, holding settings staff can change — currently the questions the
+// goal orb asks. Kept as JSON so adding a setting needs no migration.
+const RoadmapSetting = sequelize.define('RoadmapSetting', {
+  key: { type: DataTypes.STRING(64), primaryKey: true },
+  value: { type: DataTypes.JSON, allowNull: false, defaultValue: {} },
+  updatedBy: { type: DataTypes.UUID, allowNull: true },
+}, {
+  tableName: 'roadmap_settings',
+  timestamps: true,
+  underscored: true,
+});
+
 // When staff remove a student's goal, the student is told once: they get a
 // note about what was removed and then a fresh roadmap to set up.
 const RoadmapGoalNotice = sequelize.define('RoadmapGoalNotice', {
@@ -2617,6 +2631,7 @@ StudentGoal.belongsTo(User, { foreignKey: 'userId', as: 'Student', constraints: 
 StudentGoal.belongsTo(User, { foreignKey: 'approvedBy', as: 'ApprovedByUser', constraints: false });
 StudentGoal.belongsTo(AcademicSession, { foreignKey: 'academicSessionId', as: 'Session', constraints: false });
 RoadmapMilestone.belongsTo(User, { foreignKey: 'createdBy', as: 'Creator', constraints: false });
+RoadmapMilestone.belongsTo(User, { foreignKey: 'userId', as: 'Student', constraints: false });
 RoadmapMilestone.belongsTo(AcademicSession, { foreignKey: 'academicSessionId', as: 'Session', constraints: false });
 RoadmapMilestone.hasMany(RoadmapMilestoneResponse, { foreignKey: 'milestoneId', as: 'Responses', constraints: false });
 RoadmapMilestoneResponse.belongsTo(RoadmapMilestone, { foreignKey: 'milestoneId', as: 'Milestone', constraints: false });
@@ -2631,6 +2646,7 @@ RoadmapGoalNotice.belongsTo(User, { foreignKey: 'deletedBy', as: 'DeletedByUser'
 
 module.exports = {
   GOAL_QUESTIONS,
+  RoadmapSetting,
   StudentGoal,
   RoadmapGoalNotice,
   RoadmapMilestone,

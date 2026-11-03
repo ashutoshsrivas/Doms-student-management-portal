@@ -5,7 +5,7 @@ import toast from 'react-hot-toast';
 import {
   FiPlus, FiX, FiTrash2, FiEdit2, FiCheck, FiSearch, FiUsers, FiFlag, FiClock,
   FiTarget, FiBookOpen, FiAward, FiBriefcase, FiCalendar, FiStar, FiZap, FiCheckCircle, FiArrowLeft, FiEye,
-  FiMaximize2, FiRotateCcw,
+  FiMaximize2, FiRotateCcw, FiUserCheck, FiUser, FiRefreshCw,
 } from 'react-icons/fi';
 import apiClient from '@/app/lib/apiClient';
 import Timeline from './Timeline';
@@ -24,6 +24,10 @@ type GoalRow = Goal & {
 type StudentRow = {
   id: string; name: string; email: string; registrationNumber: string; sectionName: string;
   goalStatus: string; goalTitle: string; goalId: string | null; selfMilestones: number; answered: number;
+  milestones?: number;
+};
+type PickerStudent = {
+  id: string; name: string; email: string; registrationNumber: string; sectionName: string; isMentee: boolean;
 };
 type ResponseView = {
   milestone: Milestone;
@@ -42,7 +46,13 @@ const GOAL_STATUS_STYLE: Record<string, string> = {
 export default function StaffRoadmap() {
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [sessionId, setSessionId] = useState('');
-  const [tab, setTab] = useState<'goals' | 'milestones' | 'students'>('goals');
+  const [tab, setTab] = useState<'goals' | 'milestones' | 'students' | 'questions'>('goals');
+  const [menteesOnly, setMenteesOnly] = useState(false);
+  const [menteeCount, setMenteeCount] = useState(0);
+  const [picker, setPicker] = useState<PickerStudent[]>([]);
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [questionsDefault, setQuestionsDefault] = useState(true);
+  const [canEditQuestions, setCanEditQuestions] = useState(false);
   const [goals, setGoals] = useState<GoalRow[]>([]);
   const [goalFilter, setGoalFilter] = useState<'PENDING' | 'ALL'>('PENDING');
   const [milestones, setMilestones] = useState<Milestone[]>([]);
@@ -80,21 +90,29 @@ export default function StaffRoadmap() {
     if (!sessionId) return;
     try {
       setLoading(true);
-      const [g, m, s] = await Promise.all([
-        apiClient.get('/roadmap/goals', { params: { sessionId, status: goalFilter } }),
-        apiClient.get('/roadmap/milestones', { params: { sessionId } }),
-        apiClient.get('/roadmap/students', { params: { sessionId } }),
+      const mine = menteesOnly ? { menteesOnly: 1 } : {};
+      const [g, m, s, p, q] = await Promise.all([
+        apiClient.get('/roadmap/goals', { params: { sessionId, status: goalFilter, ...mine } }),
+        apiClient.get('/roadmap/milestones', { params: { sessionId, ...mine } }),
+        apiClient.get('/roadmap/students', { params: { sessionId, ...mine } }),
+        apiClient.get('/roadmap/session-students', { params: { sessionId } }),
+        apiClient.get('/roadmap/goal-questions'),
       ]);
       setGoals(g.data.goals || []);
       setCanManageGoals(!!g.data.canManage);
       setMilestones(m.data.milestones || []);
       setStudents(s.data.students || []);
+      setMenteeCount(s.data.menteeCount || 0);
+      setPicker(p.data.students || []);
+      setQuestions(q.data.questions || []);
+      setQuestionsDefault(!!q.data.isDefault);
+      setCanEditQuestions(!!q.data.canEdit);
     } catch (e: any) {
       toast.error(e?.response?.data?.message || 'Failed to load the roadmap data');
     } finally {
       setLoading(false);
     }
-  }, [sessionId, goalFilter]);
+  }, [sessionId, goalFilter, menteesOnly]);
   useEffect(() => { load(); }, [load]);
 
   const session = sessions.find((s) => s.id === sessionId) || null;
@@ -172,15 +190,17 @@ export default function StaffRoadmap() {
       setBusy(true);
       const payload = {
         academicSessionId: editing.academicSessionId || sessionId,
+        userId: editing.userId || null,
         title: editing.title.trim(),
         description: editing.description || null,
         dueDate: editing.dueDate,
         icon: editing.icon || 'target',
         questions: (editing.questions || []).filter((q) => q.label?.trim()),
       };
-      if (editing.id) await apiClient.patch(`/roadmap/milestones/${editing.id}`, payload);
-      else await apiClient.post('/roadmap/milestones', payload);
-      toast.success(editing.id ? 'Milestone updated' : 'Milestone added to every student in the session');
+      const { data } = editing.id
+        ? await apiClient.patch(`/roadmap/milestones/${editing.id}`, payload)
+        : await apiClient.post('/roadmap/milestones', payload);
+      toast.success(data.message || 'Milestone saved');
       setEditing(null);
       await load();
     } catch (e: any) {
@@ -374,8 +394,28 @@ export default function StaffRoadmap() {
       </div>
 
       {session && (
-        <div className="rounded-2xl border border-gray-200 bg-white px-4 py-2.5 text-xs text-gray-600">
-          Timeline window · {fmtDate(session.startDate)} → {fmtDate(session.endDate)} · {students.length} student{students.length === 1 ? '' : 's'}
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-gray-200 bg-white px-4 py-2.5 text-xs text-gray-600">
+          <span>
+            Timeline window · {fmtDate(session.startDate)} → {fmtDate(session.endDate)} · {students.length} student{students.length === 1 ? '' : 's'}
+            {menteesOnly ? ' (your mentees)' : ''}
+          </span>
+          <button
+            type="button"
+            onClick={() => setMenteesOnly((v) => !v)}
+            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+              menteesOnly ? 'bg-blue-600 text-white' : 'border border-gray-200 text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            <FiUserCheck className="h-3.5 w-3.5" />
+            {menteesOnly ? 'Showing my mentees' : 'Show my mentees only'}
+            {menteeCount > 0 && !menteesOnly && <span className="text-gray-400">({menteeCount})</span>}
+          </button>
+        </div>
+      )}
+
+      {menteesOnly && menteeCount === 0 && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-900">
+          You have no mentees in this session, so nothing is listed. Turn the filter off to see everyone.
         </div>
       )}
 
@@ -384,6 +424,7 @@ export default function StaffRoadmap() {
           ['goals', `Goals${pendingGoals ? ` (${pendingGoals})` : ''}`],
           ['milestones', `Milestones (${milestones.length})`],
           ['students', `Students (${students.length})`],
+          ['questions', 'Goal questions'],
         ] as const).map(([key, label]) => (
           <button key={key} type="button" onClick={() => setTab(key)}
             className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
@@ -490,6 +531,15 @@ export default function StaffRoadmap() {
                       {m.description && <p className="mt-1 whitespace-pre-line text-xs text-gray-600">{m.description}</p>}
                       <div className="mt-1 flex flex-wrap items-center gap-3 text-[11px] text-gray-500">
                         <span className="inline-flex items-center gap-1"><FiCalendar className="h-3 w-3" /> {fmtDate(m.dueDate)}</span>
+                        {m.userId ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-2 py-0.5 font-semibold text-violet-700">
+                            <FiUser className="h-3 w-3" /> {m.studentName || 'one student'}
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 font-semibold text-gray-600">
+                            <FiUsers className="h-3 w-3" /> Whole session
+                          </span>
+                        )}
                         <span>{m.questions.length} question{m.questions.length === 1 ? '' : 's'}</span>
                         <span className="inline-flex items-center gap-1"><FiUsers className="h-3 w-3" /> {m.responseCount || 0} answered</span>
                         {m.createdByName && <span>by {m.createdByName}</span>}
@@ -513,6 +563,13 @@ export default function StaffRoadmap() {
             })}
           </div>
         )
+      ) : tab === 'questions' ? (
+        <GoalQuestionsEditor
+          questions={questions}
+          isDefault={questionsDefault}
+          canEdit={canEditQuestions}
+          onSaved={load}
+        />
       ) : (
         <div className="rounded-2xl border border-gray-200 bg-white">
           <div className="flex flex-wrap items-center gap-2 border-b border-gray-100 p-3">
@@ -553,7 +610,7 @@ export default function StaffRoadmap() {
                       </span>
                       {s.goalTitle && <div className="mt-0.5 max-w-[260px] truncate text-xs text-gray-600">{s.goalTitle}</div>}
                     </td>
-                    <td className="px-3 py-2 text-xs text-gray-700 tabular-nums">{s.answered}/{milestones.length}</td>
+                    <td className="px-3 py-2 text-xs text-gray-700 tabular-nums">{s.answered}/{s.milestones ?? milestones.length}</td>
                     <td className="px-3 py-2 text-xs text-gray-700 tabular-nums">{s.selfMilestones}</td>
                     <td className="px-3 py-2 text-right">
                       <button type="button" onClick={() => openStudent(s)}
@@ -582,9 +639,38 @@ export default function StaffRoadmap() {
               <button type="button" onClick={() => setEditing(null)} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100"><FiX className="h-5 w-5" /></button>
             </div>
             <div className="space-y-3 px-5 py-4">
-              <p className="rounded-xl bg-blue-50 px-3 py-2 text-[11px] text-blue-900">
-                This appears on the timeline of every student in <strong>{session?.name || 'the session'}</strong>.
-              </p>
+              <div className="rounded-xl border border-gray-200 p-3">
+                <div className="mb-2 text-xs font-semibold text-gray-700">Who gets this milestone?</div>
+                <div className="grid grid-cols-2 gap-2">
+                  <button type="button" onClick={() => setEditing({ ...editing, userId: null })}
+                    className={`flex items-center justify-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold ${
+                      !editing.userId ? 'border-blue-300 bg-blue-50 text-blue-800' : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                    }`}>
+                    <FiUsers className="h-3.5 w-3.5" /> Everyone in the session
+                  </button>
+                  <button type="button" onClick={() => setEditing({ ...editing, userId: editing.userId || picker[0]?.id || '' })}
+                    className={`flex items-center justify-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold ${
+                      editing.userId ? 'border-violet-300 bg-violet-50 text-violet-800' : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                    }`}>
+                    <FiUser className="h-3.5 w-3.5" /> One student
+                  </button>
+                </div>
+                {editing.userId ? (
+                  <select value={editing.userId} onChange={(e) => setEditing({ ...editing, userId: e.target.value })}
+                    className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900">
+                    <option value="">Choose a student…</option>
+                    {picker.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}{p.registrationNumber ? ` · ${p.registrationNumber}` : ''}{p.sectionName ? ` · ${p.sectionName}` : ''}{p.isMentee ? ' · my mentee' : ''}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <p className="mt-2 text-[11px] text-gray-500">
+                    It lands on the timeline of every student in <strong>{session?.name || 'the session'}</strong>.
+                  </p>
+                )}
+              </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-700 mb-1">Title *</label>
                 <input value={editing.title || ''} onChange={(e) => setEditing({ ...editing, title: e.target.value })}
@@ -734,8 +820,8 @@ export default function StaffRoadmap() {
             </div>
             <div className="space-y-3 px-5 py-4">
               <p className="text-sm text-gray-600">
-                {deletingGoal.studentName}&apos;s goal “{deletingGoal.title}” is removed. They open the roadmap to a fresh setup,
-                with a note saying you removed it. Their own milestones stay.
+                {deletingGoal.studentName}&apos;s goal “{deletingGoal.title}” is removed, along with the milestones and
+                achievements they added themselves. They open the roadmap to a fresh setup, with a note saying you removed it.
               </p>
               <div>
                 <label className="block text-xs font-semibold text-gray-700 mb-1">Reason for the student (optional)</label>
@@ -791,6 +877,146 @@ export default function StaffRoadmap() {
       )}
 
       {responses && <ResponsesModal data={responses} onClose={() => setResponses(null)} />}
+    </div>
+  );
+}
+
+// The questions the goal orb asks every student. Editing them leaves
+// answers already given attached to their question ids.
+function GoalQuestionsEditor({ questions, isDefault, canEdit, onSaved }: {
+  questions: Question[];
+  isDefault: boolean;
+  canEdit: boolean;
+  onSaved: () => Promise<void> | void;
+}) {
+  const [draft, setDraft] = useState<Question[]>(questions);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => { setDraft(questions); }, [questions]);
+
+  const update = (i: number, patch: Partial<Question>) =>
+    setDraft((prev) => prev.map((q, j) => (j === i ? { ...q, ...patch } : q)));
+  const move = (i: number, by: number) => setDraft((prev) => {
+    const next = [...prev];
+    const to = i + by;
+    if (to < 0 || to >= next.length) return prev;
+    [next[i], next[to]] = [next[to], next[i]];
+    return next;
+  });
+
+  const save = async () => {
+    if (draft.some((q) => !q.label.trim())) { toast.error('Every question needs wording'); return; }
+    try {
+      setBusy(true);
+      const { data } = await apiClient.put('/roadmap/goal-questions', { questions: draft });
+      toast.success(data.message || 'Saved');
+      await onSaved();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Failed to save the questions');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const reset = async () => {
+    if (!confirm('Go back to the default questions?')) return;
+    try {
+      setBusy(true);
+      const { data } = await apiClient.put('/roadmap/goal-questions', { reset: true });
+      toast.success(data.message || 'Reset');
+      await onSaved();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Failed to reset');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="rounded-2xl border border-gray-200 bg-white p-4">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <h2 className="text-sm font-bold text-gray-900">Goal questions</h2>
+            <p className="mt-0.5 text-xs text-gray-500">
+              What the orb asks a student before they set their goal. The first question is the goal itself.
+              {isDefault ? ' These are the defaults.' : ''}
+            </p>
+          </div>
+          {canEdit && (
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={reset} disabled={busy || isDefault}
+                className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-40">
+                <FiRefreshCw className="h-3.5 w-3.5" /> Defaults
+              </button>
+              <button type="button" onClick={() => setDraft([...draft, { id: `q${draft.length + 1}_${Date.now().toString(36)}`, label: '', type: 'textarea', required: false }])}
+                className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50">
+                <FiPlus className="h-3.5 w-3.5" /> Add question
+              </button>
+              <button type="button" onClick={save} disabled={busy}
+                className="rounded-full bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-60">
+                {busy ? 'Saving…' : 'Save questions'}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {!canEdit && (
+        <p className="rounded-2xl border border-gray-200 bg-white px-4 py-2.5 text-xs text-gray-500">
+          Only an admin, HOD or coordinator can change these.
+        </p>
+      )}
+
+      <ul className="space-y-2">
+        {draft.map((q, i) => (
+          <li key={q.id} className="rounded-2xl border border-gray-200 bg-white p-3">
+            <div className="flex items-start gap-2">
+              <span className="mt-2 w-5 flex-none text-center text-xs font-bold text-gray-400">{i + 1}</span>
+              <div className="min-w-0 flex-1 space-y-2">
+                <textarea
+                  rows={2}
+                  value={q.label}
+                  readOnly={!canEdit}
+                  onChange={(e) => update(i, { label: e.target.value })}
+                  maxLength={500}
+                  placeholder="e.g. What do you want to achieve by the end of this programme?"
+                  className={`w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 ${canEdit ? '' : 'bg-gray-50'}`}
+                />
+                <div className="flex flex-wrap items-center gap-2">
+                  <select value={q.type} disabled={!canEdit} onChange={(e) => update(i, { type: e.target.value as Question['type'] })}
+                    className="rounded-lg border border-gray-200 px-2 py-1 text-[11px] text-gray-700 disabled:bg-gray-50">
+                    <option value="textarea">Long answer</option>
+                    <option value="text">Short answer</option>
+                    <option value="choice">Choice</option>
+                  </select>
+                  {q.type === 'choice' && (
+                    <input value={(q.options || []).join(', ')} disabled={!canEdit}
+                      onChange={(e) => update(i, { options: e.target.value.split(',').map((o) => o.trim()).filter(Boolean) })}
+                      placeholder="Option one, option two"
+                      className="flex-1 rounded-lg border border-gray-200 px-2 py-1 text-[11px] text-gray-700 disabled:bg-gray-50" />
+                  )}
+                  <label className="inline-flex items-center gap-1 text-[11px] text-gray-600">
+                    <input type="checkbox" checked={!!q.required} disabled={!canEdit}
+                      onChange={(e) => update(i, { required: e.target.checked })} /> required
+                  </label>
+                  <span className="text-[10px] text-gray-400">id: {q.id}</span>
+                </div>
+              </div>
+              {canEdit && (
+                <div className="flex flex-none flex-col items-center gap-1">
+                  <button type="button" onClick={() => move(i, -1)} disabled={i === 0}
+                    className="rounded px-1.5 text-xs font-bold text-gray-500 hover:bg-gray-100 disabled:opacity-30">↑</button>
+                  <button type="button" onClick={() => move(i, 1)} disabled={i === draft.length - 1}
+                    className="rounded px-1.5 text-xs font-bold text-gray-500 hover:bg-gray-100 disabled:opacity-30">↓</button>
+                  <button type="button" onClick={() => setDraft(draft.filter((_, j) => j !== i))}
+                    className="rounded p-1 text-red-600 hover:bg-red-50"><FiTrash2 className="h-3.5 w-3.5" /></button>
+                </div>
+              )}
+            </div>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
