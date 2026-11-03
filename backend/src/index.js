@@ -124,6 +124,26 @@ async function start() {
     await sequelize.authenticate();
     console.log('Database connection successful');
 
+    // Columns that a model also indexes must exist BEFORE sync runs: sync
+    // adds the index, and ADD INDEX on a missing column aborts startup.
+    for (const [table, column, ddl] of [
+      ['roadmap_milestones', 'user_id', 'CHAR(36) NULL'],
+    ]) {
+      try {
+        await sequelize.query(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
+        console.log(`Added ${column} column to ${table}`);
+      } catch (error) {
+        const msg = error.message || '';
+        if (msg.includes('Duplicate column')) {
+          console.log(`${column} column already exists on ${table}`);
+        } else if (msg.includes("doesn't exist")) {
+          // fresh install — sync creates the table with the column
+        } else {
+          console.error(`Error adding ${column} to ${table}:`, msg);
+        }
+      }
+    }
+
     // Sync models - don't use alter due to MySQL key limit (max 64 keys per table)
     await sequelize.sync({ force: false });
     console.log('Database models synced');
@@ -550,20 +570,6 @@ async function start() {
         console.error('Error adding total_strength to classes:', error.message);
       }
     }
-    // A roadmap milestone can be aimed at one student instead of a session.
-    try {
-      await sequelize.query('ALTER TABLE roadmap_milestones ADD COLUMN user_id CHAR(36) NULL');
-      console.log('Added user_id column to roadmap_milestones');
-    } catch (error) {
-      if (error.message && error.message.includes('Duplicate column')) {
-        console.log('user_id column already exists on roadmap_milestones');
-      } else if (error.message && error.message.includes("doesn't exist")) {
-        // fresh install — sync already created it
-      } else {
-        console.error('Error adding user_id to roadmap_milestones:', error.message);
-      }
-    }
-
     // Certificates granted by faculty wait for approval before a student can
     // see them: widen the status ENUM and record who decided.
     try {
