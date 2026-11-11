@@ -17,6 +17,14 @@ router.get('/eligible-crs',
   authorizeRole('ADMIN', 'HOD', 'FACULTY', 'CHAIR_HEAD', 'PLACEMENT_COORDINATOR', 'COORDINATOR'),
   classController.eligibleCRs);
 
+// The whole-institution report, and the bulk clear-down that an admin runs
+// before setting up a new term. Both are gated inside the controller too.
+router.get('/report',
+  authorizeRole('ADMIN', 'HOD', 'PLACEMENT_COORDINATOR'),
+  classController.report);
+router.get('/wipe-preview', authorizeRole('ADMIN'), classController.wipePreview);
+router.delete('/bulk', authorizeRole('ADMIN'), classController.wipe);
+
 // List classes (scoped inside the controller by role)
 router.get('/', classController.list);
 

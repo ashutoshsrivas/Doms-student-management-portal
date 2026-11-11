@@ -4,12 +4,13 @@ import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import {
   FiPlus, FiSearch, FiUsers, FiUser, FiCalendar, FiChevronDown, FiChevronUp,
-  FiTrash2, FiEdit2, FiFileText, FiCheck, FiX,
+  FiTrash2, FiEdit2, FiFileText, FiCheck, FiX, FiDownload, FiAlertTriangle,
 } from 'react-icons/fi';
 import apiClient from '@/app/lib/apiClient';
 import DashboardLayout from '@/app/components/DashboardLayout';
 import ProtectedRoute from '@/app/components/ProtectedRoute';
 import useAuthStore from '@/app/store/authStore';
+import { ClassReport, downloadClassReport } from '@/app/lib/classReport';
 
 type Student = { id: string; firstName: string | null; lastName: string | null; email: string };
 type Coordinator = Student & { approvedRole: string };
@@ -27,6 +28,13 @@ type ClassRow = {
   Session: Session | null;
   Coordinator: Coordinator | null;
   Representatives: Representative[];
+};
+type WipeCounts = {
+  classes: number;
+  attendance: number;
+  representatives: number;
+  firstDate: string | null;
+  lastDate: string | null;
 };
 type AttendanceRow = {
   id: string;
@@ -61,6 +69,9 @@ function Content() {
   // Create/delete: ADMIN/HOD only. See + edit every class: also Placement Coordinator.
   const isAdmin = ['ADMIN', 'HOD'].includes(user?.role || '');
   const canManageAll = isAdmin || user?.role === 'PLACEMENT_COORDINATOR';
+  // Clearing every class at once is a bigger thing than deleting one, so it
+  // stops at ADMIN rather than including HOD.
+  const isSuperAdmin = user?.role === 'ADMIN';
   const [classes, setClasses] = useState<ClassRow[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [sessionId, setSessionId] = useState('');
@@ -70,6 +81,8 @@ function Content() {
   const [creating, setCreating] = useState(false);
   const [editingClass, setEditingClass] = useState<ClassRow | null>(null);
   const [editingCRs, setEditingCRs] = useState<string | null>(null);
+  const [reporting, setReporting] = useState(false);
+  const [wiping, setWiping] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -145,6 +158,26 @@ function Content() {
               className="w-64 rounded-lg border border-gray-200 bg-white py-2 pl-8 pr-3 text-sm text-gray-900 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
             />
           </div>
+          {canManageAll && (
+            <button
+              type="button"
+              onClick={() => setReporting(true)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+              title="Download every class's daily attendance"
+            >
+              <FiDownload className="h-4 w-4" /> Report
+            </button>
+          )}
+          {isSuperAdmin && (
+            <button
+              type="button"
+              onClick={() => setWiping(true)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-50"
+              title="Delete classes and their attendance so a new term can be set up"
+            >
+              <FiTrash2 className="h-4 w-4" /> Clear all
+            </button>
+          )}
           {isAdmin && (
             <button
               type="button"
@@ -255,6 +288,23 @@ function Content() {
             setCreating(false);
             await refresh();
           }}
+        />
+      )}
+
+      {reporting && (
+        <ReportModal
+          sessions={sessions}
+          defaultSessionId={sessionId}
+          onClose={() => setReporting(false)}
+        />
+      )}
+
+      {wiping && (
+        <WipeModal
+          sessions={sessions}
+          defaultSessionId={sessionId}
+          onClose={() => setWiping(false)}
+          onDone={refresh}
         />
       )}
 
@@ -809,6 +859,330 @@ function EditClassModal({
           <button type="button" onClick={onClose} className="rounded border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">Cancel</button>
           <button type="button" onClick={save} disabled={saving} className="rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60">
             {saving ? 'Saving…' : 'Save changes'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Reporting and clear-down
+// ---------------------------------------------------------------------------
+
+const today = () => {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
+const daysAgo = (n: number) => {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  const pad = (x: number) => String(x).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
+const monthStart = () => `${today().slice(0, 7)}-01`;
+
+type Range = 'all' | 'today' | 'week' | 'month' | 'custom';
+
+const apiMessage = (e: unknown) =>
+  (e as { response?: { data?: { message?: string } } })?.response?.data?.message || '';
+
+const RANGES: { key: Range; label: string; from: () => string | null; to: () => string | null }[] = [
+  { key: 'all', label: 'Everything', from: () => null, to: () => null },
+  { key: 'today', label: 'Today', from: today, to: today },
+  { key: 'week', label: 'Last 7 days', from: () => daysAgo(6), to: today },
+  { key: 'month', label: 'This month', from: monthStart, to: today },
+];
+
+// Fetch a report for one scope and hand it to the browser as a workbook.
+// Shared by the download dialog and by the archive step of a clear-down, so
+// the file an admin keeps before wiping is the same file either way.
+async function fetchAndSave(sessionId: string, from: string | null, to: string | null) {
+  const params: Record<string, string> = {};
+  if (sessionId) params.sessionId = sessionId;
+  if (from) params.from = from;
+  if (to) params.to = to;
+  const res = await apiClient.get('/classes/report', { params });
+  const report = res.data as ClassReport;
+  downloadClassReport(report);
+  return report;
+}
+
+function ReportModal({
+  sessions, defaultSessionId, onClose,
+}: { sessions: Session[]; defaultSessionId: string; onClose: () => void }) {
+  const [sessionId, setSessionId] = useState(defaultSessionId);
+  const [range, setRange] = useState<Range>('all');
+  const [from, setFrom] = useState(monthStart());
+  const [to, setTo] = useState(today());
+  const [busy, setBusy] = useState(false);
+
+  const bounds = () => {
+    if (range === 'custom') return { from: from || null, to: to || null };
+    const preset = RANGES.find((r) => r.key === range)!;
+    return { from: preset.from(), to: preset.to() };
+  };
+
+  const download = async () => {
+    try {
+      setBusy(true);
+      const { from: f, to: t } = bounds();
+      const report = await fetchAndSave(sessionId, f, t);
+      toast.success(
+        report.attendance.length
+          ? `Downloaded ${report.attendance.length} entries across ${report.classes.length} classes`
+          : 'Downloaded — no attendance entries in that range',
+      );
+      onClose();
+    } catch (e: unknown) {
+      toast.error(apiMessage(e) || 'Could not build the report');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div className="w-full max-w-lg rounded-xl bg-white p-5 shadow-xl">
+        <h2 className="text-lg font-bold text-gray-900">Download the class report</h2>
+        <p className="mt-1 text-sm text-gray-500">
+          One workbook: every daily punch, a summary per class, and a note of what the file covers.
+        </p>
+
+        <label className="mt-4 block">
+          <span className="block text-xs font-semibold text-gray-600">Session</span>
+          <select
+            value={sessionId}
+            onChange={(e) => setSessionId(e.target.value)}
+            className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+          >
+            <option value="">Every session</option>
+            {sessions.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+        </label>
+
+        <div className="mt-4">
+          <span className="block text-xs font-semibold text-gray-600">Dates</span>
+          <div className="mt-1 flex flex-wrap gap-1.5">
+            {RANGES.map((r) => (
+              <button
+                key={r.key}
+                type="button"
+                onClick={() => setRange(r.key)}
+                className={`rounded-full px-3 py-1.5 text-xs font-semibold ring-1 ${
+                  range === r.key ? 'bg-blue-600 text-white ring-blue-600' : 'bg-white text-gray-700 ring-gray-200 hover:bg-gray-50'
+                }`}
+              >
+                {r.label}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => setRange('custom')}
+              className={`rounded-full px-3 py-1.5 text-xs font-semibold ring-1 ${
+                range === 'custom' ? 'bg-blue-600 text-white ring-blue-600' : 'bg-white text-gray-700 ring-gray-200 hover:bg-gray-50'
+              }`}
+            >
+              Pick dates
+            </button>
+          </div>
+          {range === 'custom' && (
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="rounded-lg border border-gray-200 px-3 py-2 text-sm" />
+              <span className="text-xs text-gray-500">to</span>
+              <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="rounded-lg border border-gray-200 px-3 py-2 text-sm" />
+            </div>
+          )}
+        </div>
+
+        <div className="mt-5 flex justify-end gap-2">
+          <button type="button" onClick={onClose} className="rounded border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">Cancel</button>
+          <button
+            type="button"
+            onClick={download}
+            disabled={busy}
+            className="inline-flex items-center gap-1.5 rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+          >
+            <FiDownload className="h-4 w-4" /> {busy ? 'Building…' : 'Download'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Clearing a term's classes. Nothing in the portal brings these rows back,
+// so the dialog makes the admin see the count, keep a copy, and type the
+// word — and the server keeps its own snapshot regardless.
+function WipeModal({
+  sessions, defaultSessionId, onClose, onDone,
+}: {
+  sessions: Session[];
+  defaultSessionId: string;
+  onClose: () => void;
+  onDone: () => void | Promise<void>;
+}) {
+  const [sessionId, setSessionId] = useState(defaultSessionId);
+  const [counts, setCounts] = useState<WipeCounts | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [archived, setArchived] = useState(false);
+  const [typed, setTyped] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      try {
+        setLoading(true);
+        setArchived(false);
+        setTyped('');
+        const res = await apiClient.get('/classes/wipe-preview', { params: sessionId ? { sessionId } : {} });
+        if (live) setCounts(res.data);
+      } catch (e: unknown) {
+        if (live) toast.error(apiMessage(e) || 'Could not read what is there');
+      } finally {
+        if (live) setLoading(false);
+      }
+    })();
+    return () => { live = false; };
+  }, [sessionId]);
+
+  const scopeName = sessionId ? (sessions.find((s) => s.id === sessionId)?.name || 'this session') : 'every session';
+
+  const archive = async () => {
+    try {
+      setBusy(true);
+      await fetchAndSave(sessionId, null, null);
+      setArchived(true);
+      toast.success('Saved. Keep that file somewhere safe.');
+    } catch (e: unknown) {
+      toast.error(apiMessage(e) || 'Could not build the report — nothing has been deleted');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const wipe = async () => {
+    if (!counts) return;
+    try {
+      setBusy(true);
+      const res = await apiClient.delete('/classes/bulk', {
+        data: {
+          sessionId: sessionId || null,
+          confirm: 'DELETE',
+          expectedClasses: counts.classes,
+          expectedAttendance: counts.attendance,
+        },
+      });
+      toast.success(res.data.message);
+      await onDone();
+      onClose();
+    } catch (e: unknown) {
+      const fresh = (e as { response?: { data?: { counts?: WipeCounts } } }).response?.data?.counts;
+      if (fresh) setCounts(fresh);
+      toast.error(apiMessage(e) || 'Could not clear the classes');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const nothing = !loading && counts && counts.classes === 0;
+  const ready = archived && typed.trim() === 'DELETE' && !!counts && counts.classes > 0;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div className="w-full max-w-lg rounded-xl bg-white p-5 shadow-xl">
+        <h2 className="flex items-center gap-2 text-lg font-bold text-gray-900">
+          <FiAlertTriangle className="h-5 w-5 text-red-600" /> Clear classes and attendance
+        </h2>
+        <p className="mt-1 text-sm text-gray-500">
+          For starting a new term. This deletes the classes themselves, every daily attendance
+          entry punched against them, and their CR assignments. It cannot be undone from here.
+        </p>
+
+        <label className="mt-4 block">
+          <span className="block text-xs font-semibold text-gray-600">What to clear</span>
+          <select
+            value={sessionId}
+            onChange={(e) => setSessionId(e.target.value)}
+            disabled={busy}
+            className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+          >
+            <option value="">Every session — all classes in the portal</option>
+            {sessions.map((s) => <option key={s.id} value={s.id}>{s.name} — this session only</option>)}
+          </select>
+        </label>
+
+        <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-800">
+          {loading ? 'Counting…' : nothing ? (
+            <>There are no classes in {scopeName}. Nothing to clear.</>
+          ) : counts ? (
+            <>
+              <strong>{counts.classes}</strong> {counts.classes === 1 ? 'class' : 'classes'},{' '}
+              <strong>{counts.attendance}</strong> attendance {counts.attendance === 1 ? 'entry' : 'entries'}
+              {counts.firstDate ? <> ({counts.firstDate} to {counts.lastDate})</> : null} and{' '}
+              <strong>{counts.representatives}</strong> CR {counts.representatives === 1 ? 'assignment' : 'assignments'} in {scopeName}.
+            </>
+          ) : null}
+        </div>
+
+        {!nothing && (
+          <ol className="mt-4 space-y-3">
+            <li className="flex items-start gap-3">
+              <span className={`mt-0.5 flex h-6 w-6 flex-none items-center justify-center rounded-full text-xs font-bold ${archived ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
+                {archived ? <FiCheck className="h-3.5 w-3.5" /> : '1'}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-gray-900">Keep a copy</p>
+                <p className="text-xs text-gray-500">The full report for {scopeName}, so the record survives the clear-down.</p>
+                <button
+                  type="button"
+                  onClick={archive}
+                  disabled={busy || loading}
+                  className="mt-1.5 inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+                >
+                  <FiDownload className="h-3.5 w-3.5" /> {archived ? 'Download it again' : 'Download the report'}
+                </button>
+              </div>
+            </li>
+            <li className="flex items-start gap-3">
+              <span className={`mt-0.5 flex h-6 w-6 flex-none items-center justify-center rounded-full text-xs font-bold ${typed.trim() === 'DELETE' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
+                {typed.trim() === 'DELETE' ? <FiCheck className="h-3.5 w-3.5" /> : '2'}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-gray-900">Type DELETE to confirm</p>
+                <input
+                  value={typed}
+                  onChange={(e) => setTyped(e.target.value)}
+                  disabled={!archived || busy}
+                  placeholder="DELETE"
+                  className="mt-1.5 w-40 rounded-lg border border-gray-200 px-3 py-1.5 text-sm tracking-wide text-gray-900 focus:border-red-400 focus:outline-none focus:ring-2 focus:ring-red-100 disabled:bg-gray-50"
+                />
+                {!archived && <p className="mt-1 text-[11px] text-gray-400">Available once the report is downloaded.</p>}
+              </div>
+            </li>
+          </ol>
+        )}
+
+        <p className="mt-4 rounded-lg bg-gray-50 px-3 py-2 text-[11px] leading-relaxed text-gray-500">
+          The server writes its own copy of every row to the backup folder before deleting anything,
+          and refuses the whole operation if it cannot. Students, sessions and everything else are
+          untouched.
+        </p>
+
+        <div className="mt-4 flex justify-end gap-2">
+          <button type="button" onClick={onClose} disabled={busy} className="rounded border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60">
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={wipe}
+            disabled={!ready || busy}
+            className="inline-flex items-center gap-1.5 rounded bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <FiTrash2 className="h-4 w-4" />
+            {busy ? 'Clearing…' : counts ? `Delete ${counts.classes} classes and ${counts.attendance} entries` : 'Delete'}
           </button>
         </div>
       </div>
