@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const ctrl = require('../controllers/formController');
+const { formAnswerUpload } = require('../middleware/upload');
 
 // Filling a form is deliberately unauthenticated: a PUBLIC form needs no
 // account at all, and a PRIVATE one reads the bearer token itself so that a
@@ -11,16 +12,16 @@ const ctrl = require('../controllers/formController');
 // and a cache that empties on restart is the right trade for a few lines of
 // code over another dependency.
 const WINDOW_MS = 10 * 60 * 1000;
-const MAX_SUBMITS = 30;
 const hits = new Map();
 
-const throttle = (req, res, next) => {
-  const key = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.ip || 'unknown';
+// Two counters per IP: one for submissions, one for uploads. An upload costs
+// us storage, so it gets its own, tighter allowance.
+const throttle = (bucket, max, message) => (req, res, next) => {
+  const ip = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.ip || 'unknown';
+  const key = `${bucket}:${ip}`;
   const now = Date.now();
   const recent = (hits.get(key) || []).filter((t) => now - t < WINDOW_MS);
-  if (recent.length >= MAX_SUBMITS) {
-    return res.status(429).json({ message: 'Too many submissions from this network. Try again in a few minutes.' });
-  }
+  if (recent.length >= max) return res.status(429).json({ message });
   recent.push(now);
   hits.set(key, recent);
   // Keep the map from growing without bound on a long-running process.
@@ -32,7 +33,29 @@ const throttle = (req, res, next) => {
   return next();
 };
 
+// Multer rejects an oversized or wrong-typed file by throwing; without this
+// the responder would get the generic 500 page instead of being told why.
+const uploadOrExplain = (req, res, next) => {
+  formAnswerUpload.single('file')(req, res, (err) => {
+    if (!err) return next();
+    const message = err.code === 'LIMIT_FILE_SIZE'
+      ? 'That file is larger than 25 MB.'
+      : err.message || 'That file could not be accepted.';
+    return res.status(400).json({ message });
+  });
+};
+
 router.get('/:slug', ctrl.publicGet);
-router.post('/:slug', throttle, ctrl.publicSubmit);
+router.post(
+  '/:slug/upload',
+  throttle('up', 20, 'Too many uploads from this network. Try again in a few minutes.'),
+  uploadOrExplain,
+  ctrl.publicUpload,
+);
+router.post(
+  '/:slug',
+  throttle('post', 30, 'Too many submissions from this network. Try again in a few minutes.'),
+  ctrl.publicSubmit,
+);
 
 module.exports = router;

@@ -1,18 +1,26 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import {
   FiPlus, FiTrash2, FiArrowUp, FiArrowDown, FiSave, FiLoader, FiArrowLeft,
   FiMapPin, FiSmartphone, FiGlobe, FiLock, FiLink, FiExternalLink, FiCheck,
-  FiBarChart2, FiEye, FiAlertCircle, FiCopy,
+  FiBarChart2, FiEye, FiAlertCircle, FiCopy, FiImage, FiX,
+  FiDownloadCloud, FiUploadCloud, FiGrid, FiClock, FiMaximize, FiDownload,
+  FiMove, FiPaperclip, FiDroplet,
 } from 'react-icons/fi';
 import apiClient from '@/app/lib/apiClient';
 import DashboardLayout from '@/app/components/DashboardLayout';
 import ProtectedRoute from '@/app/components/ProtectedRoute';
-import { FieldType, FormField, FormSummary, FIELD_TYPE_LABELS, isChoice } from '@/app/lib/forms';
+import { RichEditor, RichView } from '@/app/components/RichText';
+import {
+  FieldType, FormField, FormOption, FormSummary, Media, ThemeName,
+  FIELD_TYPE_LABELS, FILE_ACCEPT_LABELS, THEMES, isChoice, normalizeOptions,
+} from '@/app/lib/forms';
+import { downloadQr, safeFileName } from '@/app/lib/qr';
+import { downloadQuestionTemplate, parseQuestionSheet } from '@/app/lib/formTemplate';
 
 const ADMIN_ROLES = ['ADMIN', 'HOD', 'COORDINATOR'];
 const newId = () => Math.random().toString(36).slice(2, 10);
@@ -25,6 +33,13 @@ const toLocalInput = (iso: string | null) => {
   if (Number.isNaN(d.getTime())) return '';
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+
+const inAWeek = () => {
+  const d = new Date();
+  d.setDate(d.getDate() + 7);
+  d.setMinutes(0, 0, 0);
+  return d.toISOString();
 };
 
 // Declared outside the component on purpose: re-creating it during render
@@ -56,6 +71,45 @@ const Toggle = ({ on, onChange, label, note, icon, disabled }: {
   </button>
 );
 
+// A question's or an option's picture / clip, with the button that replaces it.
+const MediaBox = ({ media, onPick, onClear, busy, compact }: {
+  media?: Media; onPick: () => void; onClear: () => void; busy: boolean; compact?: boolean;
+}) => {
+  if (!media) {
+    return (
+      <button
+        type="button"
+        onClick={onPick}
+        disabled={busy}
+        className={`inline-flex items-center gap-1.5 rounded-lg border border-dashed border-gray-300 font-semibold text-gray-500 transition hover:border-indigo-300 hover:text-indigo-700 disabled:opacity-50 ${
+          compact ? 'h-7 px-2 text-[11px]' : 'px-3 py-1.5 text-xs'
+        }`}
+      >
+        {busy ? <FiLoader className="h-3.5 w-3.5 animate-spin" /> : <FiImage className="h-3.5 w-3.5" />}
+        {compact ? '' : busy ? 'Uploading…' : 'Picture or clip'}
+      </button>
+    );
+  }
+  return (
+    <div className={`relative overflow-hidden rounded-xl border border-gray-200 bg-gray-50 ${compact ? 'h-16 w-16' : 'max-w-xs'}`}>
+      {media.kind === 'video' ? (
+        <video src={media.url} controls={!compact} muted className={compact ? 'h-full w-full object-cover' : 'max-h-48 w-full'} />
+      ) : (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={media.url} alt="" className={compact ? 'h-full w-full object-cover' : 'max-h-48 w-full object-contain'} />
+      )}
+      <button
+        type="button"
+        onClick={onClear}
+        title="Remove"
+        className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80"
+      >
+        <FiX className="h-3 w-3" />
+      </button>
+    </div>
+  );
+};
+
 function Content() {
   const params = useParams<{ id: string }>();
   const id = String(params?.id || '');
@@ -67,6 +121,19 @@ function Content() {
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [uploading, setUploading] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
+
+  // One hidden file input, re-pointed at whatever asked for it.
+  const fileInput = useRef<HTMLInputElement>(null);
+  const pickTarget = useRef<{ kind: 'header' | 'question' | 'option'; fieldId?: string; index?: number } | null>(null);
+  const sheetInput = useRef<HTMLInputElement>(null);
+
+  // Dragging an option by its grip. Pointer events rather than HTML5 drag and
+  // drop, so this works the same under a finger as under a mouse.
+  const dragState = useRef<{ fieldId: string; index: number } | null>(null);
+  const [dragging, setDragging] = useState<{ fieldId: string; index: number } | null>(null);
+  const optionRows = useRef<Record<string, (HTMLDivElement | null)[]>>({});
 
   const load = useCallback(async () => {
     try {
@@ -96,6 +163,16 @@ function Content() {
     setDirty(true);
   };
 
+  const patchOption = (fieldId: string, index: number, changes: Partial<FormOption>) => {
+    setFields((list) => list.map((f) => {
+      if (f.id !== fieldId) return f;
+      const options = normalizeOptions(f);
+      options[index] = { ...options[index], ...changes };
+      return { ...f, options };
+    }));
+    setDirty(true);
+  };
+
   const addField = () => {
     setFields((list) => [...list, { id: newId(), label: '', type: 'short_text', required: false }]);
     setDirty(true);
@@ -103,7 +180,7 @@ function Content() {
 
   const duplicateField = (index: number) => {
     setFields((list) => {
-      const copy = { ...list[index], id: newId(), label: `${list[index].label} (copy)` };
+      const copy = { ...list[index], id: newId(), label: `${list[index].label} (copy)`, labelRich: undefined };
       return [...list.slice(0, index + 1), copy, ...list.slice(index + 1)];
     });
     setDirty(true);
@@ -128,10 +205,132 @@ function Content() {
   const changeType = (field: FormField, type: FieldType) => {
     const changes: Partial<FormField> = { type };
     // A choice question needs somewhere to put the options.
-    if (isChoice(type) && !(field.options || []).length) changes.options = ['Option 1'];
+    if (isChoice(type) && !normalizeOptions(field).length) changes.options = [{ label: 'Option 1' }];
     if (!isChoice(type)) changes.options = undefined;
+    if (type === 'file') {
+      changes.accept = field.accept || 'any';
+      changes.maxSizeMb = field.maxSizeMb || 10;
+    }
     patchField(field.id, changes);
   };
+
+  // ---- options ------------------------------------------------------------
+
+  const addOption = (field: FormField) => {
+    const options = normalizeOptions(field);
+    patchField(field.id, { options: [...options, { label: `Option ${options.length + 1}` }] });
+  };
+
+  const removeOption = (field: FormField, index: number) => {
+    patchField(field.id, { options: normalizeOptions(field).filter((_, i) => i !== index) });
+  };
+
+  const moveOption = (fieldId: string, from: number, to: number) => {
+    setFields((list) => list.map((f) => {
+      if (f.id !== fieldId) return f;
+      const options = normalizeOptions(f);
+      if (to < 0 || to >= options.length) return f;
+      const [lifted] = options.splice(from, 1);
+      options.splice(to, 0, lifted);
+      return { ...f, options };
+    }));
+    setDirty(true);
+  };
+
+  const gripDown = (fieldId: string, index: number) => (e: React.PointerEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    dragState.current = { fieldId, index };
+    setDragging({ fieldId, index });
+  };
+
+  const gripMove = (e: React.PointerEvent<HTMLButtonElement>) => {
+    const held = dragState.current;
+    if (!held) return;
+    const rows = optionRows.current[held.fieldId] || [];
+    let target = held.index;
+    rows.forEach((row, i) => {
+      if (!row) return;
+      const box = row.getBoundingClientRect();
+      if (e.clientY >= box.top && e.clientY <= box.bottom) target = i;
+    });
+    if (target !== held.index) {
+      moveOption(held.fieldId, held.index, target);
+      dragState.current = { fieldId: held.fieldId, index: target };
+      setDragging({ fieldId: held.fieldId, index: target });
+    }
+  };
+
+  const gripUp = () => { dragState.current = null; setDragging(null); };
+
+  // ---- uploads ------------------------------------------------------------
+
+  const openPicker = (target: { kind: 'header' | 'question' | 'option'; fieldId?: string; index?: number }) => {
+    pickTarget.current = target;
+    if (fileInput.current) {
+      fileInput.current.value = '';
+      fileInput.current.accept = target.kind === 'header'
+        ? 'image/jpeg,image/png,image/webp,image/gif'
+        : 'image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime';
+      fileInput.current.click();
+    }
+  };
+
+  const onFilePicked = async (file: File | undefined) => {
+    const target = pickTarget.current;
+    if (!file || !target || !form) return;
+    const key = target.kind === 'option' ? `${target.fieldId}:${target.index}` : target.fieldId || 'header';
+    try {
+      setUploading(key);
+      const body = new FormData();
+      body.append('file', file);
+      const res = await apiClient.post(`/forms/${form.id}/media`, body);
+      const media: Media = res.data.media;
+      if (target.kind === 'header') patch({ headerImageUrl: media.url });
+      else if (target.kind === 'question' && target.fieldId) patchField(target.fieldId, { media });
+      else if (target.kind === 'option' && target.fieldId && target.index !== undefined) {
+        patchOption(target.fieldId, target.index, { media });
+      }
+      toast.success('Uploaded — remember to save');
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string } } };
+      toast.error(err.response?.data?.message || 'That file could not be uploaded');
+    } finally {
+      setUploading(null);
+      pickTarget.current = null;
+    }
+  };
+
+  // ---- bulk questions -----------------------------------------------------
+
+  const onSheetPicked = async (file: File | undefined) => {
+    if (!file) return;
+    try {
+      setImporting(true);
+      const { fields: imported, warnings } = await parseQuestionSheet(file, newId);
+      if (!imported.length) {
+        toast.error(warnings[0] || 'No questions were found in that file.');
+        return;
+      }
+      setFields((list) => [...list, ...imported]);
+      setDirty(true);
+      toast.success(`${imported.length} question${imported.length === 1 ? '' : 's'} added — review them, then save`);
+      warnings.slice(0, 3).forEach((w) => toast.error(w, { duration: 6000 }));
+    } catch {
+      toast.error('That file could not be read. Start from the template.');
+    } finally {
+      setImporting(false);
+      if (sheetInput.current) sheetInput.current.value = '';
+    }
+  };
+
+  const setAllRequired = (required: boolean) => {
+    setFields((list) => list.map((f) => ({ ...f, required })));
+    setDirty(true);
+    toast.success(required ? 'Every question is now required' : 'No question is required now');
+  };
+
+  // ---- save / publish -----------------------------------------------------
 
   const save = async () => {
     if (!form) return;
@@ -146,6 +345,10 @@ function Content() {
         locationRequired: form.locationRequired,
         oneResponsePerUser: form.oneResponsePerUser,
         closesAt: form.closesAt,
+        theme: form.theme,
+        headerImageUrl: form.headerImageUrl,
+        requireQrToken: form.requireQrToken,
+        qrWindowSeconds: form.qrWindowSeconds,
         fields,
       });
       setForm(res.data.form);
@@ -173,16 +376,27 @@ function Content() {
     }
   };
 
+  const publicLink = form ? `${typeof window === 'undefined' ? '' : window.location.origin}/f/${form.slug}` : '';
+
   const copyLink = async () => {
     if (!form) return;
-    const url = `${window.location.origin}/f/${form.slug}`;
     try {
-      await navigator.clipboard.writeText(url);
+      await navigator.clipboard.writeText(publicLink);
       setCopied(true);
       toast.success('Link copied');
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      toast.error(url);
+      toast.error(publicLink);
+    }
+  };
+
+  const saveQr = async () => {
+    if (!form) return;
+    try {
+      await downloadQr(publicLink, `${safeFileName(form.title)}-qr`);
+      toast.success('QR code saved');
+    } catch {
+      toast.error('Could not build the QR code');
     }
   };
 
@@ -195,9 +409,24 @@ function Content() {
   }
 
   const locked = (form.responseCount ?? 0) > 0;
+  const requiredCount = fields.filter((f) => f.required).length;
 
   return (
     <div className="w-full min-w-0 space-y-5 pb-24">
+      <input
+        ref={fileInput}
+        type="file"
+        className="hidden"
+        onChange={(e) => onFilePicked(e.target.files?.[0])}
+      />
+      <input
+        ref={sheetInput}
+        type="file"
+        accept=".xlsx,.xls,.csv"
+        className="hidden"
+        onChange={(e) => onSheetPicked(e.target.files?.[0])}
+      />
+
       {/* header */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
@@ -242,117 +471,247 @@ function Content() {
 
       {/* the live link */}
       {form.status === 'PUBLISHED' && (
-        <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
-          <FiLink className="h-4 w-4 flex-none text-emerald-700" />
-          <code className="min-w-0 flex-1 truncate text-xs text-emerald-900">{typeof window !== 'undefined' ? `${window.location.origin}/f/${form.slug}` : `/f/${form.slug}`}</code>
-          <button type="button" onClick={copyLink} className="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-emerald-800 ring-1 ring-emerald-200 hover:bg-emerald-100">
-            {copied ? <><FiCheck className="h-3.5 w-3.5" /> Copied</> : <><FiLink className="h-3.5 w-3.5" /> Copy link</>}
-          </button>
-          <a href={`/f/${form.slug}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-emerald-800 ring-1 ring-emerald-200 hover:bg-emerald-100">
-            <FiExternalLink className="h-3.5 w-3.5" /> Open
-          </a>
+        <div className="space-y-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+          <div className="flex min-w-0 items-center gap-2">
+            <FiLink className="h-4 w-4 flex-none text-emerald-700" />
+            <code className="min-w-0 flex-1 truncate text-xs text-emerald-900">{publicLink}</code>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" onClick={copyLink} className="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-emerald-800 ring-1 ring-emerald-200 hover:bg-emerald-100">
+              {copied ? <><FiCheck className="h-3.5 w-3.5" /> Copied</> : <><FiLink className="h-3.5 w-3.5" /> Copy link</>}
+            </button>
+            <a href={`/f/${form.slug}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-emerald-800 ring-1 ring-emerald-200 hover:bg-emerald-100">
+              <FiExternalLink className="h-3.5 w-3.5" /> Open
+            </a>
+            <button type="button" onClick={saveQr} className="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-emerald-800 ring-1 ring-emerald-200 hover:bg-emerald-100">
+              <FiDownload className="h-3.5 w-3.5" /> Download QR
+            </button>
+            {/* An in-app link, not a new tab: a cold load of an admin route
+                lands on the sign-in page before the session rehydrates. */}
+            <Link href={`/admin/forms/${form.id}/qr`} className="inline-flex items-center gap-1.5 rounded-full bg-emerald-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-800">
+              <FiMaximize className="h-3.5 w-3.5" /> Display QR
+            </Link>
+          </div>
         </div>
       )}
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
         {/* questions */}
         <div className="min-w-0 space-y-4">
-          <div className="rounded-2xl border border-gray-200 bg-white p-5">
-            <label className="mb-1.5 block text-sm font-semibold text-gray-900">Title</label>
-            <input className={input} value={form.title} onChange={(e) => patch({ title: e.target.value })} />
-            <label className="mt-4 mb-1.5 block text-sm font-semibold text-gray-900">Description <span className="font-normal text-gray-400">(optional)</span></label>
-            <textarea rows={3} className={input} value={form.description} onChange={(e) => patch({ description: e.target.value })} placeholder="Shown to the responder above the first question" />
+          <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
+            {form.headerImageUrl && (
+              <div className="relative">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={form.headerImageUrl} alt="" className="h-32 w-full object-cover sm:h-44" />
+                <button
+                  type="button"
+                  onClick={() => patch({ headerImageUrl: null })}
+                  className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80"
+                  title="Remove the banner"
+                >
+                  <FiX className="h-4 w-4" />
+                </button>
+              </div>
+            )}
+            <div className="p-5">
+              <label className="mb-1.5 block text-sm font-semibold text-gray-900">Title</label>
+              <input className={input} value={form.title} onChange={(e) => patch({ title: e.target.value })} />
+              <label className="mt-4 mb-1.5 block text-sm font-semibold text-gray-900">Description <span className="font-normal text-gray-400">(optional)</span></label>
+              <textarea rows={3} className={input} value={form.description} onChange={(e) => patch({ description: e.target.value })} placeholder="Shown to the responder above the first question" />
+            </div>
           </div>
 
-          {fields.map((f, i) => (
-            <div key={f.id} className="rounded-2xl border border-gray-200 bg-white p-5">
-              <div className="flex items-start gap-3">
-                <span className="mt-2.5 flex h-7 w-7 flex-none items-center justify-center rounded-lg bg-gray-100 text-xs font-bold text-gray-500">{i + 1}</span>
-                <div className="min-w-0 flex-1 space-y-3">
-                  <input
-                    className={input}
-                    placeholder="Question"
-                    value={f.label}
-                    onChange={(e) => patchField(f.id, { label: e.target.value })}
-                  />
-                  <div className="flex flex-wrap items-center gap-2">
-                    <select
-                      className="min-w-0 rounded-xl border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 outline-none focus:border-indigo-400"
-                      value={f.type}
-                      onChange={(e) => changeType(f, e.target.value as FieldType)}
-                    >
-                      {(Object.keys(FIELD_TYPE_LABELS) as FieldType[]).map((t) => (
-                        <option key={t} value={t}>{FIELD_TYPE_LABELS[t]}</option>
-                      ))}
-                    </select>
-                    <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs font-semibold text-gray-600">
-                      <input
-                        type="checkbox"
-                        className="h-3.5 w-3.5 rounded accent-indigo-600"
-                        checked={!!f.required}
-                        onChange={(e) => patchField(f.id, { required: e.target.checked })}
-                      />
-                      Required
-                    </label>
-                  </div>
+          {fields.map((f, i) => {
+            const options = normalizeOptions(f);
+            return (
+              <div key={f.id} className="rounded-2xl border border-gray-200 bg-white p-5">
+                <div className="flex items-start gap-3">
+                  <span className="mt-2.5 flex h-7 w-7 flex-none items-center justify-center rounded-lg bg-gray-100 text-xs font-bold text-gray-500">{i + 1}</span>
+                  <div className="min-w-0 flex-1 space-y-3">
+                    <RichEditor
+                      rich={f.labelRich}
+                      text={f.label}
+                      placeholder="Question"
+                      onChange={({ rich, text }) => patchField(f.id, { labelRich: rich || undefined, label: text })}
+                    />
 
-                  {isChoice(f.type) && (
-                    <div className="space-y-2 rounded-xl bg-gray-50 p-3">
-                      {(f.options || []).map((opt, oi) => (
-                        <div key={oi} className="flex items-center gap-2">
-                          <span className="h-2 w-2 flex-none rounded-full bg-gray-300" />
-                          <input
-                            className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs outline-none focus:border-indigo-400"
-                            value={opt}
-                            onChange={(e) => {
-                              const options = [...(f.options || [])];
-                              options[oi] = e.target.value;
-                              patchField(f.id, { options });
-                            }}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => patchField(f.id, { options: (f.options || []).filter((_, x) => x !== oi) })}
-                            className="flex h-7 w-7 flex-none items-center justify-center rounded-lg text-gray-400 hover:bg-white hover:text-rose-600"
-                          >
-                            <FiTrash2 className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      ))}
-                      <button
-                        type="button"
-                        onClick={() => patchField(f.id, { options: [...(f.options || []), `Option ${(f.options || []).length + 1}`] })}
-                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-700 hover:text-indigo-900"
+                    <div className="flex flex-wrap items-center gap-2">
+                      <select
+                        className="min-w-0 rounded-xl border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 outline-none focus:border-indigo-400"
+                        value={f.type}
+                        onChange={(e) => changeType(f, e.target.value as FieldType)}
                       >
-                        <FiPlus className="h-3.5 w-3.5" /> Add option
-                      </button>
+                        {(Object.keys(FIELD_TYPE_LABELS) as FieldType[]).map((t) => (
+                          <option key={t} value={t}>{FIELD_TYPE_LABELS[t]}</option>
+                        ))}
+                      </select>
+                      <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs font-semibold text-gray-600">
+                        <input
+                          type="checkbox"
+                          className="h-3.5 w-3.5 rounded accent-indigo-600"
+                          checked={!!f.required}
+                          onChange={(e) => patchField(f.id, { required: e.target.checked })}
+                        />
+                        Required
+                      </label>
+                      <MediaBox
+                        media={f.media}
+                        busy={uploading === f.id}
+                        onPick={() => openPicker({ kind: 'question', fieldId: f.id })}
+                        onClear={() => patchField(f.id, { media: undefined })}
+                        compact={!!f.media}
+                      />
                     </div>
-                  )}
 
-                  <input
-                    className="w-full min-w-0 rounded-xl border border-dashed border-gray-200 px-3 py-2 text-xs text-gray-600 outline-none focus:border-indigo-400"
-                    placeholder="Helper text under the question (optional)"
-                    value={f.help || ''}
-                    onChange={(e) => patchField(f.id, { help: e.target.value })}
-                  />
-                </div>
-                <div className="flex flex-none flex-col gap-1">
-                  <button type="button" onClick={() => move(i, -1)} disabled={i === 0} title="Move up" className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-30">
-                    <FiArrowUp className="h-3.5 w-3.5" />
-                  </button>
-                  <button type="button" onClick={() => move(i, 1)} disabled={i === fields.length - 1} title="Move down" className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-30">
-                    <FiArrowDown className="h-3.5 w-3.5" />
-                  </button>
-                  <button type="button" onClick={() => duplicateField(i)} title="Duplicate" className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700">
-                    <FiCopy className="h-3.5 w-3.5" />
-                  </button>
-                  <button type="button" onClick={() => removeField(f.id)} title="Remove" className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 hover:bg-rose-50 hover:text-rose-600">
-                    <FiTrash2 className="h-3.5 w-3.5" />
-                  </button>
+                    {f.type === 'file' && (
+                      <div className="flex flex-wrap items-center gap-2 rounded-xl bg-gray-50 p-3">
+                        <FiPaperclip className="h-3.5 w-3.5 flex-none text-gray-500" />
+                        <select
+                          className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 outline-none focus:border-indigo-400"
+                          value={f.accept || 'any'}
+                          onChange={(e) => patchField(f.id, { accept: e.target.value as FormField['accept'] })}
+                        >
+                          {(Object.keys(FILE_ACCEPT_LABELS) as (keyof typeof FILE_ACCEPT_LABELS)[]).map((k) => (
+                            <option key={k} value={k}>{FILE_ACCEPT_LABELS[k]}</option>
+                          ))}
+                        </select>
+                        <label className="inline-flex items-center gap-1.5 text-xs text-gray-600">
+                          up to
+                          <input
+                            type="number"
+                            min={1}
+                            max={25}
+                            value={f.maxSizeMb ?? 10}
+                            onChange={(e) => patchField(f.id, { maxSizeMb: Number(e.target.value) })}
+                            className="w-16 rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs outline-none focus:border-indigo-400"
+                          />
+                          MB
+                        </label>
+                      </div>
+                    )}
+
+                    {isChoice(f.type) && (
+                      <div className="space-y-2 rounded-xl bg-gray-50 p-3">
+                        {options.map((opt, oi) => {
+                          const isHeld = dragging?.fieldId === f.id && dragging.index === oi;
+                          return (
+                            <div
+                              key={oi}
+                              ref={(el) => {
+                                if (!optionRows.current[f.id]) optionRows.current[f.id] = [];
+                                optionRows.current[f.id][oi] = el;
+                              }}
+                              className={`flex items-start gap-2 rounded-xl bg-white p-2 transition ${
+                                isHeld ? 'ring-2 ring-indigo-400' : 'ring-1 ring-gray-100'
+                              }`}
+                            >
+                              <button
+                                type="button"
+                                title="Drag to reorder"
+                                onPointerDown={gripDown(f.id, oi)}
+                                onPointerMove={gripMove}
+                                onPointerUp={gripUp}
+                                onPointerCancel={gripUp}
+                                className="mt-1.5 flex h-7 w-6 flex-none cursor-grab touch-none items-center justify-center rounded text-gray-400 hover:bg-gray-100 hover:text-gray-700 active:cursor-grabbing"
+                              >
+                                <FiMove className="h-3.5 w-3.5" />
+                              </button>
+                              <div className="min-w-0 flex-1 space-y-1.5">
+                                <RichEditor
+                                  rich={opt.rich}
+                                  text={opt.label}
+                                  singleLine
+                                  minHeight={34}
+                                  placeholder={`Option ${oi + 1}`}
+                                  onChange={({ rich, text }) => patchOption(f.id, oi, { rich: rich || undefined, label: text })}
+                                />
+                                {opt.media && (
+                                  <MediaBox
+                                    media={opt.media}
+                                    busy={false}
+                                    onPick={() => openPicker({ kind: 'option', fieldId: f.id, index: oi })}
+                                    onClear={() => patchOption(f.id, oi, { media: undefined })}
+                                    compact
+                                  />
+                                )}
+                              </div>
+                              <div className="mt-1 flex flex-none flex-col gap-0.5 sm:flex-row">
+                                {!opt.media && (
+                                  <button
+                                    type="button"
+                                    title="Add a picture or clip to this option"
+                                    onClick={() => openPicker({ kind: 'option', fieldId: f.id, index: oi })}
+                                    className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-indigo-700"
+                                  >
+                                    {uploading === `${f.id}:${oi}` ? <FiLoader className="h-3.5 w-3.5 animate-spin" /> : <FiImage className="h-3.5 w-3.5" />}
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  title="Move up"
+                                  disabled={oi === 0}
+                                  onClick={() => moveOption(f.id, oi, oi - 1)}
+                                  className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-30"
+                                >
+                                  <FiArrowUp className="h-3 w-3" />
+                                </button>
+                                <button
+                                  type="button"
+                                  title="Move down"
+                                  disabled={oi === options.length - 1}
+                                  onClick={() => moveOption(f.id, oi, oi + 1)}
+                                  className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-30"
+                                >
+                                  <FiArrowDown className="h-3 w-3" />
+                                </button>
+                                <button
+                                  type="button"
+                                  title="Remove this option"
+                                  onClick={() => removeOption(f, oi)}
+                                  className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 hover:bg-rose-50 hover:text-rose-600"
+                                >
+                                  <FiTrash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                        <button
+                          type="button"
+                          onClick={() => addOption(f)}
+                          className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-700 hover:text-indigo-900"
+                        >
+                          <FiPlus className="h-3.5 w-3.5" /> Add option
+                        </button>
+                      </div>
+                    )}
+
+                    <RichEditor
+                      rich={f.helpRich}
+                      text={f.help}
+                      minHeight={34}
+                      placeholder="Helper text under the question (optional)"
+                      onChange={({ rich, text }) => patchField(f.id, { helpRich: rich || undefined, help: text })}
+                    />
+                  </div>
+                  <div className="flex flex-none flex-col gap-1">
+                    <button type="button" onClick={() => move(i, -1)} disabled={i === 0} title="Move up" className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-30">
+                      <FiArrowUp className="h-3.5 w-3.5" />
+                    </button>
+                    <button type="button" onClick={() => move(i, 1)} disabled={i === fields.length - 1} title="Move down" className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-30">
+                      <FiArrowDown className="h-3.5 w-3.5" />
+                    </button>
+                    <button type="button" onClick={() => duplicateField(i)} title="Duplicate" className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700">
+                      <FiCopy className="h-3.5 w-3.5" />
+                    </button>
+                    <button type="button" onClick={() => removeField(f.id)} title="Remove" className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 hover:bg-rose-50 hover:text-rose-600">
+                      <FiTrash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
 
           <button
             type="button"
@@ -407,6 +766,44 @@ function Content() {
             )}
           </div>
 
+          {/* look and feel */}
+          <div className="space-y-3 rounded-2xl border border-gray-200 bg-white p-5">
+            <h2 className="flex items-center gap-2 text-sm font-bold text-gray-900">
+              <FiDroplet className="h-3.5 w-3.5 text-gray-400" /> How it looks
+            </h2>
+            <div className="grid grid-cols-4 gap-2">
+              {(Object.keys(THEMES) as ThemeName[]).map((name) => (
+                <button
+                  key={name}
+                  type="button"
+                  onClick={() => patch({ theme: name })}
+                  title={THEMES[name].label}
+                  className={`group flex flex-col items-center gap-1 rounded-xl border p-1.5 transition ${
+                    form.theme === name ? 'border-indigo-400 bg-indigo-50/60' : 'border-gray-200 hover:bg-gray-50'
+                  }`}
+                >
+                  <span className={`h-7 w-full rounded-lg ${THEMES[name].swatch}`} />
+                  <span className="truncate text-[10px] font-semibold text-gray-600">{THEMES[name].label}</span>
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => openPicker({ kind: 'header' })}
+              disabled={uploading === 'header'}
+              className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-gray-300 px-3 py-2.5 text-xs font-semibold text-gray-600 hover:border-indigo-300 hover:text-indigo-700 disabled:opacity-50"
+            >
+              {uploading === 'header'
+                ? <><FiLoader className="h-3.5 w-3.5 animate-spin" /> Uploading…</>
+                : <><FiImage className="h-3.5 w-3.5" /> {form.headerImageUrl ? 'Replace the banner' : 'Add a banner image'}</>}
+            </button>
+            {form.headerImageUrl && (
+              <button type="button" onClick={() => patch({ headerImageUrl: null })} className="w-full text-xs font-semibold text-gray-500 hover:text-rose-600">
+                Remove the banner
+              </button>
+            )}
+          </div>
+
           <div className="space-y-3 rounded-2xl border border-gray-200 bg-white p-5">
             <h2 className="text-sm font-bold text-gray-900">What to record</h2>
             <Toggle
@@ -438,20 +835,134 @@ function Content() {
             </p>
           </div>
 
+          {/* closing time */}
           <div className="space-y-3 rounded-2xl border border-gray-200 bg-white p-5">
             <h2 className="text-sm font-bold text-gray-900">Close automatically</h2>
-            <input
-              type="datetime-local"
-              className={input}
-              value={toLocalInput(form.closesAt)}
-              onChange={(e) => patch({ closesAt: e.target.value ? new Date(e.target.value).toISOString() : null })}
+            <Toggle
+              on={!!form.closesAt}
+              onChange={(v) => patch({ closesAt: v ? inAWeek() : null })}
+              label="Close at a set time"
+              note={form.closesAt ? 'It stops accepting responses then.' : 'Off — it stays open until you close it.'}
+              icon={<FiClock className="h-4 w-4" />}
             />
-            {form.closesAt && (
-              <button type="button" onClick={() => patch({ closesAt: null })} className="text-xs font-semibold text-gray-500 hover:text-gray-900">
-                Clear
-              </button>
+            {!!form.closesAt && (
+              <div className="space-y-2">
+                <label className="block text-xs font-semibold text-gray-600">Closing date and time</label>
+                <input
+                  type="datetime-local"
+                  className={input}
+                  value={toLocalInput(form.closesAt)}
+                  onChange={(e) => patch({ closesAt: e.target.value ? new Date(e.target.value).toISOString() : null })}
+                />
+                <p className="text-[11px] text-gray-500">Your own time zone, as your computer reports it.</p>
+              </div>
             )}
           </div>
+
+          {/* QR entry */}
+          <div className="space-y-3 rounded-2xl border border-gray-200 bg-white p-5">
+            <h2 className="flex items-center gap-2 text-sm font-bold text-gray-900">
+              <FiGrid className="h-3.5 w-3.5 text-gray-400" /> QR code
+            </h2>
+            <Toggle
+              on={form.requireQrToken}
+              onChange={(v) => patch({ requireQrToken: v })}
+              label="Only open from the live QR code"
+              note="The plain link stops working. Only a code scanned from the display screen opens the form."
+              icon={<FiMaximize className="h-4 w-4" />}
+            />
+            {form.requireQrToken && (
+              <label className="block">
+                <span className="block text-xs font-semibold text-gray-600">A code lasts</span>
+                <span className="mt-1 flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={10}
+                    max={300}
+                    value={form.qrWindowSeconds}
+                    onChange={(e) => patch({ qrWindowSeconds: Number(e.target.value) })}
+                    className="w-20 rounded-xl border border-gray-200 px-2.5 py-2 text-sm outline-none focus:border-indigo-400"
+                  />
+                  <span className="text-xs text-gray-500">seconds on screen</span>
+                </span>
+              </label>
+            )}
+            <p className="rounded-xl bg-gray-50 px-3 py-2 text-[11px] leading-relaxed text-gray-500">
+              {form.requireQrToken
+                ? 'A photograph of the screen is useless once that code rotates. Whoever scans it in time gets long enough to finish the form.'
+                : 'With this off, the rotating code still rotates — but the plain link keeps working, so a shared screenshot can be worked around by anyone who has the link.'}
+            </p>
+            {form.status === 'PUBLISHED' ? (
+              <Link
+                href={`/admin/forms/${form.id}/qr`}
+                className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-gray-900 px-3 py-2.5 text-xs font-semibold text-white hover:bg-gray-800"
+              >
+                <FiMaximize className="h-3.5 w-3.5" /> Open the display screen
+              </Link>
+            ) : (
+              <p className="text-[11px] text-gray-400">Publish the form to get its code.</p>
+            )}
+          </div>
+
+          {/* bulk */}
+          <div className="space-y-2.5 rounded-2xl border border-gray-200 bg-white p-5">
+            <h2 className="text-sm font-bold text-gray-900">Questions in bulk</h2>
+            <button
+              type="button"
+              onClick={() => { downloadQuestionTemplate(); toast.success('Template downloaded'); }}
+              className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-gray-200 px-3 py-2.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+            >
+              <FiDownloadCloud className="h-3.5 w-3.5" /> Download the template
+            </button>
+            <button
+              type="button"
+              onClick={() => sheetInput.current?.click()}
+              disabled={importing}
+              className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-indigo-600 px-3 py-2.5 text-xs font-semibold text-white hover:bg-indigo-700 disabled:opacity-60"
+            >
+              {importing
+                ? <><FiLoader className="h-3.5 w-3.5 animate-spin" /> Reading…</>
+                : <><FiUploadCloud className="h-3.5 w-3.5" /> Upload questions</>}
+            </button>
+            <p className="text-[11px] leading-relaxed text-gray-500">
+              Imported questions are added to the end as plain text. Formatting, pictures and file
+              limits are set here afterwards.
+            </p>
+            <div className="border-t border-gray-100 pt-2.5">
+              <p className="text-xs font-semibold text-gray-600">
+                {requiredCount} of {fields.length} question{fields.length === 1 ? '' : 's'} required
+              </p>
+              <div className="mt-1.5 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setAllRequired(false)}
+                  className="flex-1 rounded-lg border border-gray-200 px-2 py-1.5 text-[11px] font-semibold text-gray-700 hover:bg-gray-50"
+                >
+                  Make none required
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAllRequired(true)}
+                  className="flex-1 rounded-lg border border-gray-200 px-2 py-1.5 text-[11px] font-semibold text-gray-700 hover:bg-gray-50"
+                >
+                  Require all
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* a glance at the formatting */}
+          {fields.some((f) => f.labelRich) && (
+            <div className="space-y-2 rounded-2xl border border-gray-200 bg-white p-5">
+              <h2 className="text-sm font-bold text-gray-900">Formatted questions</h2>
+              {fields.filter((f) => f.labelRich).slice(0, 5).map((f) => (
+                <p key={f.id} className="truncate text-xs text-gray-700">
+                  <RichView rich={f.labelRich} text={f.label} />
+                </p>
+              ))}
+              <p className="text-[11px] text-gray-400">This is how the formatting will read on the form itself.</p>
+            </div>
+          )}
         </div>
       </div>
 

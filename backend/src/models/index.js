@@ -2666,8 +2666,12 @@ const jsonGet = (column, fallback) => function get() {
 
 const FORM_FIELD_TYPES = [
   'short_text', 'long_text', 'number', 'email', 'phone', 'date',
-  'single_choice', 'multi_choice', 'dropdown',
+  'single_choice', 'multi_choice', 'dropdown', 'file',
 ];
+
+// The styling presets a form can be built with. Stored as a name, not as
+// colours, so the look can be reworked later without rewriting any rows.
+const FORM_THEMES = ['indigo', 'emerald', 'ocean', 'rose', 'amber', 'violet', 'slate', 'night'];
 
 const Form = sequelize.define('Form', {
   id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
@@ -2677,8 +2681,22 @@ const Form = sequelize.define('Form', {
   slug: { type: DataTypes.STRING(64), allowNull: false, unique: true },
   audience: { type: DataTypes.ENUM('PUBLIC', 'PRIVATE'), allowNull: false, defaultValue: 'PRIVATE' },
   status: { type: DataTypes.ENUM('DRAFT', 'PUBLISHED', 'CLOSED'), allowNull: false, defaultValue: 'DRAFT' },
-  // [{ id, label, type, options: [], required, placeholder, help }]
+  // [{ id, label, labelRich, type, options: [{label, rich, media}], required,
+  //    placeholder, help, helpRich, media, accept, maxSizeMb }]
+  //
+  // Rich text is stored as a span tree, never as HTML: nothing a builder
+  // types is ever handed to a browser as markup, so there is no injection
+  // surface. `label` keeps the flattened plain text for CSV headers and
+  // tallies, and stays the value a choice answer is matched against.
   fields: { type: DataTypes.JSON, allowNull: false, defaultValue: [], get: jsonGet('fields', []) },
+  // Banner across the top of the form, and the styling preset it uses.
+  headerImageUrl: { type: DataTypes.STRING(1024), allowNull: true },
+  theme: { type: DataTypes.STRING(32), allowNull: false, defaultValue: 'indigo' },
+  // The rotating QR code: when required, the form opens only from a code that
+  // is still live, so a screenshot of one goes stale. qrWindowSeconds is how
+  // long a code lasts on screen.
+  requireQrToken: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+  qrWindowSeconds: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 20 },
   // A responder is asked for these every time they open the form.
   collectLocation: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
   collectDevice: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
@@ -2760,6 +2778,7 @@ FormResponse.belongsTo(User, { foreignKey: 'userId', as: 'Respondent', constrain
 
 module.exports = {
   FORM_FIELD_TYPES,
+  FORM_THEMES,
   Form,
   FormResponse,
   GOAL_QUESTIONS,

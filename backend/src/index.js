@@ -688,6 +688,27 @@ async function start() {
       }
     }
 
+    // Forms: header banner, styling preset and the rotating-QR settings.
+    for (const col of [
+      { name: 'header_image_url', ddl: 'VARCHAR(1024) NULL' },
+      { name: 'theme', ddl: "VARCHAR(32) NOT NULL DEFAULT 'indigo'" },
+      { name: 'require_qr_token', ddl: 'TINYINT(1) NOT NULL DEFAULT 0' },
+      { name: 'qr_window_seconds', ddl: 'INT NOT NULL DEFAULT 20' },
+    ]) {
+      try {
+        await sequelize.query(`ALTER TABLE forms ADD COLUMN ${col.name} ${col.ddl}`);
+        console.log(`Added ${col.name} column to forms`);
+      } catch (error) {
+        if (error.message && error.message.includes('Duplicate column')) {
+          console.log(`${col.name} column already exists on forms`);
+        } else if (error.message && error.message.includes("doesn't exist")) {
+          // fresh install — sync already created it
+        } else {
+          console.error(`Error adding ${col.name} to forms:`, error.message);
+        }
+      }
+    }
+
     // Bootstrap default admin user
     // Carry NOCs uploaded through the old SIP-form upload over to the
     // standalone student_nocs table (sync() created it). Idempotent and

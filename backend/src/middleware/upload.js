@@ -151,8 +151,48 @@ const contributionMediaUpload = multer({
   limits: { fileSize: 200 * 1024 * 1024, files: 10 },
 });
 
+// Form media (banner, a picture or clip on a question or option) — staff
+// side. SVG is deliberately absent: it is a script container, and these
+// objects are served public-read.
+const formMediaUpload = multer({
+  storage,
+  fileFilter: (req, file, cb) => {
+    const imgOk = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic', 'image/heif'];
+    const vidOk = ['video/mp4', 'video/webm', 'video/quicktime'];
+    if (imgOk.includes(file.mimetype) || vidOk.includes(file.mimetype)) return cb(null, true);
+    return cb(new Error('A question takes a picture (JPG, PNG, WEBP, GIF, HEIC) or a clip (MP4, WEBM, MOV)'), false);
+  },
+  // The larger of the two ceilings; the controller holds images to 10 MB.
+  limits: { fileSize: 80 * 1024 * 1024, files: 1 },
+});
+
+// A responder's answer to a file question. Reachable without a login on a
+// public form, so the list is explicit — no HTML, no SVG, nothing that would
+// execute if someone opened the stored object directly.
+const formAnswerUpload = multer({
+  storage,
+  fileFilter: (req, file, cb) => {
+    const ok = [
+      'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic', 'image/heif',
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'text/csv', 'text/plain',
+      'application/zip', 'application/x-zip-compressed',
+    ];
+    if (ok.includes(file.mimetype)) return cb(null, true);
+    return cb(new Error(`Files of type ${file.mimetype || 'unknown'} are not accepted`), false);
+  },
+  // The per-question limit is tighter and enforced in the controller.
+  limits: { fileSize: 25 * 1024 * 1024, files: 1 },
+});
+
 module.exports = {
   upload,
+  formMediaUpload,
+  formAnswerUpload,
   excelUpload,
   resumeUpload,
   assessmentUpload,

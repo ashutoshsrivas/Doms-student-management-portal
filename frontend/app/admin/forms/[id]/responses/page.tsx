@@ -7,13 +7,14 @@ import toast from 'react-hot-toast';
 import {
   FiArrowLeft, FiDownload, FiLoader, FiMapPin, FiSmartphone, FiShield,
   FiAlertTriangle, FiCrosshair, FiX, FiUsers, FiEdit2, FiRefreshCw, FiEye,
+  FiPaperclip,
 } from 'react-icons/fi';
 import apiClient from '@/app/lib/apiClient';
 import DashboardLayout from '@/app/components/DashboardLayout';
 import ProtectedRoute from '@/app/components/ProtectedRoute';
 import {
   BAND_STYLES, FormSummary, ReportStats, ResponseRow,
-  fmtDateTime, fmtDistance, isChoice,
+  fmtBytes, fmtDateTime, fmtDistance, isChoice, isFileAnswer,
 } from '@/app/lib/forms';
 import { requestLocation } from '@/app/f/device';
 
@@ -525,9 +526,22 @@ function Content() {
                 return (
                   <div key={f.id} className="min-w-0">
                     <p className="text-xs font-semibold text-gray-500">{f.label}</p>
-                    <p className="mt-0.5 whitespace-pre-wrap break-words text-sm text-gray-900">
-                      {Array.isArray(v) ? v.join(', ') : (v || <span className="text-gray-400">—</span>)}
-                    </p>
+                    {isFileAnswer(v) ? (
+                      <a
+                        href={v.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-1 inline-flex max-w-full items-center gap-2 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-50"
+                      >
+                        <FiPaperclip className="h-3.5 w-3.5 flex-none" />
+                        <span className="min-w-0 truncate">{v.name || 'file'}</span>
+                        {!!v.size && <span className="flex-none font-normal text-gray-400">{fmtBytes(v.size)}</span>}
+                      </a>
+                    ) : (
+                      <p className="mt-0.5 whitespace-pre-wrap break-words text-sm text-gray-900">
+                        {Array.isArray(v) ? v.join(', ') : (v || <span className="text-gray-400">—</span>)}
+                      </p>
+                    )}
                   </div>
                 );
               })}

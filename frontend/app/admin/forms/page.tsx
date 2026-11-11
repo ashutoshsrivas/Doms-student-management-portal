@@ -7,11 +7,13 @@ import toast from 'react-hot-toast';
 import {
   FiPlus, FiClipboard, FiLink, FiBarChart2, FiEdit2, FiTrash2, FiGlobe, FiLock,
   FiMapPin, FiSmartphone, FiLoader, FiExternalLink, FiCheck, FiX,
+  FiDownload, FiMaximize,
 } from 'react-icons/fi';
 import apiClient from '@/app/lib/apiClient';
 import DashboardLayout from '@/app/components/DashboardLayout';
 import ProtectedRoute from '@/app/components/ProtectedRoute';
 import { FormSummary, fmtDateTime } from '@/app/lib/forms';
+import { downloadQr, safeFileName } from '@/app/lib/qr';
 
 const ADMIN_ROLES = ['ADMIN', 'HOD', 'COORDINATOR'];
 
@@ -74,6 +76,15 @@ function Content() {
     } catch {
       // Clipboard access can be refused; show the link so it can be copied by hand.
       toast.error(url);
+    }
+  };
+
+  const saveQr = async (form: FormSummary) => {
+    try {
+      await downloadQr(publicUrl(form.slug), `${safeFileName(form.title)}-qr`);
+      toast.success('QR code saved');
+    } catch {
+      toast.error('Could not build the QR code');
     }
   };
 
@@ -184,6 +195,23 @@ function Content() {
                   >
                     <FiExternalLink className="h-3.5 w-3.5" />
                   </a>
+                  <button
+                    type="button"
+                    onClick={() => saveQr(f)}
+                    title="Download the QR code"
+                    className="flex h-7 w-7 flex-none items-center justify-center rounded-lg text-gray-500 hover:bg-white hover:text-gray-900"
+                  >
+                    <FiDownload className="h-3.5 w-3.5" />
+                  </button>
+                  {/* In-app, not a new tab: a cold load of an admin route
+                      lands on the sign-in page before the session rehydrates. */}
+                  <Link
+                    href={`/admin/forms/${f.id}/qr`}
+                    title="Show the rotating QR code full screen"
+                    className="flex h-7 w-7 flex-none items-center justify-center rounded-lg text-gray-500 hover:bg-white hover:text-gray-900"
+                  >
+                    <FiMaximize className="h-3.5 w-3.5" />
+                  </Link>
                 </div>
               )}
 
