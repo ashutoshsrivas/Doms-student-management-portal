@@ -2644,7 +2644,124 @@ RoadmapGoalNotice.belongsTo(User, { foreignKey: 'deletedBy', as: 'DeletedByUser'
 // Messaging Models
 
 
+// ---------------------------------------------------------------------------
+// Forms — Google-Forms-style forms built by staff.
+//
+// A form is PUBLIC (anyone with the link, no login) or PRIVATE (login
+// required, and the responder's name/email/session are filled in for them).
+// ---------------------------------------------------------------------------
+// This MySQL build hands JSON columns back as strings, so every JSON column
+// needs a getter that parses them — the same workaround the older models above
+// write out by hand.
+const jsonGet = (column, fallback) => function get() {
+  const raw = this.getDataValue(column);
+  if (typeof raw !== 'string') return raw === null || raw === undefined ? fallback : raw;
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed === null ? fallback : parsed;
+  } catch {
+    return fallback;
+  }
+};
+
+const FORM_FIELD_TYPES = [
+  'short_text', 'long_text', 'number', 'email', 'phone', 'date',
+  'single_choice', 'multi_choice', 'dropdown',
+];
+
+const Form = sequelize.define('Form', {
+  id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
+  title: { type: DataTypes.STRING(300), allowNull: false },
+  description: { type: DataTypes.TEXT, allowNull: true },
+  // The public link is /f/<slug>. Unguessable so an unlisted form stays unlisted.
+  slug: { type: DataTypes.STRING(64), allowNull: false, unique: true },
+  audience: { type: DataTypes.ENUM('PUBLIC', 'PRIVATE'), allowNull: false, defaultValue: 'PRIVATE' },
+  status: { type: DataTypes.ENUM('DRAFT', 'PUBLISHED', 'CLOSED'), allowNull: false, defaultValue: 'DRAFT' },
+  // [{ id, label, type, options: [], required, placeholder, help }]
+  fields: { type: DataTypes.JSON, allowNull: false, defaultValue: [], get: jsonGet('fields', []) },
+  // A responder is asked for these every time they open the form.
+  collectLocation: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+  collectDevice: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+  // When set, a refused location blocks the submission instead of being noted.
+  locationRequired: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+  // PRIVATE forms only — one row per signed-in responder.
+  oneResponsePerUser: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
+  // The reference point for the security check: staff capture where they are,
+  // and every response is measured against it.
+  checkLatitude: { type: DataTypes.DECIMAL(10, 7), allowNull: true },
+  checkLongitude: { type: DataTypes.DECIMAL(10, 7), allowNull: true },
+  checkLabel: { type: DataTypes.STRING(255), allowNull: true },
+  checkSetAt: { type: DataTypes.DATE, allowNull: true },
+  checkSetBy: { type: DataTypes.UUID, allowNull: true },
+  publishedAt: { type: DataTypes.DATE, allowNull: true },
+  closesAt: { type: DataTypes.DATE, allowNull: true },
+  createdBy: { type: DataTypes.UUID, allowNull: true },
+}, {
+  tableName: 'forms',
+  timestamps: true,
+  underscored: true,
+  indexes: [{ fields: ['created_by'] }, { fields: ['status'] }],
+});
+
+const FormResponse = sequelize.define('FormResponse', {
+  id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
+  formId: { type: DataTypes.UUID, allowNull: false },
+  // null on a public form — nobody was signed in.
+  userId: { type: DataTypes.UUID, allowNull: true },
+  // Copied in at submit time so the report still reads correctly after a
+  // student's name or enrolment changes.
+  respondentName: { type: DataTypes.STRING(255), allowNull: true },
+  respondentEmail: { type: DataTypes.STRING(255), allowNull: true },
+  respondentRegNo: { type: DataTypes.STRING(100), allowNull: true },
+  respondentSession: { type: DataTypes.STRING(255), allowNull: true },
+  // { fieldId: value } — a multi_choice value is an array.
+  answers: { type: DataTypes.JSON, allowNull: false, defaultValue: {}, get: jsonGet('answers', {}) },
+  latitude: { type: DataTypes.DECIMAL(10, 7), allowNull: true },
+  longitude: { type: DataTypes.DECIMAL(10, 7), allowNull: true },
+  // Metres of uncertainty the browser reported for that fix.
+  locationAccuracy: { type: DataTypes.FLOAT, allowNull: true },
+  locationStatus: {
+    type: DataTypes.ENUM('GRANTED', 'DENIED', 'UNAVAILABLE', 'NOT_ASKED'),
+    allowNull: false,
+    defaultValue: 'NOT_ASKED',
+  },
+  // A browser cannot read a MAC address — no web API exposes one. This is a
+  // hash of the signals it does expose (user agent, platform, screen, time
+  // zone, CPU/memory hints, canvas and WebGL), which is stable enough to spot
+  // the same device answering twice.
+  deviceFingerprint: { type: DataTypes.STRING(64), allowNull: true },
+  deviceLabel: { type: DataTypes.STRING(255), allowNull: true },
+  deviceDetails: { type: DataTypes.JSON, allowNull: true, get: jsonGet('deviceDetails', null) },
+  deviceStatus: {
+    type: DataTypes.ENUM('GRANTED', 'DENIED', 'NOT_ASKED'),
+    allowNull: false,
+    defaultValue: 'NOT_ASKED',
+  },
+  userAgent: { type: DataTypes.TEXT, allowNull: true },
+  ipAddress: { type: DataTypes.STRING(64), allowNull: true },
+}, {
+  tableName: 'form_responses',
+  timestamps: true,
+  underscored: true,
+  indexes: [
+    { fields: ['form_id'] },
+    { fields: ['user_id'] },
+    { fields: ['device_fingerprint'] },
+  ],
+});
+
+// constraints: false — a form never cascades into user data, and deleting a
+// user must not silently take their responses with it.
+Form.belongsTo(User, { foreignKey: 'createdBy', as: 'Creator', constraints: false });
+Form.hasMany(FormResponse, { foreignKey: 'formId', as: 'Responses', constraints: false });
+FormResponse.belongsTo(Form, { foreignKey: 'formId', as: 'Form', constraints: false });
+FormResponse.belongsTo(User, { foreignKey: 'userId', as: 'Respondent', constraints: false });
+
+
 module.exports = {
+  FORM_FIELD_TYPES,
+  Form,
+  FormResponse,
   GOAL_QUESTIONS,
   RoadmapSetting,
   StudentGoal,

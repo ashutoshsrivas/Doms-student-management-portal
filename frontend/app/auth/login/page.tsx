@@ -44,9 +44,14 @@ export default function LoginPage() {
         MENTOR: '/faculty/dashboard',
         TRAINER: '/trainer/dashboard',
       };
+      // A link that needed a sign-in first (a private form, say) says where
+      // to go back to. Only in-app paths, so this cannot send anyone off-site.
+      const next = new URLSearchParams(window.location.search).get('next');
+      const safeNext = next && next.startsWith('/') && !next.startsWith('//') ? next : null;
+
       // Fallback to /profile (which exists for every role) instead of the
       // bare /dashboard which is a 404.
-      router.push(roleRoutes[result.user.role] || '/profile');
+      router.push(safeNext || roleRoutes[result.user.role] || '/profile');
     } catch (error: unknown) {
       const err = error as { response?: { data?: { message?: string; status?: string } }; message?: string };
       const errorMessage = err.response?.data?.message || err.message || 'Login failed';

@@ -38,6 +38,8 @@ const sectionRoutes = require('./routes/sectionRoutes');
 const socialMediaRoutes = require('./routes/socialMediaRoutes');
 const examRoutes = require('./routes/examRoutes');
 const roadmapRoutes = require('./routes/roadmapRoutes');
+const formRoutes = require('./routes/formRoutes');
+const formPublicRoutes = require('./routes/formPublicRoutes');
 const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
@@ -100,6 +102,8 @@ app.use('/api/sections', sectionRoutes);
 app.use('/api/social-media', socialMediaRoutes);
 app.use('/api/exams', examRoutes);
 app.use('/api/roadmap', roadmapRoutes);
+app.use('/api/forms', formRoutes);
+app.use('/api/f', formPublicRoutes); // public, no auth — the form-filling endpoints
 
 // Health check
 app.get('/health', (req, res) => {
