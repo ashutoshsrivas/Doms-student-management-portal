@@ -20,6 +20,7 @@ import {
 } from 'react-icons/fi';
 import apiClient from '@/app/lib/apiClient';
 import { downloadQr, qrDataUrl, safeFileName } from '@/app/lib/qr';
+import { fmtDateTime } from '@/app/lib/forms';
 
 type Display = {
   title: string;
@@ -31,6 +32,8 @@ type Display = {
   status: 'DRAFT' | 'PUBLISHED' | 'CLOSED';
   open: boolean;
   reason: string | null;
+  notYetOpen: boolean;
+  opensAt: string | null;
 };
 
 export default function FormDisplayPage() {
@@ -74,7 +77,9 @@ export default function FormDisplayPage() {
 
   useEffect(() => { if (slug) refresh(); }, [slug, refresh]);
 
-  // Rotate, at whatever pace the form asks for.
+  // Rotate, at whatever pace the form asks for. A form that has not opened
+  // yet is polled on the same clock, so the screen lights up on its own at
+  // the opening time instead of waiting for someone to reload it.
   useEffect(() => {
     const every = Math.max(10, info?.windowSeconds || 20) * 1000;
     const timer = setInterval(() => { refresh(); }, every);
@@ -123,6 +128,7 @@ export default function FormDisplayPage() {
   };
 
   const windowSeconds = info?.windowSeconds || 20;
+  const notYet = !!info?.notYetOpen;
   const fraction = windowSeconds > 0 ? Math.min(1, Math.max(0, remaining / windowSeconds)) : 0;
   const CIRCUMFERENCE = 2 * Math.PI * 46;
   const dead = !!error && !info;
@@ -167,10 +173,20 @@ export default function FormDisplayPage() {
             {info && !info.open ? (
               <div className="max-w-md rounded-2xl bg-white/5 px-6 py-10 text-center ring-1 ring-white/10">
                 <FiSlash className="mx-auto h-8 w-8 text-slate-500" />
-                <p className="mt-3 text-lg font-semibold">Not accepting responses</p>
+                <p className="mt-3 text-lg font-semibold">
+                  {notYet ? 'Not open yet' : 'Not accepting responses'}
+                </p>
                 <p className="mt-1 text-sm text-slate-400">
                   {info.reason || (info.status === 'DRAFT' ? 'This form has not been published yet.' : 'This form is closed.')}
                 </p>
+                {notYet && (
+                  <>
+                    <p className="mt-3 text-xl font-bold">Opens {fmtDateTime(info.opensAt)}</p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      This screen starts showing codes by itself. No need to reload it.
+                    </p>
+                  </>
+                )}
               </div>
             ) : (
               <div className="relative">

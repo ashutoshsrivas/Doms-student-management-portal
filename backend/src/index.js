@@ -688,8 +688,10 @@ async function start() {
       }
     }
 
-    // Forms: header banner, styling preset and the rotating-QR settings.
+    // Forms: header banner, styling preset, the rotating-QR settings and the
+    // scheduled opening time.
     for (const col of [
+      { name: 'opens_at', ddl: 'DATETIME NULL' },
       { name: 'header_image_url', ddl: 'VARCHAR(1024) NULL' },
       { name: 'theme', ddl: "VARCHAR(32) NOT NULL DEFAULT 'indigo'" },
       { name: 'require_qr_token', ddl: 'TINYINT(1) NOT NULL DEFAULT 0' },

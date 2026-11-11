@@ -230,7 +230,11 @@ export type FormSummary = {
   hasDisplayLink: boolean;
   securityPoint: { latitude: number; longitude: number; label: string; setAt: string } | null;
   publishedAt: string | null;
+  opensAt: string | null;
   closesAt: string | null;
+  // Published, but its opening time has not arrived. Worked out on the server
+  // so the page is not comparing the clock while it renders.
+  waitingToOpen: boolean;
   createdAt: string;
   updatedAt: string;
   createdBy: string | null;

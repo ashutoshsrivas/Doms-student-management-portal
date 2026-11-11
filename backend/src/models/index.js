@@ -2716,6 +2716,9 @@ const Form = sequelize.define('Form', {
   checkSetAt: { type: DataTypes.DATE, allowNull: true },
   checkSetBy: { type: DataTypes.UUID, allowNull: true },
   publishedAt: { type: DataTypes.DATE, allowNull: true },
+  // A published form can be scheduled: it turns nobody away before opensAt
+  // and nobody in after closesAt. Either may be null.
+  opensAt: { type: DataTypes.DATE, allowNull: true },
   closesAt: { type: DataTypes.DATE, allowNull: true },
   createdBy: { type: DataTypes.UUID, allowNull: true },
 }, {

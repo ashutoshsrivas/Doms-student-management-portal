@@ -5,13 +5,13 @@ import { useParams } from 'next/navigation';
 import {
   FiCheckCircle, FiLoader, FiLock, FiMapPin, FiSmartphone, FiShield,
   FiAlertCircle, FiArrowRight, FiSlash, FiUploadCloud, FiFile, FiX,
-  FiRefreshCw,
+  FiRefreshCw, FiClock,
 } from 'react-icons/fi';
 import apiClient from '@/app/lib/apiClient';
 import { RichView } from '@/app/components/RichText';
 import {
   AnswerValue, FileAnswer, FormField, Media, Theme,
-  FILE_ACCEPT_ATTR, fmtBytes, isChoice, isFileAnswer, normalizeOptions, themeOf,
+  FILE_ACCEPT_ATTR, fmtBytes, fmtDateTime, isChoice, isFileAnswer, normalizeOptions, themeOf,
 } from '@/app/lib/forms';
 import { collectDeviceSignals, requestLocation, DeviceSignals, LocationResult } from '../device';
 
@@ -28,12 +28,15 @@ type Loaded = {
     collectLocation: boolean;
     collectDevice: boolean;
     locationRequired: boolean;
+    opensAt: string | null;
     closesAt: string | null;
     headerImageUrl: string | null;
     theme: string;
   };
   open: boolean;
   reason: string | null;
+  // Present only while the form is waiting for its opening time.
+  opensAt?: string | null;
   autofill: Autofill | null;
   alreadyAnswered: string | null;
   entryPass: string | null;
@@ -134,6 +137,21 @@ export default function FillFormPage() {
   }, [slug]);
 
   useEffect(() => { if (slug) load(); }, [slug, load]);
+
+  // A form scheduled to start later comes to life on its own at that moment,
+  // so a phone or a screen left on this page needs no refresh by hand.
+  const waitingFor = data && !data.open ? (data.opensAt || null) : null;
+  useEffect(() => {
+    if (!waitingFor) return;
+    const at = new Date(waitingFor).getTime();
+    if (!Number.isFinite(at)) return;
+    const wait = at - Date.now();
+    if (wait <= 0) return;
+    // Capped so a date months away still re-arms rather than relying on one
+    // enormous timer the browser may never honour.
+    const timer = setTimeout(() => { load(); }, Math.min(wait + 1500, 30 * 60 * 1000));
+    return () => clearTimeout(timer);
+  }, [waitingFor, load]);
 
   const form = data?.form;
   const theme = useMemo(() => themeOf(form?.theme), [form?.theme]);
@@ -324,14 +342,23 @@ export default function FillFormPage() {
   }
 
   if (!data?.open) {
+    const notYet = !!waitingFor;
     return (
       <Shell theme={theme} headerImageUrl={form.headerImageUrl}>
         <div className={`${card} px-6 py-10 text-center`}>
-          <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-gray-100 text-gray-500">
-            <FiSlash className="h-6 w-6" />
+          <span className={`mx-auto flex h-12 w-12 items-center justify-center rounded-2xl ${notYet ? 'bg-amber-50 text-amber-600' : 'bg-gray-100 text-gray-500'}`}>
+            {notYet ? <FiClock className="h-6 w-6" /> : <FiSlash className="h-6 w-6" />}
           </span>
           <h1 className={`mt-4 text-lg font-bold ${theme.heading}`}>{form.title}</h1>
-          <p className={`mt-2 text-sm ${theme.body}`}>{data?.reason || 'This form is not accepting responses.'}</p>
+          {notYet ? (
+            <>
+              <p className={`mt-2 text-sm ${theme.body}`}>This form is not open yet.</p>
+              <p className={`mt-3 text-base font-bold ${theme.heading}`}>Opens {fmtDateTime(waitingFor)}</p>
+              <p className={`mt-2 text-xs ${theme.muted}`}>Your own time zone. Leave this page open — it starts by itself.</p>
+            </>
+          ) : (
+            <p className={`mt-2 text-sm ${theme.body}`}>{data?.reason || 'This form is not accepting responses.'}</p>
+          )}
         </div>
       </Shell>
     );

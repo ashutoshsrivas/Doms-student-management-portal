@@ -9,7 +9,7 @@ import {
   FiMapPin, FiSmartphone, FiGlobe, FiLock, FiLink, FiExternalLink, FiCheck,
   FiBarChart2, FiEye, FiAlertCircle, FiCopy, FiImage, FiX,
   FiDownloadCloud, FiUploadCloud, FiGrid, FiClock, FiMaximize, FiDownload,
-  FiMove, FiPaperclip, FiDroplet,
+  FiMove, FiPaperclip, FiDroplet, FiPlayCircle,
 } from 'react-icons/fi';
 import apiClient from '@/app/lib/apiClient';
 import DashboardLayout from '@/app/components/DashboardLayout';
@@ -17,7 +17,7 @@ import ProtectedRoute from '@/app/components/ProtectedRoute';
 import { RichEditor, RichView } from '@/app/components/RichText';
 import {
   FieldType, FormField, FormOption, FormSummary, Media, ThemeName,
-  FIELD_TYPE_LABELS, FILE_ACCEPT_LABELS, THEMES, isChoice, normalizeOptions,
+  FIELD_TYPE_LABELS, FILE_ACCEPT_LABELS, THEMES, isChoice, normalizeOptions, fmtDateTime,
 } from '@/app/lib/forms';
 import { downloadQr, safeFileName } from '@/app/lib/qr';
 import { downloadQuestionTemplate, parseQuestionSheet } from '@/app/lib/formTemplate';
@@ -39,6 +39,15 @@ const inAWeek = () => {
   const d = new Date();
   d.setDate(d.getDate() + 7);
   d.setMinutes(0, 0, 0);
+  return d.toISOString();
+};
+
+// Tomorrow morning: a sensible first guess for a form meant to start later,
+// and never a time already past.
+const tomorrowMorning = () => {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  d.setHours(9, 0, 0, 0);
   return d.toISOString();
 };
 
@@ -346,6 +355,7 @@ function Content() {
         collectDevice: form.collectDevice,
         locationRequired: form.locationRequired,
         oneResponsePerUser: form.oneResponsePerUser,
+        opensAt: form.opensAt,
         closesAt: form.closesAt,
         theme: form.theme,
         headerImageUrl: form.headerImageUrl,
@@ -879,27 +889,62 @@ function Content() {
             </p>
           </div>
 
-          {/* closing time */}
+          {/* when it runs */}
           <div className="space-y-3 rounded-2xl border border-gray-200 bg-white p-5">
-            <h2 className="text-sm font-bold text-gray-900">Close automatically</h2>
+            <h2 className="text-sm font-bold text-gray-900">When it runs</h2>
             <Toggle
-              on={!!form.closesAt}
-              onChange={(v) => patch({ closesAt: v ? inAWeek() : null })}
-              label="Close at a set time"
-              note={form.closesAt ? 'It stops accepting responses then.' : 'Off — it stays open until you close it.'}
-              icon={<FiClock className="h-4 w-4" />}
+              on={!!form.opensAt}
+              onChange={(v) => patch({ opensAt: v ? tomorrowMorning() : null })}
+              label="Open at a set time"
+              note={form.opensAt ? 'Until then it turns everyone away, even once published.' : 'Off — it starts taking responses the moment you publish it.'}
+              icon={<FiPlayCircle className="h-4 w-4" />}
             />
-            {!!form.closesAt && (
+            {!!form.opensAt && (
               <div className="space-y-2">
-                <label className="block text-xs font-semibold text-gray-600">Closing date and time</label>
+                <label className="block text-xs font-semibold text-gray-600">Opening date and time</label>
                 <input
                   type="datetime-local"
                   className={input}
-                  value={toLocalInput(form.closesAt)}
-                  onChange={(e) => patch({ closesAt: e.target.value ? new Date(e.target.value).toISOString() : null })}
+                  value={toLocalInput(form.opensAt)}
+                  onChange={(e) => patch({ opensAt: e.target.value ? new Date(e.target.value).toISOString() : null })}
                 />
-                <p className="text-[11px] text-gray-500">Your own time zone, as your computer reports it.</p>
               </div>
+            )}
+
+            <div className="border-t border-gray-100 pt-3">
+              <Toggle
+                on={!!form.closesAt}
+                onChange={(v) => patch({ closesAt: v ? inAWeek() : null })}
+                label="Close at a set time"
+                note={form.closesAt ? 'It stops accepting responses then.' : 'Off — it stays open until you close it.'}
+                icon={<FiClock className="h-4 w-4" />}
+              />
+              {!!form.closesAt && (
+                <div className="mt-3 space-y-2">
+                  <label className="block text-xs font-semibold text-gray-600">Closing date and time</label>
+                  <input
+                    type="datetime-local"
+                    className={input}
+                    value={toLocalInput(form.closesAt)}
+                    onChange={(e) => patch({ closesAt: e.target.value ? new Date(e.target.value).toISOString() : null })}
+                  />
+                </div>
+              )}
+            </div>
+
+            <p className="rounded-xl bg-gray-50 px-3 py-2 text-[11px] leading-relaxed text-gray-500">
+              Both times are in your own time zone, as your computer reports it.
+              {form.opensAt && form.closesAt ? ' The form accepts responses only between the two.' : ''}
+            </p>
+            {!!form.opensAt && !!form.closesAt && new Date(form.opensAt) >= new Date(form.closesAt) && (
+              <p className="rounded-xl bg-rose-50 px-3 py-2 text-[11px] font-semibold leading-relaxed text-rose-700">
+                That window closes before it opens, so nobody could ever answer. Saving will be refused.
+              </p>
+            )}
+            {form.waitingToOpen && !!form.opensAt && form.status === 'PUBLISHED' && (
+              <p className="rounded-xl bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-800">
+                Published, but not yet open — anyone with the link sees a “not open yet” notice until {fmtDateTime(form.opensAt)}.
+              </p>
             )}
           </div>
 

@@ -267,6 +267,7 @@ const publicForm = (form) => ({
   collectLocation: !!form.collectLocation,
   collectDevice: !!form.collectDevice,
   locationRequired: !!form.locationRequired,
+  opensAt: form.opensAt,
   closesAt: form.closesAt,
   headerImageUrl: form.headerImageUrl || null,
   theme: form.theme || 'indigo',
@@ -298,7 +299,11 @@ const staffForm = (form, responseCount) => ({
     setAt: form.checkSetAt,
   },
   publishedAt: form.publishedAt,
+  opensAt: form.opensAt,
   closesAt: form.closesAt,
+  // Decided here rather than in the browser: a page that compares the clock
+  // while it renders shows whatever the clock said when React last ran.
+  waitingToOpen: !!(form.opensAt && new Date(form.opensAt).getTime() > Date.now()),
   createdAt: form.createdAt,
   updatedAt: form.updatedAt,
   createdBy: form.createdBy,
@@ -419,14 +424,20 @@ exports.update = async (req, res, next) => {
       // Under ten seconds a code rotates faster than a phone can focus on it.
       patch.qrWindowSeconds = Number.isFinite(secs) ? Math.min(300, Math.max(10, Math.round(secs))) : 20;
     }
-    if (req.body?.closesAt !== undefined) {
-      const raw = req.body.closesAt;
-      if (!raw) patch.closesAt = null;
-      else {
-        const d = new Date(raw);
-        if (Number.isNaN(d.getTime())) return res.status(400).json({ message: 'That closing date is not a date' });
-        patch.closesAt = d;
-      }
+    for (const [key, label] of [['opensAt', 'opening'], ['closesAt', 'closing']]) {
+      if (req.body?.[key] === undefined) continue;
+      const raw = req.body[key];
+      if (!raw) { patch[key] = null; continue; }
+      const d = new Date(raw);
+      if (Number.isNaN(d.getTime())) return res.status(400).json({ message: `That ${label} date is not a date` });
+      patch[key] = d;
+    }
+    // A window that is shut before it opens would simply never accept an
+    // answer, so it is refused rather than saved.
+    const opensAt = patch.opensAt !== undefined ? patch.opensAt : form.opensAt;
+    const closesAt = patch.closesAt !== undefined ? patch.closesAt : form.closesAt;
+    if (opensAt && closesAt && new Date(opensAt).getTime() >= new Date(closesAt).getTime()) {
+      return res.status(400).json({ message: 'The form would close before it opens — move the opening time earlier or the closing time later.' });
     }
     if (req.body?.fields !== undefined) {
       const { fields, error } = cleanFields(req.body.fields);
@@ -727,6 +738,11 @@ async function softUser(req) {
 const openState = (form) => {
   if (form.status === 'DRAFT') return { open: false, reason: 'This form has not been published yet.' };
   if (form.status === 'CLOSED') return { open: false, reason: 'This form is closed and no longer accepts responses.' };
+  // Scheduled to start later. The exact moment travels as opensAt so each
+  // screen can print it in its own time zone instead of the server's.
+  if (form.opensAt && new Date(form.opensAt).getTime() > Date.now()) {
+    return { open: false, reason: 'This form has not opened yet.', opensAt: form.opensAt };
+  }
   if (form.closesAt && new Date(form.closesAt).getTime() < Date.now()) {
     return { open: false, reason: 'This form closed on ' + new Date(form.closesAt).toISOString().slice(0, 10) + '.' };
   }
@@ -1126,6 +1142,9 @@ exports.publicDisplay = async (req, res, next) => {
       status: form.status,
       open: state.open,
       reason: state.reason,
+      // Set only while the form is waiting for its opening time.
+      notYetOpen: !!state.opensAt,
+      opensAt: state.opensAt || null,
     });
   } catch (e) { next(e); }
 };

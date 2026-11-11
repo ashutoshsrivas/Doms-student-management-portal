@@ -7,7 +7,7 @@ import toast from 'react-hot-toast';
 import {
   FiPlus, FiClipboard, FiLink, FiBarChart2, FiEdit2, FiTrash2, FiGlobe, FiLock,
   FiMapPin, FiSmartphone, FiLoader, FiExternalLink, FiCheck, FiX,
-  FiDownload, FiMaximize,
+  FiDownload, FiMaximize, FiClock,
 } from 'react-icons/fi';
 import apiClient from '@/app/lib/apiClient';
 import DashboardLayout from '@/app/components/DashboardLayout';
@@ -150,8 +150,17 @@ function Content() {
           {forms.map((f) => (
             <div key={f.id} className="flex min-w-0 flex-col rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition hover:shadow-md">
               <div className="flex items-start justify-between gap-2">
-                <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ${STATUS_CHIP[f.status]}`}>
-                  {f.status.toLowerCase()}
+                <span className="flex min-w-0 flex-wrap items-center gap-1.5">
+                  <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ${STATUS_CHIP[f.status]}`}>
+                    {f.status.toLowerCase()}
+                  </span>
+                  {/* Published but waiting for its opening time — otherwise the
+                      card would read "published" while the link turns people away. */}
+                  {f.status === 'PUBLISHED' && f.waitingToOpen && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-800 ring-1 ring-amber-200">
+                      <FiClock className="h-3 w-3" /> opens {fmtDateTime(f.opensAt)}
+                    </span>
+                  )}
                 </span>
                 <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-gray-500">
                   {f.audience === 'PUBLIC'
