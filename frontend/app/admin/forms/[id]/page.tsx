@@ -123,6 +123,8 @@ function Content() {
   const [copied, setCopied] = useState(false);
   const [uploading, setUploading] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
+  const [displayBusy, setDisplayBusy] = useState(false);
+  const [displayCopied, setDisplayCopied] = useState(false);
 
   // One hidden file input, re-pointed at whatever asked for it.
   const fileInput = useRef<HTMLInputElement>(null);
@@ -387,6 +389,48 @@ function Content() {
       setTimeout(() => setCopied(false), 2000);
     } catch {
       toast.error(publicLink);
+    }
+  };
+
+  // The display link runs a scanning point on a screen nobody has signed in
+  // on, so several can run at once. Asking for it mints one the first time.
+  const copyDisplayLink = async (rotate = false) => {
+    if (!form) return;
+    if (rotate && !window.confirm('Make a new display link?\n\nEvery screen using the old one will stop showing codes until you give it the new link.')) return;
+    try {
+      setDisplayBusy(true);
+      const res = await apiClient.get(`/forms/${form.id}/display-link${rotate ? '?rotate=1' : ''}`);
+      const url = `${window.location.origin}${res.data.path}`;
+      try {
+        await navigator.clipboard.writeText(url);
+        setDisplayCopied(true);
+        setTimeout(() => setDisplayCopied(false), 2500);
+        toast.success(rotate ? 'New link copied — the old one has stopped working' : 'Display link copied');
+      } catch {
+        toast.error(url);
+      }
+      load();
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string } } };
+      toast.error(err.response?.data?.message || 'Could not make a display link');
+    } finally {
+      setDisplayBusy(false);
+    }
+  };
+
+  const revokeDisplayLink = async () => {
+    if (!form) return;
+    if (!window.confirm('Revoke the display link?\n\nEvery screen using it stops showing codes straight away.')) return;
+    try {
+      setDisplayBusy(true);
+      const res = await apiClient.delete(`/forms/${form.id}/display-link`);
+      toast.success(res.data.message);
+      load();
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string } } };
+      toast.error(err.response?.data?.message || 'Could not revoke the display link');
+    } finally {
+      setDisplayBusy(false);
     }
   };
 
@@ -893,12 +937,50 @@ function Content() {
                 : 'With this off, the rotating code still rotates — but the plain link keeps working, so a shared screenshot can be worked around by anyone who has the link.'}
             </p>
             {form.status === 'PUBLISHED' ? (
-              <Link
-                href={`/admin/forms/${form.id}/qr`}
-                className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-gray-900 px-3 py-2.5 text-xs font-semibold text-white hover:bg-gray-800"
-              >
-                <FiMaximize className="h-3.5 w-3.5" /> Open the display screen
-              </Link>
+              <>
+                <Link
+                  href={`/admin/forms/${form.id}/qr`}
+                  className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-gray-900 px-3 py-2.5 text-xs font-semibold text-white hover:bg-gray-800"
+                >
+                  <FiMaximize className="h-3.5 w-3.5" /> Open the display screen
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => copyDisplayLink(false)}
+                  disabled={displayBusy}
+                  className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-gray-200 px-3 py-2.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+                >
+                  {displayBusy ? <FiLoader className="h-3.5 w-3.5 animate-spin" />
+                    : displayCopied ? <FiCheck className="h-3.5 w-3.5 text-emerald-600" />
+                    : <FiLink className="h-3.5 w-3.5" />}
+                  {displayCopied ? 'Copied' : 'Copy the display link'}
+                </button>
+                <p className="rounded-xl bg-gray-50 px-3 py-2 text-[11px] leading-relaxed text-gray-500">
+                  Open that link on any screen — a gate, a hall door, a desk — and it shows the same
+                  rotating code without a sign-in. Treat it as a key: whoever holds it can put a live
+                  code on a screen until you withdraw it.
+                </p>
+                {form.hasDisplayLink && (
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => copyDisplayLink(true)}
+                      disabled={displayBusy}
+                      className="flex-1 rounded-lg border border-gray-200 px-2 py-1.5 text-[11px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+                    >
+                      New link
+                    </button>
+                    <button
+                      type="button"
+                      onClick={revokeDisplayLink}
+                      disabled={displayBusy}
+                      className="flex-1 rounded-lg border border-rose-200 px-2 py-1.5 text-[11px] font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-60"
+                    >
+                      Revoke
+                    </button>
+                  </div>
+                )}
+              </>
             ) : (
               <p className="text-[11px] text-gray-400">Publish the form to get its code.</p>
             )}

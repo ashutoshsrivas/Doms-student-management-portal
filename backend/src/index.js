@@ -694,6 +694,7 @@ async function start() {
       { name: 'theme', ddl: "VARCHAR(32) NOT NULL DEFAULT 'indigo'" },
       { name: 'require_qr_token', ddl: 'TINYINT(1) NOT NULL DEFAULT 0' },
       { name: 'qr_window_seconds', ddl: 'INT NOT NULL DEFAULT 20' },
+      { name: 'display_key', ddl: 'VARCHAR(64) NULL' },
     ]) {
       try {
         await sequelize.query(`ALTER TABLE forms ADD COLUMN ${col.name} ${col.ddl}`);

@@ -288,6 +288,9 @@ const staffForm = (form, responseCount) => ({
   theme: form.theme || 'indigo',
   requireQrToken: !!form.requireQrToken,
   qrWindowSeconds: Number(form.qrWindowSeconds) || 20,
+  // Whether a display link is out there, not what it is — the key itself is
+  // only handed over by the endpoint that mints it.
+  hasDisplayLink: !!form.displayKey,
   securityPoint: form.checkLatitude === null || form.checkLatitude === undefined ? null : {
     latitude: Number(form.checkLatitude),
     longitude: Number(form.checkLongitude),
@@ -1037,6 +1040,92 @@ exports.qrToken = async (req, res, next) => {
       windowSeconds,
       requireQrToken: !!form.requireQrToken,
       status: form.status,
+    });
+  } catch (e) { next(e); }
+};
+
+// ---------------------------------------------------------------------------
+// Display links
+//
+// A display link puts the rotating code on a screen without a sign-in, so a
+// hall can run several scanning points from one form: open the same link on
+// every screen. The key in it is a stored secret rather than a signed token,
+// precisely so it can be withdrawn — regenerating or revoking it stops every
+// copy already handed out.
+//
+// Treat a display link as a key to the room: whoever holds it can mint live
+// codes for as long as it lives, which on a QR-only form means they can open
+// the form whenever they like.
+// ---------------------------------------------------------------------------
+
+const makeDisplayKey = () => crypto.randomBytes(24).toString('base64url');
+
+const sameKey = (a, b) => {
+  const left = Buffer.from(String(a || ''));
+  const right = Buffer.from(String(b || ''));
+  if (!left.length || left.length !== right.length) return false;
+  return crypto.timingSafeEqual(left, right);
+};
+
+// Hand the owner the link, making one the first time it is asked for.
+// ?rotate=1 replaces it, which is how a leaked link is withdrawn.
+exports.displayLink = async (req, res, next) => {
+  try {
+    if (!isAdminish(req.user)) return res.status(403).json({ message: 'Only an admin, HOD or coordinator can manage forms' });
+    const form = await Form.findByPk(req.params.id);
+    if (!form) return res.status(404).json({ message: 'Form not found' });
+    if (!canEdit(form, req.user)) return res.status(403).json({ message: 'Only the form owner or an admin can change this form' });
+
+    const rotating = req.query.rotate === '1';
+    if (!form.displayKey || rotating) {
+      await form.update({ displayKey: makeDisplayKey() });
+    }
+    res.json({
+      key: form.displayKey,
+      slug: form.slug,
+      path: `/display/${form.slug}?key=${encodeURIComponent(form.displayKey)}`,
+      rotated: rotating,
+      message: rotating
+        ? 'New display link made — the previous one has stopped working.'
+        : 'Display link ready.',
+    });
+  } catch (e) { next(e); }
+};
+
+exports.revokeDisplayLink = async (req, res, next) => {
+  try {
+    if (!isAdminish(req.user)) return res.status(403).json({ message: 'Only an admin, HOD or coordinator can manage forms' });
+    const form = await Form.findByPk(req.params.id);
+    if (!form) return res.status(404).json({ message: 'Form not found' });
+    if (!canEdit(form, req.user)) return res.status(403).json({ message: 'Only the form owner or an admin can change this form' });
+    await form.update({ displayKey: null });
+    res.json({ message: 'Display link revoked — every screen using it has stopped.' });
+  } catch (e) { next(e); }
+};
+
+// What a scanning point polls for: the next code, and enough about the form
+// to label the screen. No responses, no settings, no respondent data.
+exports.publicDisplay = async (req, res, next) => {
+  try {
+    const form = await Form.findOne({ where: { slug: String(req.params.slug || '') } });
+    if (!form) return res.status(404).json({ message: 'This form does not exist.' });
+    if (!form.displayKey || !sameKey(req.query.key, form.displayKey)) {
+      return res.status(403).json({ message: 'This display link is no longer valid. Ask for a fresh one.' });
+    }
+
+    const state = openState(form);
+    const windowSeconds = Math.min(300, Math.max(10, Number(form.qrWindowSeconds) || 20));
+    const token = makeQrToken(form.slug, windowSeconds * 2, 'live');
+    res.json({
+      title: form.title,
+      slug: form.slug,
+      token,
+      path: `/f/${form.slug}?k=${encodeURIComponent(token)}`,
+      windowSeconds,
+      requireQrToken: !!form.requireQrToken,
+      status: form.status,
+      open: state.open,
+      reason: state.reason,
     });
   } catch (e) { next(e); }
 };

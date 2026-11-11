@@ -226,6 +226,8 @@ export type FormSummary = {
   theme: ThemeName;
   requireQrToken: boolean;
   qrWindowSeconds: number;
+  // Whether a display link exists — never the key itself.
+  hasDisplayLink: boolean;
   securityPoint: { latitude: number; longitude: number; label: string; setAt: string } | null;
   publishedAt: string | null;
   closesAt: string | null;

@@ -2697,6 +2697,10 @@ const Form = sequelize.define('Form', {
   // long a code lasts on screen.
   requireQrToken: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
   qrWindowSeconds: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 20 },
+  // The secret in a display link. Anyone holding it can put the rotating code
+  // on a screen without signing in, which is the point: several scanning
+  // points at once. Clearing it kills every link already handed out.
+  displayKey: { type: DataTypes.STRING(64), allowNull: true },
   // A responder is asked for these every time they open the form.
   collectLocation: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
   collectDevice: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },

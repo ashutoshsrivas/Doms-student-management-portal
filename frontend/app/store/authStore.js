@@ -27,6 +27,11 @@ const useAuthStore = create(
       isAuthenticated: false,
       isLoading: false,
       error: null,
+      // False until initializeAuth has finished putting the session back
+      // together after a cold load. Deliberately not persisted: every fresh
+      // page load has to restore itself before anything may judge the
+      // session. ProtectedRoute waits on this.
+      authReady: false,
 
       setUser: (user) => set({ user: aliasUser(user) }),
       setToken: (token) => set({ token }),
@@ -152,6 +157,16 @@ const useAuthStore = create(
 
       initializeAuth: async () => {
         set({ isLoading: true });
+        try {
+          await get()._restoreSession();
+        } finally {
+          // However it went — restored, rejected or thrown — the session is
+          // now settled and the guards may act on it.
+          set({ authReady: true, isLoading: false });
+        }
+      },
+
+      _restoreSession: async () => {
         const token = Cookie.get('token');
         const refreshToken = Cookie.get('refreshToken');
 

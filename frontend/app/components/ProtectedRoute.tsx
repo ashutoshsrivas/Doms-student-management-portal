@@ -14,16 +14,24 @@ interface ProtectedRouteProps {
 
 export default function ProtectedRoute({ children, requiredRoles = [], deniedRoles = [] }: ProtectedRouteProps) {
   const router = useRouter();
-  const { user, isAuthenticated, token } = useAuthStore();
+  const { user, isAuthenticated, token, authReady } = useAuthStore();
   const rawRole = (user as { approvedRole?: string } | null)?.approvedRole;
 
   // Wait for user to be loaded with required properties
   const isUserLoaded = user && user.role;
 
+  // A cold load — a refresh, a bookmark, a link opened in a new tab — starts
+  // with an empty store. The token lives in a cookie and the user in local
+  // storage, and neither has been read back yet when this component first
+  // runs: effects fire child-first, so this one goes off before the root's
+  // initializeAuth. Judging the session at that moment sent a signed-in
+  // person to the sign-in page, so nothing is decided until the restore has
+  // finished one way or the other.
+  const restoring = !authReady || (!isUserLoaded && (isAuthenticated || token));
+
   useEffect(() => {
-    // Skip if still loading
-    if (!isUserLoaded && (isAuthenticated || token)) {
-      // Still waiting for user data to load
+    // Skip while the session is still being put back together
+    if (restoring) {
       return;
     }
 
@@ -43,9 +51,9 @@ export default function ProtectedRoute({ children, requiredRoles = [], deniedRol
         return;
       }
     }
-  }, [isUserLoaded, isAuthenticated, token, user?.role, rawRole, router, requiredRoles, deniedRoles]);
+  }, [restoring, isAuthenticated, token, user?.role, rawRole, router, requiredRoles, deniedRoles]);
 
-  if (!isUserLoaded && (isAuthenticated || token)) {
+  if (restoring) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-[#f2f2f7]">
         <div className="text-center animate-fade-in">

@@ -45,6 +45,14 @@ const uploadOrExplain = (req, res, next) => {
   });
 };
 
+// A scanning point asks for the next code on a timer. The allowance is sized
+// for a hall full of screens behind one address, not for a single phone.
+router.get(
+  '/:slug/display',
+  throttle('disp', 600, 'Too many requests for codes from this network.'),
+  ctrl.publicDisplay,
+);
+
 router.get('/:slug', ctrl.publicGet);
 router.post(
   '/:slug/upload',

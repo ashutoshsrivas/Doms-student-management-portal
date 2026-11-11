@@ -33,6 +33,9 @@ const mediaOrExplain = (req, res, next) => {
 router.post('/:id/media', mediaOrExplain, ctrl.uploadMedia);
 // One turn of the rotating QR code.
 router.get('/:id/qr-token', ctrl.qrToken);
+// The shareable link that runs a scanning point without a sign-in.
+router.get('/:id/display-link', ctrl.displayLink);
+router.delete('/:id/display-link', ctrl.revokeDisplayLink);
 
 router.put('/:id/security-point', ctrl.setSecurityPoint);
 router.delete('/:id/security-point', ctrl.clearSecurityPoint);
