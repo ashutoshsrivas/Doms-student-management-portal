@@ -2516,13 +2516,61 @@ NotificationPromptResponse.belongsTo(User, { foreignKey: 'studentUserId', as: 'S
 // ── Roadmap ─────────────────────────────────────────────────────
 // A student answers a few questions to set one goal for their programme.
 // It is only drawn on their timeline once a member of staff approves it.
+// The questions the goal orb asks. A question carrying `showIf` is only
+// asked when an earlier choice went a particular way, so a student heading
+// into the family business is never asked which company they are targeting.
+// `target`, `goal`, `why`, `first_step` and `measure` keep the ids they had
+// before branching existed, so answers already given stay where they were.
 const GOAL_QUESTIONS = [
+  {
+    id: 'track',
+    label: 'What do you want to pursue after this programme?',
+    type: 'choice',
+    options: ['Family business', 'Startup', 'Job'],
+    required: true,
+  },
+
+  // ── Family business ──
+  { id: 'fam_business', label: 'What is the family business, and which part of it will you take on?', type: 'text', required: true, showIf: { questionId: 'track', values: ['Family business'] } },
+  { id: 'fam_change', label: 'What do you want to build or change in it?', type: 'textarea', required: true, showIf: { questionId: 'track', values: ['Family business'] } },
+  { id: 'fam_ready', label: 'What will you need to learn here to be ready for it?', type: 'text', required: false, showIf: { questionId: 'track', values: ['Family business'] } },
+
+  // ── Startup ──
+  { id: 'startup_idea', label: 'What is your idea, and whose problem does it solve?', type: 'text', required: true, showIf: { questionId: 'track', values: ['Startup'] } },
+  { id: 'startup_stage', label: 'How far has it reached?', type: 'choice', options: ['Just an idea', 'Testing it with people', 'Building it', 'Already earning'], required: true, showIf: { questionId: 'track', values: ['Startup'] } },
+  { id: 'startup_need', label: 'What do you most need to move it forward?', type: 'textarea', required: false, showIf: { questionId: 'track', values: ['Startup'] } },
+
+  // ── Job ──
+  { id: 'target', label: 'Which role, company or outcome are you aiming for?', type: 'text', required: true, showIf: { questionId: 'track', values: ['Job'] } },
+  { id: 'job_sector', label: 'Which sector or kind of company?', type: 'text', required: false, showIf: { questionId: 'track', values: ['Job'] } },
+  { id: 'job_gap', label: 'What stands between you and that offer today?', type: 'textarea', required: true, showIf: { questionId: 'track', values: ['Job'] } },
+
+  // ── Asked of everyone, whichever way they are headed ──
   { id: 'goal', label: 'In one line, what do you want to achieve by the end of this programme?', type: 'text', required: true },
   { id: 'why', label: 'Why does this matter to you?', type: 'textarea', required: true },
-  { id: 'target', label: 'Which role, company or outcome are you aiming for?', type: 'text', required: false },
   { id: 'first_step', label: 'What is the first skill or step you will work on?', type: 'text', required: false },
   { id: 'measure', label: 'How will you know you have reached it?', type: 'textarea', required: false },
 ];
+
+// Which of those questions a particular set of answers calls for. A branch
+// hangs off a choice that may itself be hidden, so this walks in order and
+// treats a question whose controller never came up as hidden too.
+function visibleGoalQuestions(questions, answers = {}) {
+  const shown = new Map();
+  const out = [];
+  for (const q of Array.isArray(questions) ? questions : []) {
+    let visible = true;
+    const rule = q && q.showIf;
+    if (rule && rule.questionId) {
+      const controller = shown.get(rule.questionId);
+      const values = Array.isArray(rule.values) ? rule.values : [];
+      visible = !!controller && values.includes(String((answers || {})[rule.questionId] ?? ''));
+    }
+    shown.set(q.id, visible);
+    if (visible) out.push(q);
+  }
+  return out;
+}
 
 const StudentGoal = sequelize.define('StudentGoal', {
   id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
@@ -2789,6 +2837,7 @@ module.exports = {
   Form,
   FormResponse,
   GOAL_QUESTIONS,
+  visibleGoalQuestions,
   RoadmapSetting,
   StudentGoal,
   RoadmapGoalNotice,

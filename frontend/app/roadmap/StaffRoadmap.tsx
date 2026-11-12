@@ -11,7 +11,7 @@ import apiClient from '@/app/lib/apiClient';
 import Timeline from './Timeline';
 import RoadmapCanvas from './RoadmapCanvas';
 import Portal from './Portal';
-import { Goal, Milestone, MILESTONE_ICONS, Question, Roadmap, SessionInfo, daysUntil, fmtDate } from './types';
+import { Goal, Milestone, MILESTONE_ICONS, Question, Roadmap, SessionInfo, daysUntil, fmtDate, visibleQuestions } from './types';
 
 const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   target: FiTarget, flag: FiFlag, book: FiBookOpen, award: FiAward, briefcase: FiBriefcase,
@@ -320,16 +320,41 @@ export default function StaffRoadmap() {
         <div className="grid gap-3 md:grid-cols-2">
           <div className="rounded-2xl border border-gray-200 bg-white p-4">
             <h2 className="text-sm font-bold text-gray-900">Their goal answers</h2>
-            {viewing.goal ? (
-              <dl className="mt-2 space-y-2">
-                {viewing.questions.map((q) => (
-                  <div key={q.id}>
-                    <dt className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">{q.label}</dt>
-                    <dd className="whitespace-pre-line text-sm text-gray-800">{viewing.goal?.answers?.[q.id] || '—'}</dd>
-                  </div>
-                ))}
-              </dl>
-            ) : <p className="mt-2 text-xs italic text-gray-400">Nothing yet.</p>}
+            {viewing.goal ? (() => {
+              const answers = viewing.goal.answers || {};
+              const asked = visibleQuestions(viewing.questions, answers);
+              // Answers to questions nobody asks any more — an earlier set,
+              // or a branch they moved away from. Shown rather than dropped.
+              const askedIds = new Set(asked.map((q) => q.id));
+              const leftover = Object.entries(answers).filter(([k, v]) => !askedIds.has(k) && String(v || '').trim());
+              return (
+                <>
+                  <dl className="mt-2 space-y-2">
+                    {asked.map((q) => (
+                      <div key={q.id}>
+                        <dt className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">{q.label}</dt>
+                        <dd className="whitespace-pre-line text-sm text-gray-800">{answers[q.id] || '—'}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                  {leftover.length > 0 && (
+                    <details className="mt-3 border-t border-gray-100 pt-2">
+                      <summary className="cursor-pointer text-[11px] font-semibold text-gray-500">
+                        Earlier answers ({leftover.length})
+                      </summary>
+                      <dl className="mt-2 space-y-2">
+                        {leftover.map(([k, v]) => (
+                          <div key={k}>
+                            <dt className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">{k.replace(/_/g, ' ')}</dt>
+                            <dd className="whitespace-pre-line text-sm text-gray-600">{v}</dd>
+                          </div>
+                        ))}
+                      </dl>
+                    </details>
+                  )}
+                </>
+              );
+            })() : <p className="mt-2 text-xs italic text-gray-400">Nothing yet.</p>}
           </div>
           <div className="rounded-2xl border border-gray-200 bg-white p-4">
             <h2 className="text-sm font-bold text-gray-900">Their own milestones ({viewing.selfMilestones.length})</h2>
@@ -497,7 +522,9 @@ export default function StaffRoadmap() {
               <dl className="mt-3 grid gap-2 border-t border-gray-100 pt-3 sm:grid-cols-2">
                 {Object.entries(g.answers || {}).filter(([, v]) => String(v || '').trim()).map(([k, v]) => (
                   <div key={k}>
-                    <dt className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">{k.replace(/_/g, ' ')}</dt>
+                    <dt className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+                      {questions.find((q) => q.id === k)?.label || k.replace(/_/g, ' ')}
+                    </dt>
                     <dd className="whitespace-pre-line text-sm text-gray-700">{v}</dd>
                   </div>
                 ))}
@@ -896,6 +923,39 @@ function GoalQuestionsEditor({ questions, isDefault, canEdit, onSaved }: {
 
   const update = (i: number, patch: Partial<Question>) =>
     setDraft((prev) => prev.map((q, j) => (j === i ? { ...q, ...patch } : q)));
+
+  // A question can only follow a choice that comes before it — otherwise the
+  // branch could never be reached.
+  const controllersFor = (i: number) =>
+    draft.slice(0, i).filter((q) => q.type === 'choice' && (q.options || []).length);
+
+  const setParent = (i: number, parentId: string) => {
+    if (!parentId) { update(i, { showIf: undefined }); return; }
+    const parent = draft.find((q) => q.id === parentId);
+    const first = (parent?.options || [])[0];
+    update(i, { showIf: { questionId: parentId, values: first ? [first] : [] } });
+  };
+
+  const toggleValue = (i: number, value: string) => {
+    const rule = draft[i].showIf;
+    if (!rule) return;
+    const values = rule.values.includes(value)
+      ? rule.values.filter((v) => v !== value)
+      : [...rule.values, value];
+    update(i, { showIf: { ...rule, values } });
+  };
+
+  // What a student answering each way would actually be asked. The whole
+  // point of branching is that no one sees all of it, so the editor says
+  // how long each path really is.
+  const paths = useMemo(() => {
+    const first = draft.find((q) => q.type === 'choice' && draft.some((o) => o.showIf?.questionId === q.id));
+    if (!first) return [];
+    return (first.options || []).map((o) => ({
+      option: o,
+      count: visibleQuestions(draft, { [first.id]: o }).length,
+    }));
+  }, [draft]);
   const move = (i: number, by: number) => setDraft((prev) => {
     const next = [...prev];
     const to = i + by;
@@ -906,6 +966,11 @@ function GoalQuestionsEditor({ questions, isDefault, canEdit, onSaved }: {
 
   const save = async () => {
     if (draft.some((q) => !q.label.trim())) { toast.error('Every question needs wording'); return; }
+    if (draft.some((q) => q.type === 'choice' && !(q.options || []).length)) {
+      toast.error('A choice question needs some options to choose from'); return;
+    }
+    const dangling = draft.find((q) => q.showIf && !q.showIf.values.length);
+    if (dangling) { toast.error(`Pick which answers lead to “${dangling.label.slice(0, 40)}”`); return; }
     try {
       setBusy(true);
       const { data } = await apiClient.put('/roadmap/goal-questions', { questions: draft });
@@ -939,9 +1004,19 @@ function GoalQuestionsEditor({ questions, isDefault, canEdit, onSaved }: {
           <div>
             <h2 className="text-sm font-bold text-gray-900">Goal questions</h2>
             <p className="mt-0.5 text-xs text-gray-500">
-              What the orb asks a student before they set their goal. The first question is the goal itself.
+              What the orb asks a student before they set their goal. A question can be set to follow
+              one answer to an earlier choice, so each student is only asked what fits them.
               {isDefault ? ' These are the defaults.' : ''}
             </p>
+            {paths.length > 0 && (
+              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                {paths.map((p) => (
+                  <span key={p.option} className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2.5 py-1 text-[11px] font-semibold text-indigo-700">
+                    {p.option} <span className="text-indigo-400">· {p.count} question{p.count === 1 ? '' : 's'}</span>
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
           {canEdit && (
             <div className="flex items-center gap-2">
@@ -970,7 +1045,10 @@ function GoalQuestionsEditor({ questions, isDefault, canEdit, onSaved }: {
 
       <ul className="space-y-2">
         {draft.map((q, i) => (
-          <li key={q.id} className="rounded-2xl border border-gray-200 bg-white p-3">
+          <li
+            key={q.id}
+            className={`rounded-2xl border border-gray-200 bg-white p-3 ${q.showIf ? 'ml-0 border-l-4 border-l-indigo-300 sm:ml-6' : ''}`}
+          >
             <div className="flex items-start gap-2">
               <span className="mt-2 w-5 flex-none text-center text-xs font-bold text-gray-400">{i + 1}</span>
               <div className="min-w-0 flex-1 space-y-2">
@@ -1001,6 +1079,37 @@ function GoalQuestionsEditor({ questions, isDefault, canEdit, onSaved }: {
                       onChange={(e) => update(i, { required: e.target.checked })} /> required
                   </label>
                   <span className="text-[10px] text-gray-400">id: {q.id}</span>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 rounded-xl bg-gray-50 px-2.5 py-2">
+                  <span className="text-[11px] font-semibold text-gray-600">Ask this</span>
+                  <select
+                    value={q.showIf?.questionId || ''}
+                    disabled={!canEdit || controllersFor(i).length === 0}
+                    onChange={(e) => setParent(i, e.target.value)}
+                    className="max-w-[16rem] rounded-lg border border-gray-200 px-2 py-1 text-[11px] text-gray-700 disabled:bg-gray-100"
+                  >
+                    <option value="">of everyone</option>
+                    {controllersFor(i).map((p) => (
+                      <option key={p.id} value={p.id}>only if “{p.label.slice(0, 48)}” is…</option>
+                    ))}
+                  </select>
+                  {q.showIf && (draft.find((p) => p.id === q.showIf?.questionId)?.options || []).map((o) => (
+                    <label key={o} className={`inline-flex cursor-pointer items-center gap-1 rounded-full px-2 py-1 text-[11px] font-semibold ${
+                      q.showIf?.values.includes(o) ? 'bg-indigo-600 text-white' : 'bg-white text-gray-600 ring-1 ring-gray-200'
+                    }`}>
+                      <input type="checkbox" className="hidden" disabled={!canEdit}
+                        checked={q.showIf?.values.includes(o) || false}
+                        onChange={() => toggleValue(i, o)} />
+                      {o}
+                    </label>
+                  ))}
+                  {q.showIf && !q.showIf.values.length && (
+                    <span className="text-[11px] font-semibold text-rose-600">pick at least one answer</span>
+                  )}
+                  {controllersFor(i).length === 0 && !q.showIf && (
+                    <span className="text-[11px] text-gray-400">no choice question comes before this one</span>
+                  )}
                 </div>
               </div>
               {canEdit && (

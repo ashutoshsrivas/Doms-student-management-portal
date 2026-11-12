@@ -1,6 +1,7 @@
 const { Op } = require('sequelize');
 const {
   GOAL_QUESTIONS,
+  visibleGoalQuestions,
   RoadmapSetting,
   MentorTeam,
   MentorTeamMember,
@@ -99,13 +100,50 @@ function cleanQuestions(input) {
   if (!Array.isArray(input)) return [];
   return input
     .filter((q) => q && String(q.label || '').trim())
-    .map((q, i) => ({
-      id: String(q.id || `q${i + 1}`).trim().slice(0, 64) || `q${i + 1}`,
-      label: String(q.label).trim().slice(0, 500),
-      type: ['text', 'textarea', 'choice'].includes(q.type) ? q.type : 'textarea',
-      options: Array.isArray(q.options) ? q.options.map((o) => String(o).slice(0, 200)).filter(Boolean) : [],
-      required: !!q.required,
-    }));
+    .map((q, i) => {
+      const out = {
+        id: String(q.id || `q${i + 1}`).trim().slice(0, 64) || `q${i + 1}`,
+        label: String(q.label).trim().slice(0, 500),
+        type: ['text', 'textarea', 'choice'].includes(q.type) ? q.type : 'textarea',
+        options: Array.isArray(q.options) ? q.options.map((o) => String(o).slice(0, 200)).filter(Boolean) : [],
+        required: !!q.required,
+      };
+      const rule = q.showIf;
+      if (rule && String(rule.questionId || '').trim() && Array.isArray(rule.values) && rule.values.length) {
+        out.showIf = {
+          questionId: String(rule.questionId).trim().slice(0, 64),
+          values: rule.values.map((v) => String(v).slice(0, 200)).filter(Boolean).slice(0, 50),
+        };
+      }
+      return out;
+    });
+}
+
+// A branch rule has to point backwards at a choice that is really there,
+// at options that really exist. Otherwise a question could hang off nothing
+// and either never be asked or — worse — be asked of everybody.
+function branchErrors(questions) {
+  const errors = [];
+  const seen = new Map();
+  for (const q of questions) {
+    const rule = q.showIf;
+    if (rule) {
+      const parent = seen.get(rule.questionId);
+      if (!parent) {
+        errors.push(`"${q.label}" is set to follow a question that does not come before it.`);
+      } else if (parent.type !== 'choice') {
+        errors.push(`"${q.label}" follows "${parent.label}", which is not a choice question.`);
+      } else {
+        const unknown = rule.values.filter((v) => !(parent.options || []).includes(v));
+        if (unknown.length) errors.push(`"${q.label}" waits for an answer that "${parent.label}" does not offer: ${unknown.join(', ')}.`);
+        if (rule.values.length === (parent.options || []).length) {
+          errors.push(`"${q.label}" is set to follow every option of "${parent.label}" — leave the condition off instead.`);
+        }
+      }
+    }
+    seen.set(q.id, q);
+  }
+  return errors;
 }
 
 const shapeJson = (value, fallback) => {
@@ -252,10 +290,20 @@ const roadmapController = {
       if (!title) return res.status(400).json({ message: 'Tell us your goal in one line' });
 
       const questions = await goalQuestions();
-      for (const q of questions) {
+      const asked = visibleGoalQuestions(questions, answers);
+      for (const q of asked) {
         if (q.required && !String(answers[q.id] || (q.id === 'goal' ? title : '')).trim()) {
           return res.status(400).json({ message: `Please answer: ${q.label}` });
         }
+      }
+      // A student who changes their mind — from Startup to Job, say — should
+      // not carry the abandoned branch into the review. Answers to questions
+      // no longer in the set at all are left alone: they are history.
+      const askedIds = new Set(asked.map((q) => q.id));
+      const kept = {};
+      for (const [key, value] of Object.entries(answers)) {
+        const known = questions.some((q) => q.id === key);
+        if (!known || askedIds.has(key)) kept[key] = value;
       }
 
       // Not the student's choice: the goal is for the end of their session.
@@ -270,7 +318,7 @@ const roadmapController = {
       if (existing) {
         await existing.update({
           title,
-          answers,
+          answers: kept,
           targetDate,
           academicSessionId: session?.id || null,
           status: 'PENDING',
@@ -283,7 +331,7 @@ const roadmapController = {
           userId: req.user.id,
           academicSessionId: session?.id || null,
           title,
-          answers,
+          answers: kept,
           targetDate,
           status: 'PENDING',
         });
@@ -856,6 +904,13 @@ const roadmapController = {
         if (ids.has(q.id)) return res.status(400).json({ message: `Two questions share the id "${q.id}"` });
         ids.add(q.id);
       }
+      for (const q of questions) {
+        if (q.type === 'choice' && !q.options.length) {
+          return res.status(400).json({ message: `"${q.label}" is a choice question with no options to choose from.` });
+        }
+      }
+      const problems = branchErrors(questions);
+      if (problems.length) return res.status(400).json({ message: problems[0], problems });
       const [row] = await RoadmapSetting.findOrCreate({
         where: { key: GOAL_QUESTIONS_KEY },
         defaults: { key: GOAL_QUESTIONS_KEY, value: questions, updatedBy: req.user.id },

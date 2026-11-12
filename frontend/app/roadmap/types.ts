@@ -4,6 +4,28 @@ export type Question = {
   type: 'text' | 'textarea' | 'choice';
   options?: string[];
   required?: boolean;
+  /** Only ask this when an earlier choice went one of these ways. */
+  showIf?: { questionId: string; values: string[] };
+};
+
+// Which questions this set of answers calls for. A branch can hang off a
+// choice that is itself inside another branch, so this walks in order and
+// treats a question whose controller never came up as hidden too. The same
+// walk runs on the server — the orb decides what to show, the server decides
+// what to require.
+export const visibleQuestions = (questions: Question[], answers: Record<string, string>): Question[] => {
+  const shown = new Map<string, boolean>();
+  const out: Question[] = [];
+  for (const q of questions || []) {
+    let visible = true;
+    if (q.showIf?.questionId) {
+      const controller = shown.get(q.showIf.questionId);
+      visible = !!controller && (q.showIf.values || []).includes(String(answers?.[q.showIf.questionId] ?? ''));
+    }
+    shown.set(q.id, visible);
+    if (visible) out.push(q);
+  }
+  return out;
 };
 
 export type Goal = {
