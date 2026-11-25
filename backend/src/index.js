@@ -25,6 +25,7 @@ const facultyNoteRoutes = require('./routes/facultyNoteRoutes');
 const facultyGroupRoutes = require('./routes/facultyGroupRoutes');
 const eventRoutes = require('./routes/eventRoutes');
 const landingRoutes = require('./routes/landingRoutes');
+const departmentRoutes = require('./routes/departmentRoutes');
 const classRoutes = require('./routes/classRoutes');
 const certificationRoutes = require('./routes/certificationRoutes');
 const certificationPublicRoutes = require('./routes/certificationPublicRoutes');
@@ -89,6 +90,7 @@ app.use('/api/faculty-notes', facultyNoteRoutes);
 app.use('/api/faculty-groups', facultyGroupRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/landing', landingRoutes);
+app.use('/api/departments', departmentRoutes);
 app.use('/api/classes', classRoutes);
 app.use('/api/certifications', certificationRoutes);
 app.use('/api/verify', certificationPublicRoutes); // public, no auth

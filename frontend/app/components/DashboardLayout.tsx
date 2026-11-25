@@ -20,6 +20,7 @@ import {
   FiBriefcase,
   FiHelpCircle,
   FiHardDrive,
+  FiLayers,
   FiFileText,
   FiClipboard, FiMap,
 } from 'react-icons/fi';
@@ -139,6 +140,7 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
         { name: 'Social Media', href: '/social-media', iconKey: 'zap' },
         { name: 'Access Management', href: '/admin/access', iconKey: 'users' },
         { name: 'Landing Page', href: '/admin/landing', iconKey: 'fileText' },
+        { name: 'Departments', href: '/admin/departments', iconKey: 'layers' },
       ],
       FACULTY: [
         { name: 'Dashboard', href: '/faculty/dashboard', iconKey: 'chart' },
@@ -169,6 +171,7 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
         { name: 'Roadmap', href: '/roadmap', iconKey: 'map' },
         { name: 'Grading', href: '/admin/grading', iconKey: 'award' },
         { name: 'My Tasks', href: '/faculty/tasks', iconKey: 'clipboard' },
+        { name: 'My Department Page', href: '/admin/departments', iconKey: 'layers' },
         { name: 'Announcements', href: '/student/announcements', iconKey: 'bell', children: studentAnnouncementsChildren },
       ],
       // HOD = ADMIN clone (same sidebar, same access). Only difference is
@@ -203,6 +206,7 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
         { name: 'Social Media', href: '/social-media', iconKey: 'zap' },
         { name: 'Access Management', href: '/admin/access', iconKey: 'users' },
         { name: 'Landing Page', href: '/admin/landing', iconKey: 'fileText' },
+        { name: 'Departments', href: '/admin/departments', iconKey: 'layers' },
       ],
       PLACEMENT_COORDINATOR: [
         { name: 'Dashboard', href: '/coordinator/dashboard', iconKey: 'chart' },
@@ -323,6 +327,7 @@ export default function DashboardLayout({ children, title }: ProtectedRouteProps
       clipboard:  <FiClipboard className="w-4.5 h-4.5" />,
       award:      <FiAward className="w-4.5 h-4.5" />,
       map:        <FiMap className="w-4.5 h-4.5" />,
+      layers:     <FiLayers className="w-4.5 h-4.5" />,
     };
     return iconMap[iconKey] || <FiBarChart2 className="w-4.5 h-4.5" />;
   };

@@ -189,8 +189,33 @@ const formAnswerUpload = multer({
   limits: { fileSize: 25 * 1024 * 1024, files: 1 },
 });
 
+// A department page's cover image, or the document or picture behind one
+// of its entries. No SVG and nothing that would execute if a reader opened
+// the stored object directly — these pages are public.
+const departmentUpload = multer({
+  storage,
+  fileFilter: (req, file, cb) => {
+    const ok = [
+      'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic', 'image/heif',
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/vnd.ms-powerpoint',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      'text/csv', 'text/plain',
+    ];
+    if (ok.includes(file.mimetype)) return cb(null, true);
+    return cb(new Error('Upload a picture (JPG, PNG, WEBP, GIF) or a document (PDF, Word, Excel, PowerPoint, CSV, TXT)'), false);
+  },
+  // The controller holds pictures to a tighter limit than documents.
+  limits: { fileSize: 25 * 1024 * 1024, files: 1 },
+});
+
 module.exports = {
   upload,
+  departmentUpload,
   formMediaUpload,
   formAnswerUpload,
   excelUpload,

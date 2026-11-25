@@ -2193,6 +2193,84 @@ const LandingContent = sequelize.define('LandingContent', {
   underscored: true,
 });
 
+
+// ============ Departments ===============================================
+// GESoM is the umbrella; each department (Marketing, Finance, …) has its
+// own page on the public site, curated by that department's chair head.
+// The singular details live on the department row; everything else is an
+// entry in one of the categories below, each with its own document or
+// picture.
+const DEPARTMENT_CATEGORIES = [
+  { key: 'faculty', label: 'Faculty' },
+  { key: 'projects', label: 'Projects' },
+  { key: 'students', label: 'Students' },
+  { key: 'alumni', label: 'Alumni' },
+  { key: 'domain_research', label: 'Domain Research' },
+  { key: 'software', label: 'Software' },
+  { key: 'preparedness', label: 'Preparedness' },
+  { key: 'profiling', label: 'Profiling' },
+  { key: 'certification', label: 'Certification' },
+  { key: 'placement', label: 'Placement' },
+  { key: 'sips', label: 'SIPs' },
+  { key: 'live_projects', label: 'Live Projects' },
+  { key: 'simulations', label: 'Simulations' },
+  { key: 'foreign_collaborations', label: 'Foreign Collaborations' },
+];
+const DEPARTMENT_CATEGORY_KEYS = DEPARTMENT_CATEGORIES.map((c) => c.key);
+
+const Department = sequelize.define('Department', {
+  id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
+  // What the card on the landing page says, and what the admin manages it by.
+  name: { type: DataTypes.STRING(160), allowNull: false },
+  // The public address: /departments/<slug>.
+  slug: { type: DataTypes.STRING(160), allowNull: false, unique: true },
+  // The three things the chair head writes for their own page.
+  title: { type: DataTypes.STRING(300), allowNull: true },
+  description: { type: DataTypes.TEXT, allowNull: true },
+  coverImageUrl: { type: DataTypes.STRING(1024), allowNull: true },
+  // Who curates it. Their id is the permission — not their role — so a
+  // department keeps working if the role labels are ever reshuffled.
+  chairHeadId: { type: DataTypes.UUID, allowNull: true },
+  // Hidden departments stay out of the public site entirely. Admin only.
+  isHidden: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+  position: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+  createdBy: { type: DataTypes.UUID, allowNull: true },
+}, {
+  tableName: 'departments',
+  timestamps: true,
+  underscored: true,
+  indexes: [{ fields: ['chair_head_id'] }, { fields: ['is_hidden'] }],
+});
+
+const DepartmentEntry = sequelize.define('DepartmentEntry', {
+  id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
+  departmentId: { type: DataTypes.UUID, allowNull: false },
+  category: { type: DataTypes.STRING(64), allowNull: false },
+  title: { type: DataTypes.STRING(300), allowNull: false },
+  details: { type: DataTypes.TEXT, allowNull: true },
+  // One attachment per entry — a picture to show, or a document to open.
+  fileUrl: { type: DataTypes.STRING(1024), allowNull: true },
+  fileName: { type: DataTypes.STRING(255), allowNull: true },
+  fileKind: { type: DataTypes.STRING(16), allowNull: true }, // 'image' | 'document'
+  // Somewhere else to send the reader: a paper, a repository, a company.
+  linkUrl: { type: DataTypes.STRING(1024), allowNull: true },
+  // Hidden entries stay on the curator's screen but off the public page,
+  // which is how a half-finished row waits without being published.
+  isHidden: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+  position: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+  createdBy: { type: DataTypes.UUID, allowNull: true },
+}, {
+  tableName: 'department_entries',
+  timestamps: true,
+  underscored: true,
+  indexes: [{ fields: ['department_id', 'category'] }],
+});
+
+Department.belongsTo(User, { foreignKey: 'chairHeadId', as: 'ChairHead', constraints: false });
+Department.hasMany(DepartmentEntry, { foreignKey: 'departmentId', as: 'Entries', onDelete: 'CASCADE' });
+DepartmentEntry.belongsTo(Department, { foreignKey: 'departmentId' });
+DepartmentEntry.belongsTo(User, { foreignKey: 'createdBy', as: 'Creator', constraints: false });
+
 // ============ Classes / Sections =========================================
 // A class/section lives inside an academic session. One coordinator
 // (faculty/chair-head/placement coordinator/coordinator), up to 4 CRs
@@ -2893,6 +2971,10 @@ module.exports = {
   Event,
   BlockedDate,
   LandingContent,
+  DEPARTMENT_CATEGORIES,
+  DEPARTMENT_CATEGORY_KEYS,
+  Department,
+  DepartmentEntry,
   Class,
   ClassRepresentative,
   ClassAttendance,

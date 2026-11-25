@@ -117,6 +117,15 @@ type Placement = {
 };
 type Facility = { name: string; img: string };
 
+export type DepartmentCard = {
+  id: string;
+  name: string;
+  slug: string;
+  title: string;
+  description: string;
+  coverImageUrl: string | null;
+};
+
 export type LandingPayload = {
   hero: {
     eyebrow: string;
@@ -184,6 +193,9 @@ export default function Home() {
   const [content, setContent] = useState<LandingPayload>(FALLBACK);
   const [hoverPlacementIdx, setHoverPlacementIdx] = useState<number | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
+  // The department pages, each curated by its own chair head. Absent or
+  // unreachable, the section simply does not appear.
+  const [departments, setDepartments] = useState<DepartmentCard[]>([]);
 
   /* Live content fetch ─ falls back silently if API is unreachable. */
   useEffect(() => {
@@ -221,6 +233,21 @@ export default function Home() {
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch(`${API_BASE}/departments?_=${Date.now()}`, { cache: 'no-store' });
+        if (!r.ok) return;
+        const data = await r.json();
+        if (!cancelled && Array.isArray(data?.departments)) setDepartments(data.departments);
+      } catch {
+        /* the section stays out rather than breaking the page */
+      }
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
@@ -262,7 +289,10 @@ export default function Home() {
     );
     els.forEach((el) => io.observe(el));
     return () => io.disconnect();
-  }, [content]);
+    // Also when the departments arrive: those cards are rendered after their
+    // fetch resolves, so an observer set up before them would never see them
+    // and they would sit at opacity 0 for ever.
+  }, [content, departments.length]);
 
   // Per-section guards: if a stored section is null/missing, fall back to
   // the full default for that section. Then guard every array with `|| []`
@@ -464,6 +494,7 @@ export default function Home() {
 
           <nav className="hidden lg:flex items-center gap-9">
             <a href="#programmes" className="nav-link link">Programmes</a>
+            <a href="#departments" className="nav-link link">Departments</a>
             <a href="#placements" className="nav-link link">Placements</a>
             <a href="#campus"     className="nav-link link">Campus</a>
             <a href="#contact"    className="nav-link link">Contact</a>
@@ -517,8 +548,9 @@ export default function Home() {
         </div>
         <nav className="p-6 flex flex-col gap-5">
           {[
-            { l: 'Programmes', h: '#programmes' },
-            { l: 'Placements', h: '#placements' },
+            { l: 'Programmes',  h: '#programmes' },
+            { l: 'Departments', h: '#departments' },
+            { l: 'Placements',  h: '#placements' },
             { l: 'Campus',     h: '#campus' },
             { l: 'Contact',    h: '#contact' },
           ].map((i) => (
@@ -751,6 +783,68 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+
+      {/* ───────────────────── Departments ───────────────────── */}
+      {departments.length > 0 && (
+        <section id="departments" className="bg-[var(--bone)] py-20 sm:py-28 lg:py-40">
+          <div className="max-w-[1320px] mx-auto pad-mobile px-6 lg:px-10">
+            <div className="grid lg:grid-cols-12 gap-8 sm:gap-10 mb-12 sm:mb-16">
+              <div data-reveal className="reveal lg:col-span-4">
+                <p className="micro text-[var(--gold)]">Departments</p>
+                <div className="mt-4 h-px w-12 bg-[var(--gold)]/60" />
+              </div>
+              <div data-reveal className="reveal reveal-delay-1 lg:col-span-8">
+                <h2 className="serif display-lg text-[var(--ink)]">
+                  One school, {departments.length === 1 ? 'one department' : `${departments.length} departments`}.
+                </h2>
+                <p className="mt-5 sm:mt-6 max-w-2xl text-[15px] sm:text-[16px] leading-[1.7] text-[var(--muted)]">
+                  Each department is led by its own chair head, who keeps its page here — the faculty, the
+                  research, the projects, the placements and the work students do.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid gap-5 sm:gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              {departments.map((d, i) => (
+                <a
+                  key={d.id}
+                  href={`/departments/${d.slug}`}
+                  data-reveal
+                  className={`reveal reveal-delay-${Math.min(i, 4)} group flex flex-col overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--paper)] transition hover:shadow-[0_18px_50px_-20px_rgba(14,16,20,0.35)]`}
+                >
+                  <div className="relative h-44 w-full overflow-hidden bg-[var(--bone)]">
+                    {d.coverImageUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={d.coverImageUrl}
+                        alt=""
+                        className="h-44 w-full object-cover transition-transform duration-700 group-hover:scale-105"
+                      />
+                    ) : (
+                      <div className="flex h-44 w-full items-center justify-center">
+                        <span className="serif text-[40px] text-[var(--line)]">{d.name.slice(0, 1)}</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex flex-1 flex-col p-6">
+                    <h3 className="serif text-[20px] leading-snug text-[var(--ink)]">{d.name}</h3>
+                    {(d.title || d.description) && (
+                      <p className="mt-2.5 line-clamp-3 text-[14px] leading-[1.7] text-[var(--muted)]">
+                        {d.title || d.description}
+                      </p>
+                    )}
+                    <span className="mt-5 inline-flex items-center gap-2 text-[13px] font-medium text-[var(--ink)]">
+                      <span className="link">Open the department</span>
+                      <FiArrowUpRight size={14} />
+                    </span>
+                  </div>
+                </a>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* ───────────────────── Placements ───────────────────── */}
       <section
@@ -1028,6 +1122,7 @@ export default function Home() {
               <p className="micro text-[var(--gold-soft)] mb-4 sm:mb-5">Site</p>
               <ul className="space-y-3 text-[14px]">
                 <li><a href="#programmes" className="link">Programmes</a></li>
+                <li><a href="#departments" className="link">Departments</a></li>
                 <li><a href="#placements" className="link">Placements</a></li>
                 <li><a href="#campus"     className="link">Campus</a></li>
                 <li><a href="#contact"    className="link">Contact</a></li>
