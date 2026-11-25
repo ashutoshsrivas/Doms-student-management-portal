@@ -286,8 +286,10 @@ const roadmapController = {
     try {
       if (req.user.role !== 'STUDENT') return res.status(403).json({ message: 'Only a student can set their goal' });
       const answers = req.body.answers && typeof req.body.answers === 'object' ? req.body.answers : {};
-      const title = String(req.body.title || answers.goal || '').trim();
-      if (!title) return res.status(400).json({ message: 'Tell us your goal in one line' });
+      // The goal line is now a SMART statement, which can run long; the
+      // column holds 500 characters, so clamp rather than let the write fail.
+      const title = String(req.body.title || answers.goal || '').trim().slice(0, 500);
+      if (!title) return res.status(400).json({ message: 'Write your goal as a SMART statement' });
 
       const questions = await goalQuestions();
       const asked = visibleGoalQuestions(questions, answers);

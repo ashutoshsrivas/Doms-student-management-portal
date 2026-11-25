@@ -2600,34 +2600,135 @@ NotificationPromptResponse.belongsTo(User, { foreignKey: 'studentUserId', as: 'S
 // `target`, `goal`, `why`, `first_step` and `measure` keep the ids they had
 // before branching existed, so answers already given stay where they were.
 const GOAL_QUESTIONS = [
+  // ── Part A — everyone ──
+  // Name, enrolment, section and email are not asked: the portal already
+  // knows who is answering and shows it on every staff view of the goal.
   {
-    id: 'track',
-    label: 'What do you want to pursue after this programme?',
+    id: 'specialisation',
+    label: 'Which specialisation (major) are you taking?',
     type: 'choice',
-    options: ['Family business', 'Startup', 'Job'],
+    options: ['Finance', 'Marketing', 'HR', 'Business Analytics', 'LSCM', 'AI & DS', 'AAM', 'HA'],
     required: true,
   },
+  { id: 'ug_degree', label: 'Your undergraduate degree and stream', type: 'text', required: true },
+  { id: 'work_experience', label: 'Work experience, in months', type: 'text', required: false },
+  {
+    id: 'track',
+    label: 'After completing the MBA, what is your primary goal?',
+    type: 'choice',
+    options: ['Jobs', 'Family business or startup', 'Higher education'],
+    required: true,
+  },
+  { id: 'why', label: 'In one or two lines, what made you choose this track?', type: 'textarea', required: true },
 
-  // ── Family business ──
-  { id: 'fam_business', label: 'What is the family business, and which part of it will you take on?', type: 'text', required: true, showIf: { questionId: 'track', values: ['Family business'] } },
-  { id: 'fam_change', label: 'What do you want to build or change in it?', type: 'textarea', required: true, showIf: { questionId: 'track', values: ['Family business'] } },
-  { id: 'fam_ready', label: 'What will you need to learn here to be ready for it?', type: 'text', required: false, showIf: { questionId: 'track', values: ['Family business'] } },
+  // ── Part B, Track 1 — Jobs ──
+  { id: 'target', label: 'Which job role do you want in your first placement?', type: 'text', required: true, showIf: { questionId: 'track', values: ['Jobs'] } },
+  { id: 'job_sector', label: 'Which sector do you prefer? Up to two.', type: 'text', required: true, showIf: { questionId: 'track', values: ['Jobs'] } },
+  { id: 'job_companies', label: 'Name three companies you would most like to join.', type: 'text', required: true, showIf: { questionId: 'track', values: ['Jobs'] } },
+  {
+    id: 'job_location',
+    label: 'Preferred job location',
+    type: 'choice',
+    options: ['Dehradun / Uttarakhand', 'Delhi NCR', 'Any metro city', 'Anywhere in India', 'Abroad'],
+    required: true,
+    showIf: { questionId: 'track', values: ['Jobs'] },
+  },
+  { id: 'measure', label: 'Measurable — how will you know you have succeeded?', type: 'textarea', required: true, showIf: { questionId: 'track', values: ['Jobs'] } },
+  {
+    id: 'job_ctc',
+    label: 'What annual salary (CTC) are you targeting?',
+    type: 'choice',
+    options: ['Below ₹4 lakh', '₹4–6 lakh', '₹6–8 lakh', '₹8–12 lakh', 'Above ₹12 lakh'],
+    required: true,
+    showIf: { questionId: 'track', values: ['Jobs'] },
+  },
+  { id: 'job_milestones', label: 'How many of these will you complete before final placements? In this order: industry certifications, live projects or internships, mock interviews and group discussions, company applications submitted, new LinkedIn connections with industry professionals.', type: 'textarea', required: false, showIf: { questionId: 'track', values: ['Jobs'] } },
+  { id: 'job_achievable', label: 'Achievable — is it realistic for you?', type: 'textarea', required: true, showIf: { questionId: 'track', values: ['Jobs'] } },
+  { id: 'job_skills', label: 'Rate yourself 1 to 5 on the skills your target role needs, in this order: communication and presentation, domain knowledge of your specialisation, Excel and analytical tools, aptitude and reasoning, interview confidence.', type: 'textarea', required: false, showIf: { questionId: 'track', values: ['Jobs'] } },
+  { id: 'job_gap', label: 'Which two skill gaps will you close first, and how?', type: 'textarea', required: true, showIf: { questionId: 'track', values: ['Jobs'] } },
+  {
+    id: 'job_hours',
+    label: 'How many hours a week can you give to placement preparation, apart from classes?',
+    type: 'choice',
+    options: ['Less than 3', '3–5', '6–10', 'More than 10'],
+    required: true,
+    showIf: { questionId: 'track', values: ['Jobs'] },
+  },
+  { id: 'job_relevant', label: 'Relevant — does this fit your strengths and your long-term plan?', type: 'textarea', required: true, showIf: { questionId: 'track', values: ['Jobs'] } },
+  { id: 'job_background', label: 'How does this role connect to your graduation background, interests or past experience?', type: 'textarea', required: false, showIf: { questionId: 'track', values: ['Jobs'] } },
+  { id: 'job_five_years', label: 'Where do you see yourself five years after your first job?', type: 'text', required: false, showIf: { questionId: 'track', values: ['Jobs'] } },
+  { id: 'job_timeline', label: 'Time-bound — give a month and year for each: CV and LinkedIn profile ready, first certification completed, summer internship secured, internship completed, final placement offer received.', type: 'textarea', required: false, showIf: { questionId: 'track', values: ['Jobs'] } },
 
-  // ── Startup ──
-  { id: 'startup_idea', label: 'What is your idea, and whose problem does it solve?', type: 'text', required: true, showIf: { questionId: 'track', values: ['Startup'] } },
-  { id: 'startup_stage', label: 'How far has it reached?', type: 'choice', options: ['Just an idea', 'Testing it with people', 'Building it', 'Already earning'], required: true, showIf: { questionId: 'track', values: ['Startup'] } },
-  { id: 'startup_need', label: 'What do you most need to move it forward?', type: 'textarea', required: false, showIf: { questionId: 'track', values: ['Startup'] } },
+  // ── Part B, Track 2 — Family business, entrepreneurship or a startup ──
+  {
+    id: 'fam_path',
+    label: 'Which path describes you best?',
+    type: 'choice',
+    options: [
+      'Joining and growing my family business',
+      'Starting a new venture of my own',
+      'Co-founding a startup with others',
+      'Taking over a franchise or an existing business',
+    ],
+    required: true,
+    showIf: { questionId: 'track', values: ['Family business or startup'] },
+  },
+  { id: 'fam_business', label: 'Describe the business in one or two lines — the product or service, and who the customer is.', type: 'textarea', required: true, showIf: { questionId: 'track', values: ['Family business or startup'] } },
+  {
+    id: 'biz_sector',
+    label: 'Industry or sector',
+    type: 'choice',
+    options: ['Manufacturing', 'Trading / Retail', 'Services', 'Agri / Food processing', 'Tourism / Hospitality', 'Tech / App-based', 'Green energy / Sustainability'],
+    required: true,
+    showIf: { questionId: 'track', values: ['Family business or startup'] },
+  },
+  { id: 'fam_change', label: 'For a family business: what role will you take, and what new value will you add? For example digital marketing, a new product line, an export market, better financial control.', type: 'textarea', required: false, showIf: { questionId: 'track', values: ['Family business or startup'] } },
+  {
+    id: 'biz_location',
+    label: 'Where will the business operate?',
+    type: 'choice',
+    options: ['Local town or city', 'State level', 'National', 'Online / pan-India', 'International'],
+    required: true,
+    showIf: { questionId: 'track', values: ['Family business or startup'] },
+  },
+  { id: 'biz_numbers', label: 'Your numbers for the first full year after the MBA: annual revenue, paying customers, employees, the month you reach break-even, and growth over the current family turnover where that applies.', type: 'textarea', required: true, showIf: { questionId: 'track', values: ['Family business or startup'] } },
+  { id: 'biz_capital', label: 'How much starting capital do you need, and where will it come from?', type: 'textarea', required: true, showIf: { questionId: 'track', values: ['Family business or startup'] } },
+  { id: 'biz_readiness', label: 'Rate your readiness 1 to 5, in this order: understanding of the market and customers, financial planning and costing, sales and marketing, legal, tax and compliance, team building and leadership.', type: 'textarea', required: false, showIf: { questionId: 'track', values: ['Family business or startup'] } },
+  { id: 'biz_mentors', label: 'Which mentors, contacts or resources can you count on? Family, alumni, industry experts, an incubator.', type: 'textarea', required: false, showIf: { questionId: 'track', values: ['Family business or startup'] } },
+  { id: 'biz_problem', label: 'What problem does your business solve, and why are you the right person to solve it?', type: 'textarea', required: true, showIf: { questionId: 'track', values: ['Family business or startup'] } },
+  { id: 'fam_ready', label: 'Which MBA subjects or skills will help you most in this venture?', type: 'textarea', required: false, showIf: { questionId: 'track', values: ['Family business or startup'] } },
+  { id: 'biz_timeline', label: 'Time-bound — give a month and year for each: idea validated with at least 20 possible customers, business plan or pitch deck ready, funding arranged, business registered or your new role defined, first sale or launch, break-even reached.', type: 'textarea', required: false, showIf: { questionId: 'track', values: ['Family business or startup'] } },
 
-  // ── Job ──
-  { id: 'target', label: 'Which role, company or outcome are you aiming for?', type: 'text', required: true, showIf: { questionId: 'track', values: ['Job'] } },
-  { id: 'job_sector', label: 'Which sector or kind of company?', type: 'text', required: false, showIf: { questionId: 'track', values: ['Job'] } },
-  { id: 'job_gap', label: 'What stands between you and that offer today?', type: 'textarea', required: true, showIf: { questionId: 'track', values: ['Job'] } },
+  // ── Part B, Track 3 — Higher education ──
+  { id: 'he_domain', label: 'Which domain and subject area do you want to pursue?', type: 'textarea', required: true, showIf: { questionId: 'track', values: ['Higher education'] } },
 
-  // ── Asked of everyone, whichever way they are headed ──
-  { id: 'goal', label: 'In one line, what do you want to achieve by the end of this programme?', type: 'text', required: true },
-  { id: 'why', label: 'Why does this matter to you?', type: 'textarea', required: true },
-  { id: 'first_step', label: 'What is the first skill or step you will work on?', type: 'text', required: false },
-  { id: 'measure', label: 'How will you know you have reached it?', type: 'textarea', required: false },
+  // ── Part C — everyone ──
+  { id: 'goal', label: 'Write your main goal as one SMART statement. By [month, year], I will [specific outcome], measured by [number or result], by doing [key actions].', type: 'textarea', required: true },
+  { id: 'first_step', label: 'Three actions you will take in the next 30 days, each with the date you will finish it by.', type: 'textarea', required: true },
+  { id: 'risks', label: 'What could stop you from reaching this goal?', type: 'textarea', required: true },
+  {
+    id: 'support',
+    label: 'What support do you most want from GESoM?',
+    type: 'choice',
+    options: [
+      'CV and LinkedIn review',
+      'Mock interviews and GD practice',
+      'Aptitude training',
+      'Industry mentor',
+      'Internship leads',
+      'Incubation and startup guidance',
+      'Funding and scheme awareness',
+      'Family business case discussions',
+    ],
+    required: false,
+  },
+  {
+    id: 'declaration',
+    label: 'I have set these goals myself, and I will review my progress with my mentor every fortnight.',
+    type: 'choice',
+    options: ['Yes'],
+    required: true,
+  },
 ];
 
 // Which of those questions a particular set of answers calls for. A branch
