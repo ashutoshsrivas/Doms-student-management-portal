@@ -10,7 +10,7 @@ import Link from 'next/link';
 import toast from 'react-hot-toast';
 import {
   FiPlus, FiLoader, FiEye, FiEyeOff, FiExternalLink, FiTrash2, FiEdit2,
-  FiLayers, FiUser, FiImage, FiX,
+  FiLayers, FiUser, FiImage, FiX, FiSettings,
 } from 'react-icons/fi';
 import apiClient from '@/app/lib/apiClient';
 import DashboardLayout from '@/app/components/DashboardLayout';
@@ -28,6 +28,7 @@ function Content() {
   const [canCreate, setCanCreate] = useState(false);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState<Department | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -56,7 +57,10 @@ function Content() {
 
   const remove = async (d: Department) => {
     const n = d.counts?.total || 0;
-    if (!confirm(`Delete "${d.name}"?\n\nIts ${n} ${n === 1 ? 'entry goes' : 'entries go'} too, and the page comes off the website. This cannot be undone.`)) return;
+    const takes = n === 0
+      ? 'The page comes off the website.'
+      : `Its ${n} ${n === 1 ? 'entry goes' : 'entries go'} too, and the page comes off the website.`;
+    if (!confirm(`Delete "${d.name}"?\n\n${takes} This cannot be undone.`)) return;
     try {
       const { data } = await apiClient.delete(`/departments/${d.id}`);
       toast.success(data.message || 'Department deleted');
@@ -143,6 +147,13 @@ function Content() {
                   >
                     <FiEdit2 className="h-3.5 w-3.5" /> Curate
                   </Link>
+                  <button
+                    type="button"
+                    onClick={() => setEditing(d)}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                  >
+                    <FiSettings className="h-3.5 w-3.5" /> Details
+                  </button>
                   <a
                     href={`/departments/${d.slug}`}
                     target="_blank"
@@ -163,10 +174,9 @@ function Content() {
                       <button
                         type="button"
                         onClick={() => remove(d)}
-                        title="Delete this department"
-                        className="ml-auto rounded-lg p-1.5 text-red-600 hover:bg-red-50"
+                        className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50"
                       >
-                        <FiTrash2 className="h-3.5 w-3.5" />
+                        <FiTrash2 className="h-3.5 w-3.5" /> Delete
                       </button>
                     </>
                   )}
@@ -179,6 +189,16 @@ function Content() {
 
       {creating && (
         <NewDepartmentModal onClose={() => setCreating(false)} onCreated={async () => { setCreating(false); await load(); }} />
+      )}
+
+      {editing && (
+        <EditDepartmentModal
+          department={editing}
+          canAdmin={canCreate}
+          onClose={() => setEditing(null)}
+          onSaved={async () => { setEditing(null); await load(); }}
+          onDelete={canCreate ? async () => { setEditing(null); await remove(editing); } : undefined}
+        />
       )}
     </div>
   );
@@ -255,6 +275,154 @@ function NewDepartmentModal({ onClose, onCreated }: { onClose: () => void; onCre
           <button type="button" onClick={onClose} className="rounded border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">Cancel</button>
           <button type="button" onClick={save} disabled={busy} className="rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60">
             {busy ? 'Adding…' : 'Add department'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// The quick way to change a department without opening its page: the title
+// and description, and — for an admin or HOD — its name, its chair head,
+// whether it is on the website, and deleting it outright.
+function EditDepartmentModal({
+  department, canAdmin, onClose, onSaved, onDelete,
+}: {
+  department: Department;
+  canAdmin: boolean;
+  onClose: () => void;
+  onSaved: () => void | Promise<void>;
+  onDelete?: () => void | Promise<void>;
+}) {
+  const [name, setName] = useState(department.name);
+  const [title, setTitle] = useState(department.title);
+  const [description, setDescription] = useState(department.description);
+  const [chairHeadId, setChairHeadId] = useState(department.chairHeadId || '');
+  const [isHidden, setIsHidden] = useState(department.isHidden);
+  const [people, setPeople] = useState<ChairHead[]>([]);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!canAdmin) return;
+    (async () => {
+      try {
+        const { data } = await apiClient.get('/departments/chair-heads');
+        setPeople(data.users || []);
+      } catch { setPeople([]); }
+    })();
+  }, [canAdmin]);
+
+  const save = async () => {
+    if (canAdmin && !name.trim()) { toast.error('A department needs a name'); return; }
+    try {
+      setBusy(true);
+      const body: Record<string, unknown> = { title, description };
+      if (canAdmin) {
+        body.name = name.trim();
+        body.chairHeadId = chairHeadId || null;
+        body.isHidden = isHidden;
+      }
+      const { data } = await apiClient.patch(`/departments/${department.id}`, body);
+      toast.success(data.message || 'Saved');
+      await onSaved();
+    } catch (e: unknown) {
+      toast.error(apiMessage(e) || 'Could not save the department');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4">
+      <div className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-white p-5 shadow-xl sm:rounded-2xl">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="truncate text-lg font-bold text-gray-900">{department.name}</h2>
+            <p className="text-[11px] text-gray-500">/departments/{department.slug}</p>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100"><FiX className="h-5 w-5" /></button>
+        </div>
+
+        {canAdmin && (
+          <label className="mt-4 block">
+            <span className="block text-xs font-semibold text-gray-600">Department name</span>
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              maxLength={160}
+              className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+            />
+            <span className="mt-1 block text-[11px] text-gray-500">What the card on the landing page says. The web address stays as it is.</span>
+          </label>
+        )}
+
+        <label className="mt-3 block">
+          <span className="block text-xs font-semibold text-gray-600">Page title</span>
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            maxLength={300}
+            placeholder={department.name}
+            className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+          />
+          <span className="mt-1 block text-[11px] text-gray-500">The headline at the top of the department&apos;s own page.</span>
+        </label>
+
+        <label className="mt-3 block">
+          <span className="block text-xs font-semibold text-gray-600">Description</span>
+          <textarea
+            rows={3}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+          />
+        </label>
+
+        {canAdmin && (
+          <>
+            <label className="mt-3 block">
+              <span className="block text-xs font-semibold text-gray-600">Chair head</span>
+              <select
+                value={chairHeadId}
+                onChange={(e) => setChairHeadId(e.target.value)}
+                className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+              >
+                <option value="">Nobody — only admin and HOD can curate it</option>
+                {people.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {`${p.firstName || ''} ${p.lastName || ''}`.trim() || p.email} — {p.approvedRole}
+                  </option>
+                ))}
+              </select>
+              <span className="mt-1 block text-[11px] text-gray-500">
+                Changing this hands the page to someone else. What is already on it stays.
+              </span>
+            </label>
+
+            <label className="mt-3 flex items-start gap-2 rounded-xl bg-gray-50 px-3 py-2.5">
+              <input type="checkbox" className="mt-0.5" checked={!isHidden} onChange={(e) => setIsHidden(!e.target.checked)} />
+              <span className="text-xs text-gray-700">
+                <strong className="font-semibold">Show on the website.</strong>{' '}
+                The card appears on the landing page and anyone can open the page.
+              </span>
+            </label>
+          </>
+        )}
+
+        <div className="mt-5 flex flex-wrap items-center justify-end gap-2">
+          {onDelete && (
+            <button
+              type="button"
+              onClick={onDelete}
+              disabled={busy}
+              className="mr-auto inline-flex items-center gap-1.5 rounded border border-red-200 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-60"
+            >
+              <FiTrash2 className="h-4 w-4" /> Delete
+            </button>
+          )}
+          <button type="button" onClick={onClose} className="rounded border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">Cancel</button>
+          <button type="button" onClick={save} disabled={busy} className="rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60">
+            {busy ? 'Saving…' : 'Save'}
           </button>
         </div>
       </div>
