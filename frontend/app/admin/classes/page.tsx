@@ -270,6 +270,7 @@ function Content() {
                     <AttendancePanel
                       cls={c}
                       canWriteATR={canManageAll || c.coordinatorId === user?.id}
+                      canManage={canManageAll || c.coordinatorId === user?.id}
                     />
                   </div>
                 )}
@@ -484,11 +485,29 @@ function CRList({
   );
 }
 
-function AttendancePanel({ cls, canWriteATR }: { cls: ClassRow; canWriteATR: boolean }) {
+// A punched entry as it is being corrected.
+type EntryDraft = {
+  date: string;
+  classTiming: string;
+  presentCount: string;
+  bunkedCount: string;
+  leaveCount: string;
+  additionalInfo: string;
+};
+
+function AttendancePanel({ cls, canWriteATR, canManage }: {
+  cls: ClassRow;
+  canWriteATR: boolean;
+  /** Admin, HOD, placement coordinator, or this class's own coordinator. */
+  canManage: boolean;
+}) {
   const [rows, setRows] = useState<AttendanceRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingATR, setEditingATR] = useState<string | null>(null);
   const [atrDraft, setATRDraft] = useState('');
+  const [editingRow, setEditingRow] = useState<string | null>(null);
+  const [draft, setDraft] = useState<EntryDraft | null>(null);
+  const [busyRow, setBusyRow] = useState<string | null>(null);
 
   const load = async () => {
     try {
@@ -502,6 +521,59 @@ function AttendancePanel({ cls, canWriteATR }: { cls: ClassRow; canWriteATR: boo
     }
   };
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [cls.id]);
+
+  const startEdit = (r: AttendanceRow) => {
+    setEditingATR(null);
+    setEditingRow(r.id);
+    setDraft({
+      date: String(r.date).slice(0, 10),
+      classTiming: r.classTiming || '',
+      presentCount: String(r.presentCount ?? 0),
+      bunkedCount: String(r.bunkedCount ?? 0),
+      leaveCount: String(r.leaveCount ?? 0),
+      additionalInfo: r.additionalInfo || '',
+    });
+  };
+
+  const cancelEdit = () => { setEditingRow(null); setDraft(null); };
+
+  const saveEntry = async (attId: string) => {
+    if (!draft) return;
+    if (!draft.date) { toast.error('An entry needs a date'); return; }
+    try {
+      setBusyRow(attId);
+      const { data } = await apiClient.patch(`/classes/${cls.id}/attendance/${attId}`, {
+        date: draft.date,
+        classTiming: draft.classTiming,
+        presentCount: Number(draft.presentCount) || 0,
+        bunkedCount: Number(draft.bunkedCount) || 0,
+        leaveCount: Number(draft.leaveCount) || 0,
+        additionalInfo: draft.additionalInfo,
+      });
+      toast.success(data.message || 'Entry updated');
+      cancelEdit();
+      await load();
+    } catch (e: unknown) {
+      toast.error(apiMessage(e) || 'Failed to update the entry');
+    } finally {
+      setBusyRow(null);
+    }
+  };
+
+  const deleteEntry = async (r: AttendanceRow) => {
+    const when = `${fmt(r.date)}${r.classTiming?.trim() ? ` · ${r.classTiming}` : ''}`;
+    if (!confirm(`Delete the attendance entry for ${when}?\n\nPresent ${r.presentCount}, absent ${r.absentCount ?? 0}, skipped ${r.bunkedCount}, leave ${r.leaveCount}.\n\nThis cannot be undone.`)) return;
+    try {
+      setBusyRow(r.id);
+      const { data } = await apiClient.delete(`/classes/${cls.id}/attendance/${r.id}`);
+      toast.success(data.message || 'Entry deleted');
+      await load();
+    } catch (e: unknown) {
+      toast.error(apiMessage(e) || 'Failed to delete the entry');
+    } finally {
+      setBusyRow(null);
+    }
+  };
 
   const saveATR = async (attId: string) => {
     try {
@@ -575,11 +647,79 @@ function AttendancePanel({ cls, canWriteATR }: { cls: ClassRow; canWriteATR: boo
                       <th className="px-3 py-2 text-left font-semibold text-gray-700">Info</th>
                       <th className="px-3 py-2 text-left font-semibold text-gray-700">Submitted by</th>
                       {canWriteATR && <th className="px-3 py-2 text-left font-semibold text-gray-700">ATR</th>}
+                      {canManage && <th className="px-3 py-2 text-right font-semibold text-gray-700">Edit</th>}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {list.map((r) => {
                       const isEditing = editingATR === r.id;
+                      const rowEditing = editingRow === r.id && !!draft;
+                      // Absent follows the class strength, the same way it does
+                      // when a CR punches — shown live so the editor can see
+                      // the figure they are really saving.
+                      const liveAbsent = cls.totalStrength != null && draft
+                        ? Math.max(0, cls.totalStrength - (Number(draft.presentCount) || 0) - (Number(draft.leaveCount) || 0))
+                        : null;
+                      const numCell = 'w-16 rounded border border-gray-300 px-1.5 py-1 text-sm focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-200';
+                      if (rowEditing && draft) {
+                        return (
+                          <tr key={r.id} className="align-top bg-blue-50/40">
+                            <td className="px-3 py-2">
+                              <input type="date" value={draft.date}
+                                onChange={(e) => setDraft({ ...draft, date: e.target.value })}
+                                className="w-36 rounded border border-gray-300 px-1.5 py-1 text-xs focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-200" />
+                              <input value={draft.classTiming} maxLength={100}
+                                onChange={(e) => setDraft({ ...draft, classTiming: e.target.value })}
+                                placeholder="Period / timing"
+                                className="mt-1 w-36 rounded border border-gray-300 px-1.5 py-1 text-xs focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-200" />
+                            </td>
+                            <td className="px-3 py-2">
+                              <input type="number" min={0} value={draft.presentCount}
+                                onChange={(e) => setDraft({ ...draft, presentCount: e.target.value })} className={numCell} />
+                            </td>
+                            <td className="px-3 py-2 text-gray-700 font-semibold">
+                              {liveAbsent === null ? (
+                                <input type="number" min={0} value={String(r.absentCount ?? 0)} disabled className={`${numCell} bg-gray-100`} />
+                              ) : (
+                                <span title="Worked out from the class strength">{liveAbsent}</span>
+                              )}
+                            </td>
+                            <td className="px-3 py-2">
+                              <input type="number" min={0} value={draft.bunkedCount}
+                                onChange={(e) => setDraft({ ...draft, bunkedCount: e.target.value })} className={numCell} />
+                            </td>
+                            <td className="px-3 py-2">
+                              <input type="number" min={0} value={draft.leaveCount}
+                                onChange={(e) => setDraft({ ...draft, leaveCount: e.target.value })} className={numCell} />
+                            </td>
+                            <td className="px-3 py-2">
+                              <textarea rows={2} value={draft.additionalInfo}
+                                onChange={(e) => setDraft({ ...draft, additionalInfo: e.target.value })}
+                                placeholder="Note"
+                                className="w-full min-w-[180px] rounded border border-gray-300 px-2 py-1 text-xs focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-200" />
+                            </td>
+                            <td className="px-3 py-2 text-xs text-gray-600">
+                              {r.submitter?.name || '—'}
+                              <div className="text-[10px] text-gray-400">punched {fmt(r.submittedAt)}</div>
+                            </td>
+                            {canWriteATR && <td className="px-3 py-2 text-[11px] text-gray-400 italic">unchanged</td>}
+                            {canManage && (
+                            <td className="px-3 py-2">
+                              <div className="flex items-center justify-end gap-1">
+                                <button type="button" onClick={() => saveEntry(r.id)} disabled={busyRow === r.id}
+                                  className="inline-flex items-center gap-1 rounded bg-blue-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-blue-700 disabled:opacity-60">
+                                  <FiCheck className="h-3 w-3" /> {busyRow === r.id ? 'Saving…' : 'Save'}
+                                </button>
+                                <button type="button" onClick={cancelEdit} disabled={busyRow === r.id}
+                                  className="inline-flex items-center gap-1 rounded border border-gray-200 px-2 py-1 text-[11px] font-semibold text-gray-700 hover:bg-gray-50">
+                                  <FiX className="h-3 w-3" /> Cancel
+                                </button>
+                              </div>
+                            </td>
+                            )}
+                          </tr>
+                        );
+                      }
                       return (
                         <tr key={r.id} className="align-top">
                           <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{r.classTiming?.trim() ? r.classTiming : <span className="text-gray-400 italic">—</span>}</td>
@@ -629,6 +769,20 @@ function AttendancePanel({ cls, canWriteATR }: { cls: ClassRow; canWriteATR: boo
                                   <FiFileText className="h-3 w-3" /> Add ATR
                                 </button>
                               )}
+                            </td>
+                          )}
+                          {canManage && (
+                            <td className="px-3 py-2">
+                              <div className="flex items-center justify-end gap-1">
+                                <button type="button" onClick={() => startEdit(r)} title="Edit this entry"
+                                  className="rounded p-1.5 text-blue-600 hover:bg-blue-50">
+                                  <FiEdit2 className="h-3.5 w-3.5" />
+                                </button>
+                                <button type="button" onClick={() => deleteEntry(r)} disabled={busyRow === r.id} title="Delete this entry"
+                                  className="rounded p-1.5 text-red-600 hover:bg-red-50 disabled:opacity-50">
+                                  <FiTrash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
                             </td>
                           )}
                         </tr>

@@ -42,6 +42,11 @@ router.put('/:id/crs', classController.setCRs); // coordinator or admin
 router.get('/:id/attendance', classController.listAttendance);
 router.post('/:id/attendance', classController.submitAttendance);
 
+// Correcting or removing one entry — admin/HOD, a placement coordinator or
+// this class's own coordinator. Gated again inside the controller.
+router.patch('/:id/attendance/:attId', classController.updateAttendance);
+router.delete('/:id/attendance/:attId', classController.removeAttendance);
+
 // ATR — only admin/HOD or the class coordinator
 router.patch('/:id/attendance/:attId/atr', classController.setATR);
 

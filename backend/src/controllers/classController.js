@@ -604,6 +604,109 @@ module.exports = {
     }
   },
 
+
+  // PATCH /api/classes/:id/attendance/:attId — correct one entry.
+  //
+  // A CR punches attendance from their phone, so a wrong date, a wrong
+  // period or a mistyped count is ordinary. Admin, HOD, placement
+  // coordinator and the class's own coordinator can put any single entry
+  // right without deleting and re-punching it.
+  updateAttendance: async (req, res) => {
+    try {
+      const cls = await Class.findByPk(req.params.id);
+      if (!cls) return res.status(404).json({ message: 'Class not found' });
+      if (!isOwnCoordinator(cls, req.user.id, req.user.role)) {
+        return res.status(403).json({ message: 'Only ADMIN, HOD, a placement coordinator or this class\'s coordinator can edit an entry' });
+      }
+      const att = await ClassAttendance.findOne({ where: { id: req.params.attId, classId: cls.id } });
+      if (!att) return res.status(404).json({ message: 'Attendance record not found' });
+
+      const body = req.body || {};
+      const num = (value, fallback) => {
+        if (value === undefined || value === null || value === '') return fallback;
+        const n = parseInt(value, 10);
+        return Number.isFinite(n) ? Math.max(0, n) : fallback;
+      };
+      const date = body.date ? String(body.date).slice(0, 10) : att.date;
+      if (Number.isNaN(new Date(`${date}T00:00:00`).getTime())) {
+        return res.status(400).json({ message: 'That date is not a date' });
+      }
+      const timing = body.classTiming === undefined
+        ? att.classTiming
+        : String(body.classTiming || '').trim().slice(0, 100);
+
+      // One entry per class, per date, per period — the same rule a punch
+      // follows. Moving an entry onto one that already exists is refused
+      // rather than merged, because only the person doing it knows which
+      // set of numbers is the right one.
+      if (date !== att.date || timing !== att.classTiming) {
+        const clash = await ClassAttendance.findOne({
+          where: { classId: cls.id, date, classTiming: timing, id: { [Op.ne]: att.id } },
+        });
+        if (clash) {
+          return res.status(409).json({
+            message: `There is already an entry for ${date}${timing ? ` at ${timing}` : ''}. Edit that one, or give this a different period.`,
+          });
+        }
+      }
+
+      const present = num(body.presentCount, att.presentCount);
+      const bunked = num(body.bunkedCount, att.bunkedCount);
+      const leave = num(body.leaveCount, att.leaveCount);
+      // Absent stays derived from the class strength, exactly as it is when
+      // a CR punches — otherwise an edited row would not add up.
+      const absent = (cls.totalStrength !== null && cls.totalStrength !== undefined)
+        ? Math.max(0, cls.totalStrength - present - leave)
+        : num(body.absentCount, att.absentCount ?? 0);
+      const info = body.additionalInfo === undefined
+        ? att.additionalInfo
+        : (String(body.additionalInfo || '').trim() || null);
+
+      await att.update({
+        date,
+        classTiming: timing,
+        presentCount: present,
+        absentCount: absent,
+        bunkedCount: bunked,
+        leaveCount: leave,
+        additionalInfo: info,
+      });
+
+      const reloaded = await ClassAttendance.findByPk(att.id, {
+        include: [
+          { model: User, as: 'Submitter', attributes: ['id', 'firstName', 'lastName'] },
+          { model: User, as: 'ATRAuthor', attributes: ['id', 'firstName', 'lastName'] },
+        ],
+      });
+      console.log(`[attendance edit] ${req.user.email} corrected entry ${att.id} on class ${cls.name}`);
+      res.json({ message: 'Entry updated', attendance: shapeAttendanceRow(reloaded, true) });
+    } catch (err) {
+      console.error('classController.updateAttendance error:', err);
+      res.status(500).json({ message: 'Failed to update the entry' });
+    }
+  },
+
+  // DELETE /api/classes/:id/attendance/:attId — remove one entry.
+  removeAttendance: async (req, res) => {
+    try {
+      const cls = await Class.findByPk(req.params.id);
+      if (!cls) return res.status(404).json({ message: 'Class not found' });
+      if (!isOwnCoordinator(cls, req.user.id, req.user.role)) {
+        return res.status(403).json({ message: 'Only ADMIN, HOD, a placement coordinator or this class\'s coordinator can delete an entry' });
+      }
+      const att = await ClassAttendance.findOne({ where: { id: req.params.attId, classId: cls.id } });
+      if (!att) return res.status(404).json({ message: 'Attendance record not found' });
+      // Said out loud in the log: one row of a class's record going is worth
+      // being able to trace later.
+      console.warn(`[attendance delete] ${req.user.email} deleted ${att.date}${att.classTiming ? ` ${att.classTiming}` : ''} on class ${cls.name} (present ${att.presentCount}, absent ${att.absentCount}, skipped ${att.bunkedCount}, leave ${att.leaveCount})`);
+      await att.destroy();
+      res.json({ message: 'Entry deleted' });
+    } catch (err) {
+      console.error('classController.removeAttendance error:', err);
+      res.status(500).json({ message: 'Failed to delete the entry' });
+    }
+  },
+
   // PATCH /api/classes/:id/attendance/:attId/atr — coordinator writes ATR.
   // Body: { actionTakenReport }. Set to empty string to clear.
   setATR: async (req, res) => {
